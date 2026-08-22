@@ -6,6 +6,7 @@
 // starts deciding on its own is a behaviour the CLI cannot reach and the tests
 // do not cover.
 
+#include "Config.h"
 #include "DocumentModel.h"
 #include "InputLog.h"
 #include "Strings.h"
@@ -45,8 +46,19 @@ int main(int argc, char *argv[])
     // The window's words, from i18n/<language>.json. English is always loaded
     // first, so a catalogue that only translates half of it shows English for
     // the other half instead of gaps.
+    // The settings, and the keymap with them, from
+    // ~/.config/omapixel/config.toml. Loaded before anything asks a question
+    // of them -- the language the window is read in is one of the settings.
+    omapixel::Config &config = omapixel::Config::shared();
+    config.load();
+
     omapixel::Strings &strings = omapixel::Strings::shared();
     strings.load(omapixel::Strings::preferredLanguage());
+    // Saving the file re-reads it, and a language changed there takes effect
+    // with the rest. The window rebinds its keys on the same signal.
+    QObject::connect(&config, &omapixel::Config::changed, &app, [&strings] {
+        strings.load(omapixel::Strings::preferredLanguage());
+    });
 
     omapixel::InputLog inputLog(qEnvironmentVariableIsSet("OMAPIXEL_DEBUG_INPUT"));
 
@@ -71,6 +83,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("shotSheet"), QString::fromUtf8(qgetenv("OMAPIXEL_SHOT_SHEET")));
     engine.rootContext()->setContextProperty(QStringLiteral("T"), &strings);
+    engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &config);
     engine.rootContext()->setContextProperty(QStringLiteral("log"), &inputLog);
     engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
     engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);

@@ -84,7 +84,7 @@ Item {
             label: win.playing ? "❚❚" : "▶"
             on: win.playing
             usable: doc.frameCount > 1
-            onClicked: win.playing = !win.playing
+            onClicked: win.togglePlay()
         }
         Chip { label: T.t("timeline.addFrame"); onClicked: doc.addFrame(false) }
         Chip { label: T.t("timeline.duplicate"); onClicked: doc.addFrame(true) }

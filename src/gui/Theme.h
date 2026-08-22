@@ -62,6 +62,7 @@ class Theme : public QObject
 
 public:
     explicit Theme(QObject *parent = nullptr);
+    ~Theme() override;
 
     QString name() const { return m_name; }
     bool dark() const { return m_dark; }

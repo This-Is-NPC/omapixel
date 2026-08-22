@@ -11,6 +11,17 @@
 #include <QTimer>
 
 namespace omapixel {
+
+Theme::~Theme()
+{
+    if (!m_hyprctl || m_hyprctl->state() == QProcess::NotRunning)
+        return;
+    m_hyprctl->terminate();
+    if (!m_hyprctl->waitForFinished(100)) {
+        m_hyprctl->kill();
+        m_hyprctl->waitForFinished(100);
+    }
+}
 namespace {
 
 /// Where omarchy keeps the pointer to the active theme.

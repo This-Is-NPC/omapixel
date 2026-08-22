@@ -33,8 +33,11 @@ import omapixel
 Window {
     id: win
 
-    width: 1280
-    height: 820
+    // From the config file, so a person who wants the studio to open the size
+    // of their screen says so once. A drag on the window edge replaces the
+    // binding, which is what a window resize should do.
+    width: cfg.settings["window.width"]
+    height: cfg.settings["window.height"]
     minimumWidth: 900
     minimumHeight: 560
     visible: true
@@ -45,14 +48,38 @@ Window {
     property string tool: "pencil"
     property string slot: "I"
     property real zoom: 12
-    property bool onion: false
-    property bool mesh: true
+    property bool onion: cfg.settings["canvas.onion"]
+    property bool mesh: cfg.settings["canvas.grid"]
     property bool playing: false
+    property string pendingAction: ""
+    property bool allowClosing: false
+
+    /// Whether ▶ starts the clip over at the end. `playback.loop` in the
+    /// config, and **View → Loop playback** while the window is open: a loop is
+    /// right for judging movement and wrong for judging the last frame, and
+    /// which of those you are doing changes several times an hour.
+    property bool loop: cfg.settings["playback.loop"]
+
+    /// Play, pause, and the one case that needs thinking about: pressing play
+    /// while stopped on the last frame with looping off. Doing nothing there
+    /// reads as a broken button, so it starts over.
+    function togglePlay() {
+        if (win.playing) {
+            win.playing = false
+            return
+        }
+        if (!win.loop && doc.frame >= doc.frameCount - 1)
+            doc.frame = 0
+        win.playing = true
+    }
+
+    /// How far shift and an arrow jumps. `canvas.big_step` in the config.
+    readonly property int bigStep: Math.max(1, cfg.settings["canvas.big_step"])
 
     // The keyboard cursor. Drawing with a mouse is fine for shapes and hopeless
     // for placing one pixel exactly; -1 means it has not been used yet and
     // nothing is drawn for it.
-    property bool showHints: true
+    property bool showHints: cfg.settings["window.hints"]
 
     /// The colour the picker is currently on. Published so a test can read it
     /// without reaching into a popup's insides.
@@ -91,7 +118,7 @@ Window {
         })
         var letter = already.length > 0 ? already[0].slot : doc.freeSlot()
         if (letter === "") {
-            doc.say("the palette is full — remove a slot first")
+            doc.say(T.t("note.paletteFull"))
             return
         }
         if (already.length === 0)
@@ -122,7 +149,7 @@ Window {
             moveCaret(0, 0)
         var letter = doc.freeSlot()
         if (letter === "") {
-            doc.say("the palette is full — remove a slot first")
+            doc.say(T.t("note.paletteFull"))
             return
         }
         // One stroke around both edits: adding the colour and painting with it
@@ -134,7 +161,7 @@ Window {
         slot = letter
         doc.paint(caretColumn, caretRow, letter)
         doc.endStroke()
-        doc.say("russian roulette — " + hex + " on slot " + letter)
+        doc.say(T.t("note.roulette").arg(hex).arg(letter))
     }
 
     function putOnDigit(digit, which) {
@@ -143,8 +170,10 @@ Window {
             next.push("")
         next[digit] = which
         registers = next
-        doc.say((which === "." ? "empty" : "slot " + which)
-                + " is now on " + (digit === 9 ? 0 : digit + 1))
+        doc.say(T.t("note.nowOn")
+                    .arg(which === "." ? T.t("note.empty")
+                                       : T.t("note.slot").arg(which))
+                    .arg(digit === 9 ? 0 : digit + 1))
     }
 
     function useSlot(which, paintIt) {
@@ -184,52 +213,56 @@ Window {
         if (awaitingSlot)
             return [{ key: "A–Z  a–g", label: T.t("hint.slotToUse") },
                     { key: ".", label: T.t("hint.empty") },
-                    { key: "Esc", label: T.t("hint.cancel") }]
+                    { key: cfg.keys.cancel, label: T.t("hint.cancel") }]
 
         if (linePoints.length > 0)
             return [{ key: "arrows", label: T.t("hint.moveFreeEnd") },
-                    { key: "l", label: T.t("hint.pinCorner") },
+                    { key: cfg.keys.line_point, label: T.t("hint.pinCorner") },
                     { key: "1–0", label: T.t("hint.drawInColour") },
-                    { key: "Enter", label: T.t("hint.drawIt") },
-                    { key: "Esc", label: T.t("hint.throwAway") }]
+                    { key: cfg.keys.paint, label: T.t("hint.drawIt") },
+                    { key: cfg.keys.cancel, label: T.t("hint.throwAway") }]
 
         if (mode === "pick")
             return [{ key: "arrows", label: T.t("hint.moveOverColour") },
                     { key: "1–0", label: T.t("hint.putOnNumber") },
-                    { key: "Esc", label: T.t("hint.leavePicking") }]
+                    { key: cfg.keys.cancel, label: T.t("hint.leavePicking") }]
 
         if (mode === "draw")
             return [{ key: "hold 1–0", label: T.t("hint.paintAsYouMove") },
-                    { key: "Enter", label: T.t("hint.onePixel") },
-                    { key: "l", label: T.t("hint.straightLine") },
-                    { key: "Esc", label: T.t("hint.leaveDrawing") }]
+                    { key: cfg.keys.paint, label: T.t("hint.onePixel") },
+                    { key: cfg.keys.line_point, label: T.t("hint.straightLine") },
+                    { key: cfg.keys.cancel, label: T.t("hint.leaveDrawing") }]
 
         if (caretColumn >= 0)
             return [{ key: "arrows", label: T.t("hint.move") },
-                    { key: "Shift", label: T.t("hint.byEight") },
-                    { key: "Enter", label: T.t("hint.paintPixel") },
-                    { key: "Bksp", label: T.t("hint.eraseIt") },
+                    { key: "Shift", label: T.t("hint.byEight").arg(win.bigStep) },
+                    { key: cfg.keys.paint, label: T.t("hint.paintPixel") },
+                    { key: cfg.keys.erase, label: T.t("hint.eraseIt") },
                     { key: "1–0", label: T.t("hint.colours") },
-                    { key: "d", label: T.t("hint.drawAsYouMove") },
-                    { key: "p", label: T.t("hint.pickColours") },
-                    { key: "c", label: T.t("hint.findColour") },
-                    { key: "r", label: T.t("hint.roulette") },
-                    { key: "⇧c", label: T.t("hint.replaceColour") },
-                    { key: "l", label: T.t("hint.straightLine") },
-                    { key: "Esc", label: T.t("hint.putAway") }]
+                    { key: cfg.keys.draw_mode, label: T.t("hint.drawAsYouMove") },
+                    { key: cfg.keys.pick_mode, label: T.t("hint.pickColours") },
+                    { key: cfg.keys.choose_colour, label: T.t("hint.findColour") },
+                    { key: cfg.keys.roulette, label: T.t("hint.roulette") },
+                    { key: cfg.keys.replace_colour, label: T.t("hint.replaceColour") },
+                    { key: cfg.keys.line_point, label: T.t("hint.straightLine") },
+                    { key: cfg.keys.cancel, label: T.t("hint.putAway") }]
 
         return [{ key: "arrows", label: T.t("hint.drawWithKeyboard") },
-                { key: "b e f i h", label: T.t("hint.tools") },
+                { key: [cfg.keys.tool_pencil, cfg.keys.tool_eraser, cfg.keys.tool_bucket,
+                        cfg.keys.tool_picker, cfg.keys.tool_hand].join(" "),
+                  label: T.t("hint.tools") },
                 { key: "1–0", label: T.t("hint.colours") },
-                { key: ";", label: T.t("hint.changeColour") },
-                { key: "Space", label: T.t("hint.play") },
-                { key: ",  .", label: T.t("hint.frame") },
-                { key: "[  ]", label: T.t("hint.clip") },
+                { key: cfg.keys.slot_leader, label: T.t("hint.changeColour") },
+                { key: cfg.keys.play, label: T.t("hint.play") },
+                { key: cfg.keys.frame_previous + "  " + cfg.keys.frame_next,
+                  label: T.t("hint.frame") },
+                { key: cfg.keys.clip_previous + "  " + cfg.keys.clip_next,
+                  label: T.t("hint.clip") },
                 { key: "Tab", label: T.t("hint.controls") },
-                { key: "F10", label: T.t("hint.menus") },
-                { key: "^Z", label: T.t("hint.undo") },
-                { key: "^S", label: T.t("hint.save") },
-                { key: "^E", label: T.t("hint.export") }]
+                { key: cfg.keys.menus, label: T.t("hint.menus") },
+                { key: cfg.keys.undo, label: T.t("hint.undo") },
+                { key: cfg.keys.save, label: T.t("hint.save") },
+                { key: cfg.keys.export_png, label: T.t("hint.export") }]
     }
 
     // Waiting for the letter of a palette slot. Every letter is already a tool
@@ -259,6 +292,66 @@ Window {
 
     function focusCanvas() {
         keys.forceActiveFocus()
+    }
+
+    function performPendingAction(action) {
+        if (action === "new")
+            newSheet.open()
+        else if (action === "open")
+            openDialog.open()
+        else if (action === "quit") {
+            allowClosing = true
+            Qt.quit()
+        }
+        else if (action === "close") {
+            allowClosing = true
+            win.close()
+        }
+    }
+
+    function requestAction(action) {
+        if (!doc.dirty) {
+            performPendingAction(action)
+            return
+        }
+        pendingAction = action
+        unsavedSheet.open()
+    }
+
+    function resumePendingAction() {
+        var action = pendingAction
+        pendingAction = ""
+        unsavedSheet.close()
+        performPendingAction(action)
+    }
+
+    function discardPendingChanges() {
+        var action = pendingAction
+        pendingAction = ""
+        unsavedSheet.close()
+        performPendingAction(action)
+    }
+
+    function savePendingChanges() {
+        if (doc.path === "") {
+            unsavedSheet.keepPendingAction = true
+            unsavedSheet.close()
+            saveDialog.open()
+            return
+        }
+        if (doc.save())
+            resumePendingAction()
+    }
+
+    onClosing: function (close) {
+        if (allowClosing) {
+            allowClosing = false
+            return
+        }
+        if (!doc.dirty)
+            return
+        close.accepted = false
+        requestAction("close")
     }
 
     /// The character a key press names, for choosing a palette slot.
@@ -367,7 +460,17 @@ Window {
         interval: Math.max(16, Math.round(1000 / doc.fps))
         running: win.playing && doc.frameCount > 1
         repeat: true
-        onTriggered: doc.frame = (doc.frame + 1) % doc.frameCount
+        onTriggered: {
+            if (doc.frame + 1 < doc.frameCount) {
+                doc.frame = doc.frame + 1
+            } else if (win.loop) {
+                doc.frame = 0
+            } else {
+                // Stopped ON the last frame, not one past it: the end of the
+                // animation is a thing you look at.
+                win.playing = false
+            }
+        }
     }
 
     // -------------------------------------------------------------- commands
@@ -376,26 +479,26 @@ Window {
     // command that exists twice -- once in a menu handler and once in a key
     // handler -- is a command that will one day do two different things.
 
-    C.Action { id: actNew; text: T.t("menu.new"); shortcut: "Ctrl+N"
-             onTriggered: newSheet.open() }
-    C.Action { id: actOpen; text: T.t("menu.open"); shortcut: "Ctrl+O"
-             onTriggered: openDialog.open() }
-    C.Action { id: actSave; text: T.t("menu.save"); shortcut: "Ctrl+S"
+    C.Action { id: actNew; text: T.t("menu.new"); shortcut: cfg.shortcuts.new
+             onTriggered: requestAction("new") }
+    C.Action { id: actOpen; text: T.t("menu.open"); shortcut: cfg.shortcuts.open
+             onTriggered: requestAction("open") }
+    C.Action { id: actSave; text: T.t("menu.save"); shortcut: cfg.shortcuts.save
              onTriggered: doc.path === "" ? saveDialog.open() : doc.save() }
-    C.Action { id: actSaveAs; text: T.t("menu.saveAs"); shortcut: "Ctrl+Shift+S"
+    C.Action { id: actSaveAs; text: T.t("menu.saveAs"); shortcut: cfg.shortcuts.save_as
              onTriggered: saveDialog.open() }
-    C.Action { id: actExport; text: T.t("menu.exportPng"); shortcut: "Ctrl+E"
+    C.Action { id: actExport; text: T.t("menu.exportPng"); shortcut: cfg.shortcuts.export_png
              onTriggered: { exportSheet.asSheet = false; exportSheet.open() } }
-    C.Action { id: actExportSheet; text: T.t("menu.exportSheet"); shortcut: "Ctrl+Shift+E"
+    C.Action { id: actExportSheet; text: T.t("menu.exportSheet"); shortcut: cfg.shortcuts.export_sheet
              onTriggered: { exportSheet.asSheet = true; exportSheet.open() } }
-    C.Action { id: actQuit; text: T.t("menu.quit"); shortcut: "Ctrl+Q"
-             onTriggered: Qt.quit() }
+    C.Action { id: actQuit; text: T.t("menu.quit"); shortcut: cfg.shortcuts.quit
+             onTriggered: requestAction("quit") }
 
-    C.Action { id: actUndo; text: T.t("menu.undo"); shortcut: "Ctrl+Z"
+    C.Action { id: actUndo; text: T.t("menu.undo"); shortcut: cfg.shortcuts.undo
              enabled: doc.canUndo; onTriggered: doc.undo() }
-    C.Action { id: actRedo; text: T.t("menu.redo"); shortcut: "Ctrl+Shift+Z"
+    C.Action { id: actRedo; text: T.t("menu.redo"); shortcut: cfg.shortcuts.redo
              enabled: doc.canRedo; onTriggered: doc.redo() }
-    C.Action { id: actClear; text: T.t("menu.clearFrame"); shortcut: "Delete"
+    C.Action { id: actClear; text: T.t("menu.clearFrame"); shortcut: cfg.shortcuts.clear_frame
              onTriggered: doc.clearFrame() }
     C.Action { id: actFlipX; text: T.t("menu.flipX"); onTriggered: doc.flip("x") }
     C.Action { id: actFlipY; text: T.t("menu.flipY"); onTriggered: doc.flip("y") }
@@ -407,20 +510,23 @@ Window {
     C.Action { id: actRemoveClip; text: T.t("menu.deleteClip")
              enabled: doc.clipNames.length > 1
              onTriggered: doc.removeClip(doc.clip) }
-    C.Action { id: actAddFrame; text: T.t("menu.addFrame"); shortcut: "Ctrl+Shift+N"
+    C.Action { id: actAddFrame; text: T.t("menu.addFrame"); shortcut: cfg.shortcuts.frame_add
              onTriggered: doc.addFrame(false) }
-    C.Action { id: actDupFrame; text: T.t("menu.dupFrame"); shortcut: "Ctrl+D"
+    C.Action { id: actDupFrame; text: T.t("menu.dupFrame"); shortcut: cfg.shortcuts.frame_duplicate
              onTriggered: doc.addFrame(true) }
     C.Action { id: actDelFrame; text: T.t("menu.delFrame")
              enabled: doc.frameCount > 1; onTriggered: doc.removeFrame() }
-    C.Action { id: actPlay; text: T.t("menu.play"); shortcut: "Space"
-             enabled: doc.frameCount > 1; onTriggered: win.playing = !win.playing }
+    C.Action { id: actPlay; text: T.t("menu.play"); shortcut: cfg.shortcuts.play
+             enabled: doc.frameCount > 1; onTriggered: win.togglePlay() }
+    C.Action { id: actLoop; text: T.t("menu.loop"); checkable: true; checked: win.loop
+             shortcut: cfg.shortcuts.toggle_loop
+             onTriggered: win.loop = !win.loop }
 
-    C.Action { id: actZoomIn; text: T.t("menu.zoomIn"); shortcut: "Ctrl++"
+    C.Action { id: actZoomIn; text: T.t("menu.zoomIn"); shortcut: cfg.shortcuts.zoom_in
              onTriggered: stage.zoomStep(stage.width / 2, stage.height / 2, true) }
-    C.Action { id: actZoomOut; text: T.t("menu.zoomOut"); shortcut: "Ctrl+-"
+    C.Action { id: actZoomOut; text: T.t("menu.zoomOut"); shortcut: cfg.shortcuts.zoom_out
              onTriggered: stage.zoomStep(stage.width / 2, stage.height / 2, false) }
-    C.Action { id: actFit; text: T.t("menu.fit"); shortcut: "Ctrl+0"
+    C.Action { id: actFit; text: T.t("menu.fit"); shortcut: cfg.shortcuts.zoom_fit
              onTriggered: { stage.touched = false; stage.fit() } }
     C.Action { id: actOnion; text: T.t("menu.onion"); checkable: true; checked: win.onion
              onTriggered: win.onion = !win.onion }
@@ -438,22 +544,23 @@ Window {
     // F10 puts the keyboard on the menu bar, where the arrows walk it. Alt and
     // the underlined letter opens one directly. Both are what every menu bar
     // has done for thirty years, and neither existed here.
-    Shortcut { sequence: "F10"; onActivated: menus.forceActiveFocus() }
+    Shortcut { sequence: cfg.shortcuts.menus; onActivated: menus.forceActiveFocus() }
 
-    C.Action { id: actNextClip; text: T.t("menu.nextClip"); shortcut: "]"
+    C.Action { id: actNextClip; text: T.t("menu.nextClip"); shortcut: cfg.shortcuts.clip_next
              enabled: doc.clipNames.length > 1
              onTriggered: win.stepClip(1) }
-    C.Action { id: actPrevClip; text: T.t("menu.prevClip"); shortcut: "["
+    C.Action { id: actPrevClip; text: T.t("menu.prevClip"); shortcut: cfg.shortcuts.clip_previous
              enabled: doc.clipNames.length > 1
              onTriggered: win.stepClip(-1) }
-    C.Action { id: actFrameBack; text: T.t("menu.frameBack"); shortcut: "Shift+,"
+    C.Action { id: actFrameBack; text: T.t("menu.frameBack"); shortcut: cfg.shortcuts.frame_move_back
              enabled: doc.frame > 0
              onTriggered: doc.moveFrame(-1) }
-    C.Action { id: actFrameOn; text: T.t("menu.frameOn"); shortcut: "Shift+."
+    C.Action { id: actFrameOn; text: T.t("menu.frameOn"); shortcut: cfg.shortcuts.frame_move_on
              enabled: doc.frame < doc.frameCount - 1
              onTriggered: doc.moveFrame(1) }
 
     C.Action { id: actHints; text: T.t("menu.keyHints"); checkable: true; checked: win.showHints
+             shortcut: cfg.shortcuts.toggle_hints
              onTriggered: win.showHints = !win.showHints }
 
     // ------------------------------------------------------------- the window
@@ -488,9 +595,10 @@ Window {
             // the next: the stroke is closed and reopened dozens of times, and
             // undo then takes back the last fragment instead of the run. The
             // arrows are meant to repeat; the modes are not.
+            var act = cfg.action(event.key, event.modifiers)
             if (event.isAutoRepeat
-                && (event.key === Qt.Key_D || event.key === Qt.Key_L
-                    || event.key === Qt.Key_Semicolon)) {
+                && (act === "draw_mode" || act === "pick_mode"
+                    || act === "line_point" || act === "slot_leader")) {
                 event.accepted = true
                 return
             }
@@ -520,7 +628,7 @@ Window {
                     return e.slot === wanted
                 })
                 if (!known) {
-                    doc.say("no slot " + wanted)
+                    doc.say(T.t("note.noSlot").arg(wanted))
                     return
                 }
                 win.slot = wanted
@@ -532,35 +640,42 @@ Window {
                 return
             }
 
-            switch (event.key) {
-            case Qt.Key_B: win.tool = "pencil"; break
-            case Qt.Key_E: win.tool = "eraser"; break
-            case Qt.Key_F: win.tool = "bucket"; break
-            case Qt.Key_I: win.tool = "picker"; break
-            case Qt.Key_H: win.tool = "hand"; break
-            case Qt.Key_O: win.onion = !win.onion; break
-            case Qt.Key_M: win.mesh = !win.mesh; break
-            // The arrows walk the drawing, a pixel at a time, eight with
+            // Dispatched on what the key MEANS, not on which key it is. The
+            // config file is the map between the two, so a rebind changes one
+            // line of TOML rather than a case label in here.
+            switch (act) {
+            case "tool_pencil": win.tool = "pencil"; break
+            case "tool_eraser": win.tool = "eraser"; break
+            case "tool_bucket": win.tool = "bucket"; break
+            case "tool_picker": win.tool = "picker"; break
+            case "tool_hand": win.tool = "hand"; break
+            case "toggle_onion": win.onion = !win.onion; break
+            case "toggle_grid": win.mesh = !win.mesh; break
+            case "toggle_hints": win.showHints = !win.showHints; break
+            case "toggle_loop": win.loop = !win.loop; break
+            // The arrows walk the drawing, a pixel at a time, further with
             // shift. Frames moved to the comma and full stop, which is where
             // every other sprite editor puts them -- the arrows are worth more
             // here, and stepping through frames is not something you do while
             // your hand is on the canvas.
-            case Qt.Key_Left:  win.moveCaret(event.modifiers & Qt.ShiftModifier ? -8 : -1, 0); break
-            case Qt.Key_Right: win.moveCaret(event.modifiers & Qt.ShiftModifier ?  8 :  1, 0); break
-            case Qt.Key_Up:    win.moveCaret(0, event.modifiers & Qt.ShiftModifier ? -8 : -1); break
-            case Qt.Key_Down:  win.moveCaret(0, event.modifiers & Qt.ShiftModifier ?  8 :  1); break
+            case "caret_left":  win.moveCaret(-1, 0); break
+            case "caret_right": win.moveCaret(1, 0); break
+            case "caret_up":    win.moveCaret(0, -1); break
+            case "caret_down":  win.moveCaret(0, 1); break
+            case "caret_left_far":  win.moveCaret(-win.bigStep, 0); break
+            case "caret_right_far": win.moveCaret(win.bigStep, 0); break
+            case "caret_up_far":    win.moveCaret(0, -win.bigStep); break
+            case "caret_down_far":  win.moveCaret(0, win.bigStep); break
 
-            case Qt.Key_Comma:  doc.frame = Math.max(0, doc.frame - 1); break
-            case Qt.Key_Period:
+            case "frame_previous":  doc.frame = Math.max(0, doc.frame - 1); break
+            case "frame_next":
                 doc.frame = Math.min(doc.frameCount - 1, doc.frame + 1); break
 
             // Draw where the cursor is. Return paints, backspace clears, and
             // both work on the pixel you can see the outline around.
             // Paint with the colour in hand: the pending line if there is one,
             // otherwise the pixel under the cursor.
-            case Qt.Key_Return:
-            case Qt.Key_Enter:
-            case Qt.Key_X:
+            case "paint":
                 if (win.caretColumn < 0)
                     break
                 if (win.linePoints.length > 0) {
@@ -571,7 +686,7 @@ Window {
                     doc.endStroke()
                 }
                 break
-            case Qt.Key_Backspace:
+            case "erase":
                 if (win.caretColumn >= 0) {
                     doc.beginStroke()
                     doc.paint(win.caretColumn, win.caretRow, ".")
@@ -581,7 +696,7 @@ Window {
             // Escape undoes one thing at a time, most recent first: the line
             // you were about to draw, then the pen, then the cursor. One key
             // that always means "not that" is worth more than three.
-            case Qt.Key_Escape:
+            case "cancel":
                 // Reached from anywhere: a key event that nothing else wanted
                 // arrives here, because this item is an ancestor of every
                 // control in the window. So Escape always means "back to the
@@ -604,23 +719,21 @@ Window {
 
             // The leader. Semicolon rather than the comma, which is already the
             // previous frame and worth more there.
-            case Qt.Key_Semicolon: win.awaitingSlot = true; break
+            case "slot_leader": win.awaitingSlot = true; break
 
             // A colour you do not know the name of yet.
-            case Qt.Key_C:
-                colourSheet.show(event.modifiers & Qt.ShiftModifier ? "replace"
-                                                                    : "assign")
-                break
+            case "choose_colour": colourSheet.show("assign"); break
+            case "replace_colour": colourSheet.show("replace"); break
 
             // And one nobody knows.
-            case Qt.Key_R: win.russianRoulette(); break
+            case "roulette": win.russianRoulette(); break
 
 
 
             // Draw mode: from here the arrows paint, but only while a colour
             // is held down. Moving and drawing are the same gesture with and
             // without your other hand on a number.
-            case Qt.Key_D:
+            case "draw_mode":
                 if (win.caretColumn < 0)
                     win.moveCaret(0, 0)
                 win.mode = win.mode === "draw" ? "" : "draw"
@@ -629,7 +742,7 @@ Window {
             // Pick mode: the digits stop choosing a colour and start
             // collecting one. Point at a pixel, press a number, and that
             // colour is on that number.
-            case Qt.Key_P:
+            case "pick_mode":
                 if (win.caretColumn < 0)
                     win.moveCaret(0, 0)
                 win.mode = win.mode === "pick" ? "" : "pick"
@@ -642,7 +755,7 @@ Window {
             // Each press drops a corner. Nothing is drawn until you name a
             // colour, so a right angle is two corners and one press instead of
             // two lines whose ends you have to line up by hand.
-            case Qt.Key_L:
+            case "line_point":
                 if (win.caretColumn < 0)
                     win.moveCaret(0, 0)
                 win.linePoints = win.linePoints.concat(
@@ -655,11 +768,12 @@ Window {
             // button in the window unreachable -- Escape does that job now,
             // from anywhere, and it is the key people already press to leave
             // something.
-            case Qt.Key_Plus:
-            case Qt.Key_Equal:
+            case "zoom_in":
                 stage.zoomStep(stage.width / 2, stage.height / 2, true); break
-            case Qt.Key_Minus:
+            case "zoom_out":
                 stage.zoomStep(stage.width / 2, stage.height / 2, false); break
+            case "zoom_fit":
+                stage.touched = false; stage.fit(); break
             default:
                 // The digits: a colour each. Shift puts the current colour on
                 // one, plain uses it -- and painting on use, so choosing a
@@ -814,6 +928,7 @@ Window {
                     Rule {}
                     Cmd { action: actOnion }
                     Cmd { action: actMesh }
+                    Cmd { action: actLoop }
                     Rule {}
                     Cmd { action: actReference }
                     Rule {}
@@ -1176,8 +1291,9 @@ Window {
                                              > paletteSection.rowsShown
                                                * paletteSection.swatchPitch
                                     label: paletteSection.showAll
-                                           ? "show nine rows"
-                                           : "show all " + doc.palette.length
+                                           ? T.t("panel.palette.showNine")
+                                           : T.t("panel.palette.showAll")
+                                                 .arg(doc.palette.length)
                                     on: paletteSection.showAll
                                     onClicked: paletteSection.showAll = !paletteSection.showAll
                                 }
@@ -1461,6 +1577,46 @@ Window {
 
     // ---------------------------------------------------------------- dialogs
 
+    Sheet {
+        id: unsavedSheet
+        title: T.t("dialog.unsaved")
+        property bool keepPendingAction: false
+        onClosed: {
+            if (keepPendingAction)
+                keepPendingAction = false
+            else
+                win.pendingAction = ""
+            win.focusCanvas()
+        }
+
+        body: [
+            Label {
+                width: 320
+                wrapMode: Text.Wrap
+                text: T.t("dialog.unsaved.message")
+            },
+            Row {
+                spacing: 6
+                Chip {
+                    label: T.t("menu.save")
+                    on: true
+                    onClicked: win.savePendingChanges()
+                }
+                Chip {
+                    label: T.t("action.discard")
+                    onClicked: win.discardPendingChanges()
+                }
+                Chip {
+                    label: T.t("action.cancel")
+                    onClicked: {
+                        win.pendingAction = ""
+                        unsavedSheet.close()
+                    }
+                }
+            }
+        ]
+    }
+
     FileDialog {
         id: openDialog
         title: T.t("dialog.open")
@@ -1474,7 +1630,14 @@ Window {
         fileMode: FileDialog.SaveFile
         defaultSuffix: "json"
         nameFilters: ["omapixel documents (*.json)", "All files (*)"]
-        onAccepted: doc.save(selectedFile)
+        onAccepted: {
+            var saved = doc.save(selectedFile)
+            if (saved && win.pendingAction !== "")
+                win.resumePendingAction()
+            else if (!saved && win.pendingAction !== "")
+                unsavedSheet.open()
+        }
+        onRejected: if (win.pendingAction !== "") unsavedSheet.open()
     }
 
     FileDialog {
@@ -1503,8 +1666,8 @@ Window {
         onClosed: win.focusCanvas()
         title: T.t("sheet.new")
 
-        property int columns: 32
-        property int rows: 24
+        property int columns: cfg.settings["document.width"]
+        property int rows: cfg.settings["document.height"]
 
         body: [
             Flow {

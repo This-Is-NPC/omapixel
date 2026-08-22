@@ -132,9 +132,25 @@ Item {
     // you want right up to the moment you have chosen a view of your own.
     property bool touched: false
 
+    /// The zoom a drawing opens at: `canvas.zoom` in the config file, which is
+    /// either "fit" or a number of screen pixels per drawing pixel. Somebody
+    /// who always works on 32x32 tiles at 16x should not have to reach for the
+    /// same two keys every time they open one.
+    function opening() {
+        var asked = cfg.settings["canvas.zoom"]
+        var fixed = Number(asked)
+        if (String(asked) !== "fit" && isFinite(fixed) && fixed > 0) {
+            win.zoom = Math.max(1, Math.min(40, Math.round(fixed)))
+            panX = 0
+            panY = 0
+            return
+        }
+        fit()
+    }
+
     function settle() {
         if (!touched && width > 80 && height > 80)
-            fit()
+            opening()
         else
             clampPan()
     }

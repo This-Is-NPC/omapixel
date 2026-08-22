@@ -35,6 +35,14 @@ Rectangle {
                 required property var modelData
                 spacing: 5
 
+                // A hint that does not fit is dropped whole rather than sliced
+                // down the middle of a word. Done with opacity and not
+                // `visible`, because a Row closes the gap left by an invisible
+                // child: the next hint would slide into the space, fit, become
+                // visible, push the first one back out, and the bar would sit
+                // there flickering between two layouts.
+                opacity: pair.x + pair.width <= hints.width - 24 ? 1 : 0
+
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     width: cap.implicitWidth + 8

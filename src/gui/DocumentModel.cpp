@@ -1,9 +1,10 @@
 #include "DocumentModel.h"
 
 #include "Codec.h"
+#include "Config.h"
 #include "Ops.h"
-#include "Strings.h"
 #include "Render.h"
+#include "Strings.h"
 
 #include <QFileInfo>
 #include <QDir>
@@ -12,13 +13,54 @@
 #include <QVariantMap>
 
 namespace omapixel {
+namespace {
+
+Codec::WarningLimits warningLimits()
+{
+    const Config &config = Config::shared();
+    Codec::WarningLimits limits;
+    limits.fileBytes = qint64(config.number(QStringLiteral("warnings.file_mib")))
+                       * 1024 * 1024;
+    limits.clips = config.number(QStringLiteral("warnings.clips"));
+    limits.framesPerClip =
+        config.number(QStringLiteral("warnings.frames_per_clip"));
+    limits.totalFrames = config.number(QStringLiteral("warnings.frames_total"));
+    limits.paletteSlots = config.number(QStringLiteral("warnings.palette_slots"));
+    return limits;
+}
+
+qint64 renderWarningPixels()
+{
+    return qint64(Config::shared().number(
+                      QStringLiteral("warnings.render_megapixels")))
+           * 1000000;
+}
+
+Document newDocument(int columns, int rows)
+{
+    Document document = Document::blank(columns, rows);
+    document.setFps(document.clipNames().first(),
+                    qBound(1, Config::shared().number(
+                                  QStringLiteral("document.fps")),
+                           60));
+    return document;
+}
+
+} // namespace
 
 DocumentModel::DocumentModel(QObject *parent)
-    : QObject(parent), m_document(Document::blank(32, 24))
+    : QObject(parent),
+      // The size the config file calls a new document, so opening the studio
+      // with nothing to open gives you the canvas you usually work on.
+      m_document(newDocument(
+          qBound(1, Config::shared().number(QStringLiteral("document.width")), 512),
+          qBound(1, Config::shared().number(QStringLiteral("document.height")), 512)))
 {
     m_paletteRows.sync(m_document.palette());
     m_clip = m_document.clipNames().value(0);
-    m_note = QStringLiteral("new document · 32×24");
+    m_note = QStringLiteral("new document · %1×%2")
+                 .arg(m_document.columns())
+                 .arg(m_document.rows());
 }
 
 QVariantList DocumentModel::palette() const
@@ -97,10 +139,17 @@ void DocumentModel::remember(const Document &before)
         m_strokeRemembered = true;
     }
     m_undo.append(before);
-    if (m_undo.size() > HistoryDepth)
+    while (m_undo.size() > historyDepth())
         m_undo.removeFirst();
     m_redo.clear();
     emit historyChanged();
+}
+
+int DocumentModel::historyDepth()
+{
+    // One is the floor: a stack with nothing in it turns Ctrl+Z into a key
+    // that does nothing, which reads as broken rather than as configured.
+    return qMax(1, Config::shared().number(QStringLiteral("history.depth")));
 }
 
 void DocumentModel::reseat()
@@ -547,7 +596,7 @@ void DocumentModel::resize(int columns, int rows)
 void DocumentModel::reset(int columns, int rows)
 {
     remember(m_document);
-    m_document = Document::blank(columns, rows);
+    m_document = newDocument(columns, rows);
     m_clip = m_document.clipNames().value(0);
     m_frame = 0;
     m_path.clear();
@@ -607,7 +656,7 @@ bool DocumentModel::open(const QString &path)
     if (where.startsWith(QLatin1String("file://")))
         where = QUrl(where).toLocalFile();
 
-    const Codec::Result read = Codec::readFile(where);
+    const Codec::Result read = Codec::readFile(where, warningLimits());
     if (!read) {
         say(read.error);
         return false;
@@ -621,9 +670,12 @@ bool DocumentModel::open(const QString &path)
     m_path = where;
     m_dirty = false;
     paletteMoved();
-    say(Strings::shared().t(QStringLiteral("note.opened"))
-            .arg(QFileInfo(where).fileName())
-            .arg(m_document.clips().size()));
+    QString note = Strings::shared().t(QStringLiteral("note.opened"))
+                       .arg(QFileInfo(where).fileName())
+                       .arg(m_document.clips().size());
+    if (!read.warnings.isEmpty())
+        note += QStringLiteral(" · warning: ") + read.warnings.join(QStringLiteral("; "));
+    say(note);
     emit changed();
     emit viewChanged();
     emit fileChanged();
@@ -632,7 +684,9 @@ bool DocumentModel::open(const QString &path)
 
 bool DocumentModel::save(const QString &path)
 {
-    const QString where = path.isEmpty() ? m_path : path;
+    QString where = path.isEmpty() ? m_path : path;
+    if (where.startsWith(QLatin1String("file://")))
+        where = QUrl(where).toLocalFile();
     if (where.isEmpty()) {
         say(Strings::shared().t(QStringLiteral("note.sayWhereToSave")));
         return false;
@@ -664,15 +718,24 @@ bool DocumentModel::exportImage(const QString &path, int scale, bool sheet,
     options.scale = qBound(1, scale, 64);
     options.sheet = sheet;
     options.checker = checker;
-    const QImage image = render::toImage(m_document, m_clip, m_frame, options);
+    options.warningPixels = renderWarningPixels();
+    QString warning;
+    QString error;
+    const QImage image =
+        render::toImage(m_document, m_clip, m_frame, options, &warning, &error);
     if (image.isNull() || !image.save(where)) {
-        say(Strings::shared().t(QStringLiteral("note.couldNotWrite")).arg(where));
+        say(error.isEmpty()
+                ? Strings::shared().t(QStringLiteral("note.couldNotWrite")).arg(where)
+                : error);
         return false;
     }
-    say(Strings::shared().t(QStringLiteral("note.exported"))
-            .arg(image.width())
-            .arg(image.height())
-            .arg(QFileInfo(where).fileName()));
+    QString note = Strings::shared().t(QStringLiteral("note.exported"))
+                       .arg(image.width())
+                       .arg(image.height())
+                       .arg(QFileInfo(where).fileName());
+    if (!warning.isEmpty())
+        note += QStringLiteral(" · warning: ") + warning;
+    say(note);
     return true;
 }
 

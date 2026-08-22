@@ -244,9 +244,11 @@ private:
     /// underneath them, which undo can do in one step.
     void reseat();
 
-    /// Deep enough to cover a session's worth of mistakes, shallow enough that
-    /// the snapshots cannot quietly eat a workstation.
-    static constexpr int HistoryDepth = 80;
+    /// How far back undo goes. `history.depth` in the config file, because a
+    /// snapshot is a whole document: deep enough to cover a session's worth of
+    /// mistakes on a 32x24 sprite is not the same number as on a 512x512 one,
+    /// and only the person drawing knows which they are doing.
+    static int historyDepth();
 
     /// Announces a palette change, and keeps the revision counter honest.
     void paletteMoved();
