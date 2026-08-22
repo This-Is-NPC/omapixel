@@ -8,7 +8,9 @@ TARGET    = tst_omapixel
 # Compiles the core's sources directly rather than linking the library. It is
 # what omawrite does, and it keeps `mise run test` independent of whether the
 # main build happens to be up to date.
-DEFINES += OMAPIXEL_I18N_DIR=\\\"$$PWD/../i18n\\\" SOURCE_DIR=\\\"$$PWD/..\\\"
+DEFINES += OMAPIXEL_I18N_DIR=\\\"$$PWD/../i18n\\\"
+DEFINES += OMAPIXEL_CONFIG_DIR=\\\"$$PWD/../config\\\"
+DEFINES += SOURCE_DIR=\\\"$$PWD/..\\\"
 
 INCLUDEPATH += $$PWD/../src/core $$PWD/../src/gui $$PWD/../src/cli
 
@@ -22,6 +24,8 @@ SOURCES += \
     ../src/core/Render.cpp \
     ../src/core/Bridge.cpp \
     ../src/core/Strings.cpp \
+    ../src/core/Toml.cpp \
+    ../src/core/Config.cpp \
     ../src/gui/Theme.cpp \
     ../src/gui/DocumentModel.cpp \
     ../src/gui/PaletteModel.cpp \
@@ -38,6 +42,8 @@ HEADERS += \
     ../src/core/Render.h \
     ../src/core/Bridge.h \
     ../src/core/Strings.h \
+    ../src/core/Toml.h \
+    ../src/core/Config.h \
     ../src/gui/Theme.h \
     ../src/gui/DocumentModel.h \
     ../src/gui/PaletteModel.h \

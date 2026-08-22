@@ -23,6 +23,8 @@
 #include <QSignalSpy>
 #include <QSet>
 #include <QJsonArray>
+
+#include <limits>
 #include <QJsonDocument>
 
 #include "Bridge.h"
@@ -33,7 +35,9 @@
 #include "Palette.h"
 #include "Render.h"
 #include "Commands.h"
+#include "Config.h"
 #include "Strings.h"
+#include "Toml.h"
 #include "DocumentModel.h"
 #include "InputLog.h"
 #include "PixelGridItem.h"
@@ -130,6 +134,23 @@ class OmapixelTest : public QObject
     Q_OBJECT
 
 private slots:
+
+    void initTestCase()
+    {
+        // The tests must not read the config file of whoever is running them:
+        // a rebound key on this machine would fail a test that passes
+        // everywhere else. Pointed at a path that is not there, which is the
+        // supported way of saying "the defaults".
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+        Config::shared().load();
+
+        // And the catalogue, because the window reads every one of its labels
+        // out of it. Without this the QML tests ran with `T` undefined and
+        // every string in the window empty -- which they survived only
+        // because a QML binding error is a warning.
+        Strings::shared().load(QStringLiteral("en"));
+    }
+
 
     // ------------------------------------------------------------------ Grid
 
@@ -356,6 +377,49 @@ private slots:
         QVERIFY(read.error.contains(QLatin1String("size")));
     }
 
+    void malformedDocumentsAreRefusedBeforeTheyCanBeNormalised()
+    {
+        const QByteArray valid = R"({
+            "size": {"w": 1, "h": 1},
+            "palette": [{"slot": "I", "colour": "#112233"}],
+            "clips": [{"name": "idle", "fps": 8, "frames": [["I"]]}]
+        })";
+        QVERIFY(Codec::read(valid).ok);
+
+        QByteArray wrongType = valid;
+        wrongType.replace("\"fps\": 8", "\"fps\": \"8\"");
+        QVERIFY(Codec::read(wrongType).error.contains(QLatin1String(".fps")));
+
+        QByteArray shortRow = valid;
+        shortRow.replace("[\"I\"]", "[\"\"]");
+        QVERIFY(Codec::read(shortRow).error.contains(QLatin1String("QChars")));
+
+        QByteArray unknownSlot = valid;
+        unknownSlot.replace("[\"I\"]", "[\"Z\"]");
+        QVERIFY(Codec::read(unknownSlot).error.contains(QLatin1String("undefined")));
+
+        const QByteArray duplicate = R"({
+            "size": {"w": 1, "w": 2, "h": 1},
+            "palette": [{"slot": "I", "colour": "#112233"}],
+            "clips": [{"name": "idle", "fps": 8, "frames": [["I"]]}]
+        })";
+        QVERIFY(Codec::read(duplicate).error.contains(QLatin1String("duplicate")));
+    }
+
+    void resourceThresholdsWarnWithoutRefusingTheDocument()
+    {
+        Codec::WarningLimits limits;
+        limits.fileBytes = 1;
+        limits.clips = 0;
+        limits.framesPerClip = 0;
+        limits.totalFrames = 0;
+        limits.paletteSlots = 0;
+        const Codec::Result read = Codec::read(Codec::write(sample()), limits);
+        QVERIFY(read.ok);
+        QCOMPARE(read.warnings.size(), 1);
+        QVERIFY(read.warnings.first().contains(QLatin1String("threshold")));
+    }
+
     void writingIsAtomic()
     {
         // The studio watches the file it has open. It must not read half a
@@ -367,6 +431,18 @@ private slots:
         const Codec::Result back = Codec::readFile(path);
         QVERIFY(back.ok);
         QVERIFY(back.document == sample());
+    }
+
+    void documentModelSavesFileDialogUrls()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("saved.json"));
+        DocumentModel document;
+        document.paint(0, 0, QStringLiteral("I"));
+        QVERIFY(document.save(QUrl::fromLocalFile(path).toString()));
+        QCOMPARE(document.path(), path);
+        QVERIFY(Codec::readFile(path).ok);
     }
 
     // ------------------------------------------------------------------- Ops
@@ -390,6 +466,30 @@ private slots:
         Grid block(5, 5);
         ops::rect(block, QPoint(0, 0), QPoint(4, 4), u'I', true);
         QCOMPARE(block.drawnCount(), 25);
+    }
+
+    void extremeGeometryIsClippedBeforeItIsWalked()
+    {
+        Grid line(16, 16);
+        QElapsedTimer elapsed;
+        elapsed.start();
+        ops::line(line, QPoint(std::numeric_limits<int>::min(), 8),
+                  QPoint(std::numeric_limits<int>::max(), 8), u'I');
+        QVERIFY(elapsed.elapsed() < 100);
+        QCOMPARE(line.drawnCount(), 16);
+
+        Grid filled(16, 16);
+        ops::rect(filled,
+                  QPoint(std::numeric_limits<int>::min(),
+                         std::numeric_limits<int>::min()),
+                  QPoint(std::numeric_limits<int>::max(),
+                         std::numeric_limits<int>::max()),
+                  u'I', true);
+        QCOMPARE(filled.drawnCount(), 16 * 16);
+
+        Grid outline(16, 16);
+        ops::rect(outline, QPoint(-100, -100), QPoint(100, 100), u'I', false);
+        QCOMPARE(outline.drawnCount(), 0);
     }
 
     void fillStopsAtTheEdgeOfItsOwnRun()
@@ -477,6 +577,27 @@ private slots:
         QCOMPARE(qAlpha(image.pixel(0, 0)), 0);
     }
 
+    void renderWarningsDoNotReplaceOverflowChecks()
+    {
+        Document doc = sample();
+        doc.addFrame(QStringLiteral("idle"), 0, true);
+        render::Options options;
+        options.sheet = true;
+        options.warningPixels = 1;
+        QString warning;
+        QString error;
+        QVERIFY(!render::toImage(doc, QStringLiteral("idle"), 0, options,
+                                 &warning, &error).isNull());
+        QVERIFY(!warning.isEmpty());
+        QVERIFY(error.isEmpty());
+
+        options.sheetGap = std::numeric_limits<int>::max();
+        QVERIFY(render::toImage(doc, QStringLiteral("idle"), 0, options,
+                                &warning, &error).isNull());
+        QVERIFY(error.contains(QLatin1String("limits"))
+                || error.contains(QLatin1String("overflow")));
+    }
+
     void textIsTheGridAndNothingElse()
     {
         // What a diff and a test want, and what survives being pasted anywhere.
@@ -550,6 +671,17 @@ private slots:
                                        .value(QStringLiteral("0"))
                                        .toObject();
         QVERIFY(!states.contains(QStringLiteral("dancing")));
+    }
+
+    void exportWithoutAnyKnownSequenceDoesNotProduceACatalog()
+    {
+        Document doc = Document::blank(1, 1);
+        QVERIFY(doc.renameClip(QStringLiteral("idle"), QStringLiteral("dancing")));
+        const Bridge::Result pushed =
+            Bridge::exportInto(catalog(), doc, QStringLiteral("critter"),
+                               QStringLiteral("0"));
+        QVERIFY(!pushed.ok);
+        QVERIFY(pushed.catalog.isEmpty());
     }
 
     void aMissingSpeciesSaysWhatThereIs()
@@ -724,7 +856,33 @@ private slots:
         const cli::Outcome info = run(doc, QStringLiteral("info"));
         QCOMPARE(info.code, 0);
         QVERIFY(!info.changed);
-        QVERIFY(info.output.contains(QStringLiteral("\"size\"")));
+        QJsonParseError parse;
+        const QJsonDocument json =
+            QJsonDocument::fromJson(info.output.toUtf8(), &parse);
+        QCOMPARE(parse.error, QJsonParseError::NoError);
+        QVERIFY(json.isObject());
+    }
+
+    void infoEscapesNamesAndDiffIncludesMetadata()
+    {
+        Document left = sample();
+        QVERIFY(left.renameClip(QStringLiteral("idle"),
+                                QStringLiteral("bad\"name\\line")));
+        const cli::Outcome info = run(left, QStringLiteral("info"));
+        QJsonParseError parse;
+        const QJsonDocument json =
+            QJsonDocument::fromJson(info.output.toUtf8(), &parse);
+        QCOMPARE(parse.error, QJsonParseError::NoError);
+        QCOMPARE(json.object().value(QStringLiteral("clips")).toArray().first()
+                     .toObject().value(QStringLiteral("name")).toString(),
+                 QStringLiteral("bad\"name\\line"));
+
+        Document right = left;
+        QVERIFY(right.setFps(QStringLiteral("bad\"name\\line"), 12));
+        QVERIFY(!cli::documentDifferences(left, right).isEmpty());
+        right = left;
+        QVERIFY(right.addClip(QStringLiteral("extra")));
+        QVERIFY(!cli::documentDifferences(left, right).isEmpty());
     }
 
     void aWrongCommandIsTwoAndARefusalIsOne()
@@ -1013,15 +1171,15 @@ private slots:
         // file that ships.
         qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
 
+        QTest::failOnWarning();
+        DocumentModel document;
+        document.reset(64, 64);
+        Theme theme;
         QQuickView view;
         // Surface.qml has no size of its own -- in the window it takes one from
         // the layout. Without this it loads at 0x0 and no pointer event can
         // reach it, which looks exactly like the bug being hunted.
         view.setResizeMode(QQuickView::SizeRootObjectToView);
-        DocumentModel document;
-        document.reset(64, 64);
-        Theme theme;
-
         // `win` is the window in Main.qml. Surface reads a handful of view
         // state off it; here it is a stand-in carrying the same properties.
         QQmlComponent stub(view.engine());
@@ -1036,6 +1194,9 @@ private slots:
                 property string referencePath: ""
                 property real referenceAlpha: 0.5
                 property bool referenceOnTop: false
+                property var linePoints: []
+                property int caretColumn: -1
+                property int caretRow: -1
             }
         )", QUrl());
         QVERIFY2(stub.isReady(), qPrintable(stub.errorString()));
@@ -1045,6 +1206,9 @@ private slots:
         view.rootContext()->setContextProperty(QStringLiteral("win"), win);
         view.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
         view.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        view.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        view.rootContext()->setContextProperty(
+            QStringLiteral("T"), &Strings::shared());
         static InputLog quiet(false);
         view.rootContext()->setContextProperty(QStringLiteral("log"), &quiet);
 
@@ -1087,6 +1251,7 @@ private slots:
 
     void aWheelOverTheWholeWindowReachesTheSurface()
     {
+        QTest::failOnWarning();
         // Loads Main.qml -- the whole composition, rails and timeline and all --
         // and scrolls at a point inside the drawing pane. Testing Surface.qml
         // on its own passed while the studio did not, which means the thing
@@ -1099,6 +1264,9 @@ private slots:
         Theme theme;
         engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(
+            QStringLiteral("T"), &Strings::shared());
         static InputLog silent(false);
         engine.rootContext()->setContextProperty(QStringLiteral("log"), &silent);
         engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
@@ -1131,7 +1299,53 @@ private slots:
                                                  Qt::NoModifier);
         QCoreApplication::processEvents();
         QVERIFY2(!qFuzzyCompare(surface->property("panY").toReal(), restingY),
-                 "a wheel over the drawing did not scroll it");
+                  "a wheel over the drawing did not scroll it");
+    }
+
+    void dirtyDocumentsGateEveryDestructiveWindowAction()
+    {
+        QTest::failOnWarning();
+        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        QQmlEngine engine;
+        DocumentModel document;
+        Theme theme;
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(
+            QStringLiteral("T"), &Strings::shared());
+        static InputLog silent(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &silent);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        QVERIFY(root);
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+
+        document.paint(0, 0, QStringLiteral("I"));
+        QVERIFY(document.dirty());
+        const int columns = document.columns();
+        const int rows = document.rows();
+        for (const QString &action : {QStringLiteral("new"), QStringLiteral("open"),
+                                      QStringLiteral("quit")}) {
+            root->setProperty("pendingAction", QString());
+            QVERIFY(QMetaObject::invokeMethod(root.data(), "requestAction",
+                                              Q_ARG(QVariant, action)));
+            QCOMPARE(root->property("pendingAction").toString(), action);
+            QVERIFY(document.dirty());
+            QCOMPARE(document.columns(), columns);
+            QCOMPARE(document.rows(), rows);
+        }
+
+        root->setProperty("pendingAction", QString());
+        window->close();
+        QCoreApplication::processEvents();
+        QCOMPARE(root->property("pendingAction").toString(), QStringLiteral("close"));
+        QVERIFY(document.dirty());
     }
 
     void replacingASlotReachesEveryFrame()
@@ -1289,6 +1503,9 @@ private slots:
         static InputLog mute(false);
         engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(
+            QStringLiteral("T"), &Strings::shared());
         engine.rootContext()->setContextProperty(QStringLiteral("log"), &mute);
         engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
 
@@ -1483,6 +1700,9 @@ private slots:
         static InputLog still(false);
         engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(
+            QStringLiteral("T"), &Strings::shared());
         engine.rootContext()->setContextProperty(QStringLiteral("log"), &still);
         engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
 
@@ -1547,6 +1767,9 @@ private slots:
         static InputLog quiet2(false);
         engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(
+            QStringLiteral("T"), &Strings::shared());
         engine.rootContext()->setContextProperty(QStringLiteral("log"), &quiet2);
         engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
 
@@ -1764,6 +1987,9 @@ private slots:
         static InputLog hush(false);
         engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(
+            QStringLiteral("T"), &Strings::shared());
         engine.rootContext()->setContextProperty(QStringLiteral("log"), &hush);
         engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
 
@@ -1809,6 +2035,404 @@ private slots:
         // things that do not depend on how busy the machine is.
         QVERIFY2(last < first * 4 + 200,
                  "painting got dramatically slower as the palette grew");
+    }
+
+    // ---------------------------------------------------------- config
+
+    void aSettingComesFromTheFileAndNothingElseIsInvented()
+    {
+        // The defaults are the program; the file is how you disagree with it.
+        // A key nobody reads has to be reported, because a setting that does
+        // nothing and says nothing is the failure a config file actually has.
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        const QString path = home.path() + QStringLiteral("/config.toml");
+        qputenv("OMAPIXEL_CONFIG_PATH", path.toUtf8());
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("[window]\n"
+                   "hints = false\n"
+                   "[canvas]\n"
+                   "big_step = 4\n"
+                   "grid = \"yes\"\n"
+                   "wibble = 3\n");
+        file.close();
+
+        Config config;
+        QCOMPARE(config.flag(QStringLiteral("window.hints")), false);
+        QCOMPARE(config.number(QStringLiteral("canvas.big_step")), 4);
+        // Untouched settings keep their defaults.
+        QCOMPARE(config.number(QStringLiteral("window.width")), 1280);
+        // A boolean written as a string is not read as one: "yes" is a string,
+        // and a string is not false.
+        QCOMPARE(config.flag(QStringLiteral("canvas.grid")), true);
+
+        const QStringList problems = config.problems();
+        QCOMPARE(problems.size(), 2);
+        QVERIFY(problems.filter(QStringLiteral("canvas.grid")).size() == 1);
+        QVERIFY(problems.filter(QStringLiteral("wibble")).size() == 1);
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+    }
+
+    void aKeyDoesWhatTheFileSaysItDoes()
+    {
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        const QString path = home.path() + QStringLiteral("/config.toml");
+        qputenv("OMAPIXEL_CONFIG_PATH", path.toUtf8());
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("[keys]\n"
+                   "undo = \"alt+z\"\n"
+                   "paint = [\"enter\", \"z\"]\n"
+                   "roulette = \"\"\n"
+                   "line_point = \"nonsense\"\n");
+        file.close();
+
+        Config config;
+        QCOMPARE(config.action(Qt::Key_Z, Qt::AltModifier), QStringLiteral("undo"));
+        // The old binding is gone, not added to.
+        QVERIFY(config.action(Qt::Key_Z, Qt::ControlModifier).isEmpty());
+        // Several keys for one action.
+        QCOMPARE(config.action(Qt::Key_Return, Qt::NoModifier), QStringLiteral("paint"));
+        QCOMPARE(config.action(Qt::Key_Z, Qt::NoModifier), QStringLiteral("paint"));
+        // The keypad's Enter is the same key to anybody typing, and only one
+        // of the two can be written in a file.
+        QCOMPARE(config.action(Qt::Key_Enter, Qt::NoModifier), QStringLiteral("paint"));
+        // An empty string gives the key back.
+        QVERIFY(config.action(Qt::Key_R, Qt::NoModifier).isEmpty());
+        // A binding that names no key is reported rather than ignored.
+        QVERIFY(config.problems().filter(QStringLiteral("nonsense")).size() == 1);
+        // And the untouched ones still work.
+        QCOMPARE(config.action(Qt::Key_B, Qt::NoModifier), QStringLiteral("tool_pencil"));
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+    }
+
+    void punctuationIsBoundWithOrWithoutShift()
+    {
+        // `+` is shift-and-equals on one layout and a key of its own on
+        // another. Somebody who wrote `zoom_in = "plus"` means the plus key on
+        // both, so shift is forgiven -- but only when nothing matched exactly,
+        // so a deliberate shift+comma still beats a plain comma.
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+        Config config;
+        QCOMPARE(config.action(Qt::Key_Plus, Qt::ShiftModifier), QStringLiteral("zoom_in"));
+        QCOMPARE(config.action(Qt::Key_Plus, Qt::NoModifier), QStringLiteral("zoom_in"));
+        QCOMPARE(config.action(Qt::Key_Comma, Qt::NoModifier),
+                 QStringLiteral("frame_previous"));
+        QCOMPARE(config.action(Qt::Key_Comma, Qt::ShiftModifier),
+                 QStringLiteral("frame_move_back"));
+        // Letters are never forgiven: c and shift+c are two commands here.
+        QCOMPARE(config.action(Qt::Key_C, Qt::NoModifier), QStringLiteral("choose_colour"));
+        QCOMPARE(config.action(Qt::Key_C, Qt::ShiftModifier),
+                 QStringLiteral("replace_colour"));
+    }
+
+    void twoActionsOnOneKeyIsSaidOutLoud()
+    {
+        // The mistake a keybinding file makes, and the one whose symptom --
+        // one of them silently never firing -- cannot be guessed at.
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        const QString path = home.path() + QStringLiteral("/config.toml");
+        qputenv("OMAPIXEL_CONFIG_PATH", path.toUtf8());
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("[keys]\ntool_hand = \"r\"\n");
+        file.close();
+
+        Config config;
+        const QStringList clash = config.problems().filter(QStringLiteral("R is on both"));
+        QCOMPARE(clash.size(), 1);
+        QVERIFY(clash.first().contains(QStringLiteral("roulette")));
+        QVERIFY(clash.first().contains(QStringLiteral("tool_hand")));
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+    }
+
+    void aBindingIsWrittenBothWaysRound()
+    {
+        // The menus need Qt's spelling and the hint bar needs a short one.
+        // Both come from the same parsed binding, so a rebind cannot change
+        // one and leave the other lying.
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+        Config config;
+        QCOMPARE(config.shortcut(QStringLiteral("save")), QStringLiteral("Ctrl+S"));
+        QCOMPARE(config.label(QStringLiteral("save")), QStringLiteral("^S"));
+        QCOMPARE(config.label(QStringLiteral("cancel")), QStringLiteral("Esc"));
+        QCOMPARE(config.label(QStringLiteral("draw_mode")), QStringLiteral("d"));
+        QCOMPARE(config.label(QStringLiteral("replace_colour")), QStringLiteral("⇧C"));
+        QCOMPARE(config.label(QStringLiteral("slot_leader")), QStringLiteral(";"));
+        // An action nobody bound says nothing rather than "".
+        QVERIFY(config.label(QStringLiteral("toggle_hints")).isEmpty());
+    }
+
+    void savingTheFileRebindsTheKeysWhileTheWindowIsOpen()
+    {
+        // The claim the documentation makes. A keybinding file you have to
+        // relaunch to try is a keybinding file that goes unedited, so the
+        // watcher is part of the feature rather than a nicety.
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        const QString path = home.path() + QStringLiteral("/config.toml");
+        qputenv("OMAPIXEL_CONFIG_PATH", path.toUtf8());
+
+        Config config;
+        QCOMPARE(config.action(Qt::Key_B, Qt::NoModifier), QStringLiteral("tool_pencil"));
+        QSignalSpy changed(&config, &Config::changed);
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("[keys]\ntool_pencil = \"n\"\n");
+        file.close();
+
+        QVERIFY(changed.wait(4000));
+        QCOMPARE(config.action(Qt::Key_N, Qt::NoModifier), QStringLiteral("tool_pencil"));
+        QVERIFY(config.action(Qt::Key_B, Qt::NoModifier).isEmpty());
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+    }
+
+    void numericSettingsRejectValuesOutsideTheirDomain()
+    {
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        const QString path = home.path() + QStringLiteral("/config.toml");
+        qputenv("OMAPIXEL_CONFIG_PATH", path.toUtf8());
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("[window]\nwidth = -1\n"
+                   "[canvas]\nzoom = 41\nbig_step = 0\n"
+                   "[document]\nwidth = 513\nfps = 0\n"
+                   "[history]\ndepth = -5\n"
+                   "[warnings]\nclips = -1\n");
+        file.close();
+
+        Config config;
+        QCOMPARE(config.problems().size(), 7);
+        QCOMPARE(config.number(QStringLiteral("window.width")), 1280);
+        QCOMPARE(config.text(QStringLiteral("canvas.zoom")), QStringLiteral("fit"));
+        QCOMPARE(config.number(QStringLiteral("warnings.clips")), 256);
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+    }
+
+    void newDocumentsUseTheConfiguredFps()
+    {
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        const QString path = home.path() + QStringLiteral("/config.toml");
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("[document]\nfps = 24\n");
+        file.close();
+
+        qputenv("OMAPIXEL_CONFIG_PATH", path.toUtf8());
+        Config::shared().load();
+        DocumentModel document;
+        QCOMPARE(document.fps(), 24);
+        document.reset(16, 16);
+        QCOMPARE(document.fps(), 24);
+
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+        Config::shared().load();
+    }
+
+    void theShippedConfigSaysWhatTheProgramActuallyDoes()
+    {
+        // config/config.toml is the documentation, the seed for `config write`
+        // and what `--default-config` prints. If it drifts from the defaults
+        // in Config.cpp it is worse than no file: it describes a program that
+        // does not exist. So every commented line in it is checked against the
+        // real default, and every default is checked for a line.
+        QFile shipped(QStringLiteral(SOURCE_DIR "/config/config.toml"));
+        QVERIFY2(shipped.open(QIODevice::ReadOnly), "config/config.toml is missing");
+        const QString body = QString::fromUtf8(shipped.readAll());
+
+        // Uncommenting every `# key = value` turns the shipped file into a
+        // config that sets everything to its default -- which is exactly what
+        // the parser should then agree with.
+        QString uncommented;
+        const QRegularExpression setting(
+            QStringLiteral("^# ([a-z_]+ = .*)$"));
+        QSet<QString> mentioned;
+        QString section;
+        const QStringList lines = body.split(QLatin1Char('\n'));
+        for (const QString &line : lines) {
+            if (line.startsWith(QLatin1Char('[')) && line.endsWith(QLatin1Char(']'))) {
+                section = line.mid(1, line.size() - 2);
+                uncommented += line + QLatin1Char('\n');
+                continue;
+            }
+            const auto match = setting.match(line);
+            if (!match.hasMatch())
+                continue;
+            const QString assignment = match.captured(1);
+            uncommented += assignment + QLatin1Char('\n');
+            const QString name = assignment.section(QLatin1Char('='), 0, 0).trimmed();
+            mentioned.insert(section.isEmpty() ? name
+                                               : section + QLatin1Char('.') + name);
+        }
+
+        const toml::Table parsed = toml::read(uncommented);
+        QVERIFY2(parsed.problems.isEmpty(),
+                 qPrintable(parsed.problems.isEmpty()
+                                ? QString()
+                                : parsed.problems.first().message));
+
+        for (const auto &defaulted : Config::settings()) {
+            QVERIFY2(mentioned.contains(defaulted.first),
+                     qPrintable(defaulted.first + QStringLiteral(" is not in config/config.toml")));
+            QCOMPARE(parsed.value(defaulted.first).toString(),
+                     defaulted.second.toString());
+        }
+
+        for (const auto &action : Config::actions()) {
+            const QString key = QStringLiteral("keys.") + action.first;
+            QVERIFY2(mentioned.contains(key),
+                     qPrintable(key + QStringLiteral(" is not in config/config.toml")));
+            // The default is stored as the file would write it, so the two can
+            // be compared without either side knowing the other's syntax.
+            QString wrote;
+            const QVariant value = parsed.value(key);
+            if (value.typeId() == QMetaType::QVariantList) {
+                QStringList parts;
+                for (const QVariant &one : value.toList())
+                    parts << QLatin1Char('"') + one.toString() + QLatin1Char('"');
+                wrote = QLatin1Char('[') + parts.join(QStringLiteral(", ")) + QLatin1Char(']');
+            } else {
+                wrote = value.toString();
+            }
+            QCOMPARE(wrote, action.second);
+        }
+
+        // And nothing in the file that the program does not read.
+        for (const QString &key : mentioned) {
+            const bool known =
+                std::any_of(Config::settings().begin(), Config::settings().end(),
+                            [&key](const QPair<QString, QVariant> &s) { return s.first == key; })
+                || std::any_of(Config::actions().begin(), Config::actions().end(),
+                               [&key](const QPair<QString, QString> &a) {
+                                   return QStringLiteral("keys.") + a.first == key;
+                               });
+            QVERIFY2(known, qPrintable(key + QStringLiteral(" in config/config.toml is read by nothing")));
+        }
+    }
+
+    void nothingTheWindowSaysIsWrittenInTheQml()
+    {
+        // The catalogue test above checks that every key the QML asks for
+        // exists. It cannot see a string that never asked -- and six of them
+        // had quietly stayed in English through the whole i18n change, which
+        // is exactly the failure a translator finds and nobody else does.
+        QStringList literals;
+        const QRegularExpression said(
+            QStringLiteral("(?:doc\\.say|label:|text:)\\s*\"([A-Za-z][^\"]{3,})\""));
+        QDirIterator qml(QStringLiteral(SOURCE_DIR "/src/gui/qml"),
+                         {QStringLiteral("*.qml")}, QDir::Files);
+        while (qml.hasNext()) {
+            QFile file(qml.next());
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            const QString body = QString::fromUtf8(file.readAll());
+            auto found = said.globalMatch(body);
+            while (found.hasNext()) {
+                const QString text = found.next().captured(1);
+                // The program's own name is not a word in any language.
+                if (text == QLatin1String("omapixel"))
+                    continue;
+                literals << text;
+            }
+        }
+        QVERIFY2(literals.isEmpty(),
+                 qPrintable(QStringLiteral("not in the catalogue: ")
+                            + literals.join(QStringLiteral(" | "))));
+    }
+
+    void playingStopsOnTheLastFrameWhenTheLoopIsOff()
+    {
+        // A loop is right for judging movement and wrong for judging the last
+        // frame -- which the loop keeps snatching away a twelfth of a second
+        // after it arrives. Both are wanted, so it is a flag.
+        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+
+        QQmlEngine engine;
+        DocumentModel document;
+        document.reset(8, 8);
+        for (int i = 0; i < 3; ++i)
+            document.addFrame(false);
+        document.setFps(60);            // so the test does not sit and wait
+        Theme theme;
+        static InputLog mute(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &mute);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        window->resize(900, 640);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        const int last = document.frameCount() - 1;
+        QCOMPARE(root->property("loop").toBool(), true);   // the default
+
+        // Looping: from the last frame it comes back round, still playing.
+        document.setFrame(last);
+        QMetaObject::invokeMethod(root.data(), "togglePlay");
+        QVERIFY(root->property("playing").toBool());
+        QTRY_COMPARE(document.frame(), 0);
+        QVERIFY(root->property("playing").toBool());
+        QMetaObject::invokeMethod(root.data(), "togglePlay");
+        QVERIFY(!root->property("playing").toBool());
+
+        // Not looping: it stops, and it stops ON the last frame rather than
+        // one past it, because the end of an animation is a thing you look at.
+        root->setProperty("loop", false);
+        document.setFrame(0);
+        QMetaObject::invokeMethod(root.data(), "togglePlay");
+        QTRY_VERIFY(!root->property("playing").toBool());
+        QCOMPARE(document.frame(), last);
+
+        // And pressing play again from there starts it over, rather than
+        // doing nothing at all -- which reads as a broken button.
+        QMetaObject::invokeMethod(root.data(), "togglePlay");
+        QCOMPARE(document.frame(), 0);
+        QVERIFY(root->property("playing").toBool());
+    }
+
+    void theWindowOnlyAsksForActionsThatExist()
+    {
+        // The same check the catalogue gets: every `cfg.shortcuts.x`,
+        // `cfg.keys.x` and every action the key switch dispatches on has to be
+        // an action Config knows. A typo here is a menu with no shortcut and a
+        // key that does nothing, neither of which announces itself.
+        QSet<QString> known;
+        for (const auto &action : Config::actions())
+            known.insert(action.first);
+
+        QStringList invented;
+        const QRegularExpression reference(
+            QStringLiteral("cfg\\.(?:shortcuts|keys)\\.([a-z_]+)"));
+        QDirIterator qml(QStringLiteral(SOURCE_DIR "/src/gui/qml"),
+                         {QStringLiteral("*.qml")}, QDir::Files);
+        while (qml.hasNext()) {
+            QFile file(qml.next());
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            const QString body = QString::fromUtf8(file.readAll());
+            auto found = reference.globalMatch(body);
+            while (found.hasNext()) {
+                const QString name = found.next().captured(1);
+                if (!known.contains(name))
+                    invented << name;
+            }
+        }
+        QVERIFY2(invented.isEmpty(), qPrintable(invented.join(QStringLiteral(", "))));
     }
 
     // ------------------------------------------------------------ i18n
