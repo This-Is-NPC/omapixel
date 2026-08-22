@@ -21,12 +21,26 @@
 #include <QTimer>
 #include <QtGlobal>
 
+#include "version.h"
+
 #include <cstdio>
 
 int main(int argc, char *argv[])
 {
+    // Answered before QGuiApplication exists, because constructing it needs a
+    // display and asking a program its version does not. A package build runs
+    // on a machine with no screen at all.
+    for (int i = 1; i < argc; ++i) {
+        const QLatin1String argument(argv[i]);
+        if (argument == QLatin1String("--version") || argument == QLatin1String("-v")) {
+            std::printf("omapixel-studio %s\n", OMAPIXEL_VERSION);
+            return 0;
+        }
+    }
+
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("omapixel"));
+    app.setApplicationVersion(QStringLiteral(OMAPIXEL_VERSION));
     app.setApplicationDisplayName(QStringLiteral("omapixel"));
     app.setDesktopFileName(QStringLiteral("omapixel-studio"));
 
