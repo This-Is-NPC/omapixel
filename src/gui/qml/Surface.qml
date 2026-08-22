@@ -20,6 +20,10 @@ Item {
     // over both rails and the studio looked like it had lost its controls.
     clip: true
 
+    /// Emitted when somebody puts the pointer down on the drawing. The window
+    /// uses it to take the keyboard back.
+    signal pressedOnCanvas()
+
     property int hoverColumn: -1
     property int hoverRow: -1
 
@@ -29,14 +33,18 @@ Item {
     property real panX: 0
     property real panY: 0
 
-    readonly property real fitZoom: Math.max(
-        1, Math.min(Math.floor((width - 24) / Math.max(1, doc.columns)),
-                    Math.floor((height - 24) / Math.max(1, doc.rows))))
-
     /// Puts the whole drawing on screen. What you want on opening a file, and
     /// what you want after losing yourself at 40x.
+    ///
+    /// The size is worked out here rather than read from a bound property. A
+    /// binding on width and height has not been re-evaluated yet when
+    /// `onHeightChanged` runs, so fitting from one used the PREVIOUS size: the
+    /// window would lay itself out correctly and the drawing would still open
+    /// at 1x, having been fitted to a pane that no longer existed.
     function fit() {
-        win.zoom = Math.max(1, Math.min(40, surface.fitZoom))
+        var byWidth = Math.floor((width - 24) / Math.max(1, doc.columns))
+        var byHeight = Math.floor((height - 24) / Math.max(1, doc.rows))
+        win.zoom = Math.max(1, Math.min(40, Math.min(byWidth, byHeight)))
         panX = 0
         panY = 0
     }
@@ -91,6 +99,19 @@ Item {
         panX += dx * 0.7
         panY += dy * 0.7
         clampPan()
+    }
+
+    /// Brings a pixel into view, without moving anything if it is already
+    /// there. Recentring on every keypress would make the drawing lurch under
+    /// a cursor that is walking calmly across it.
+    function reveal(column, row) {
+        if (!scrollsX && !scrollsY)
+            return
+        const margin = 2
+        if (column >= viewColumn + margin && column <= viewColumn + viewColumns - margin
+            && row >= viewRow + margin && row <= viewRow + viewRows - margin)
+            return
+        centreOn(column, row)
     }
 
     /// Puts a point of the DRAWING, in columns and rows, at the middle of the
@@ -445,6 +466,7 @@ Item {
             // the first pixel that actually changes, so a click that missed
             // does not leave an entry behind.
             onPressed: function (mouse) {
+                surface.pressedOnCanvas()
                 lastColumn = -1
                 doc.beginStroke()
                 apply(mouse.x, mouse.y, mouse.button === Qt.RightButton)
@@ -458,6 +480,128 @@ Item {
                     apply(mouse.x, mouse.y, pressedButtons & Qt.RightButton)
             }
             onExited: { surface.hoverColumn = -1; surface.hoverRow = -1 }
+        }
+
+        // Where the line would go: every corner placed so far, and out to the
+        // cursor. A line you cannot see before you commit to it is a line you
+        // draw twice, once to find out and once to get it right.
+        Item {
+            id: preview
+            visible: win.linePoints.length > 0 && win.caretColumn >= 0
+            z: 6
+
+            readonly property var path: win.linePoints.concat(
+                [{ c: win.caretColumn, r: win.caretRow }])
+
+            Repeater {
+                model: Math.max(0, preview.path.length - 1)
+
+                Item {
+                    id: leg
+                    required property int index
+                    readonly property var a: preview.path[index]
+                    readonly property var b: preview.path[index + 1]
+                    readonly property real ax: (a.c + 0.5) * win.zoom
+                    readonly property real ay: (a.r + 0.5) * win.zoom
+                    readonly property real bx: (b.c + 0.5) * win.zoom
+                    readonly property real by: (b.r + 0.5) * win.zoom
+                    readonly property real len: Math.hypot(bx - ax, by - ay)
+                    readonly property real turn:
+                        Math.atan2(by - ay, bx - ax) * 180 / Math.PI
+
+                    // Two strokes, a dark one under a bright one: a single
+                    // line in the accent is legible over the background and
+                    // lost over a drawing of the same brightness, which is
+                    // most of a drawing.
+                    Rectangle {
+                        x: leg.ax; y: leg.ay - height / 2
+                        width: leg.len; height: Math.max(3, win.zoom / 2)
+                        transformOrigin: Item.Left; rotation: leg.turn
+                        color: "#000000"; opacity: 0.5
+                    }
+                    Rectangle {
+                        x: leg.ax; y: leg.ay - height / 2
+                        width: leg.len; height: Math.max(1, win.zoom / 4)
+                        transformOrigin: Item.Left; rotation: leg.turn
+                        color: theme.accent
+                    }
+                }
+            }
+
+            // The corners themselves, so it is clear which points are pinned
+            // and which end is still following the cursor.
+            Repeater {
+                model: win.linePoints
+
+                Rectangle {
+                    required property var modelData
+                    x: modelData.c * win.zoom
+                    y: modelData.r * win.zoom
+                    width: win.zoom
+                    height: win.zoom
+                    color: theme.fill(theme.accent, 0.30)
+                    border.width: Math.max(1, Math.round(win.zoom / 6))
+                    border.color: theme.accent
+                }
+            }
+        }
+
+        // Guides through the keyboard cursor, the width and height of the
+        // drawing. At 5x the cursor is a five-pixel square on a picture made of
+        // five-pixel squares: findable only if you already know where it is.
+        Rectangle {
+            visible: win.caretColumn >= 0
+            x: win.caretColumn * win.zoom
+            y: 0
+            width: win.zoom
+            height: parent.height
+            color: theme.fill(theme.accent, 0.10)
+            z: 4
+        }
+        Rectangle {
+            visible: win.caretColumn >= 0
+            x: 0
+            y: win.caretRow * win.zoom
+            width: parent.width
+            height: win.zoom
+            color: theme.fill(theme.accent, 0.10)
+            z: 4
+        }
+
+        // The keyboard cursor. Drawn in the accent and heavier than the
+        // mouse's outline, because it is a position the program is holding on
+        // your behalf rather than one your hand is already on.
+        Rectangle {
+            visible: win.caretColumn >= 0
+            x: win.caretColumn * win.zoom
+            y: win.caretRow * win.zoom
+            width: win.zoom
+            height: win.zoom
+            // Against the pixel it sits on, not against the theme. An accent
+            // that reads beautifully over the background is invisible over a
+            // drawing that happens to use the accent's own family of colours --
+            // and a cursor you cannot find is worse than no cursor.
+            readonly property color against: {
+                var c = doc.contrastAt(win.caretColumn, win.caretRow)
+                return c.a > 0 ? c : theme.foreground
+            }
+
+            color: "transparent"
+            border.width: Math.max(1, Math.round(win.zoom / 6))
+            border.color: against
+            z: 5
+
+            // A second outline, one pixel in and in the opposite direction, so
+            // the cursor survives sitting exactly on the boundary between two
+            // colours -- where one edge would match whatever it crosses.
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: parent.border.width
+                color: "transparent"
+                border.width: 1
+                border.color: parent.against.hslLightness > 0.5 ? "#000000" : "#ffffff"
+                opacity: 0.55
+            }
         }
 
         // The outline of the pixel under the cursor. On a 32-column grid at 12×

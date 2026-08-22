@@ -11,6 +11,20 @@ Column {
     property int boxWidth: 200
     signal edited(string text)
     signal committed(string text)
+    /// Up and down, for a field that drives a list beside it. -1 is up.
+    signal stepped(int delta)
+    /// Escape. Where it goes is the caller's business: out of a panel is not
+    /// the same place as back to the drawing, and a field cannot know which
+    /// it is in.
+    signal escaped()
+
+    /// Takes the keyboard, and selects what is there so typing replaces it.
+    function focusEntry() {
+        entry.forceActiveFocus()
+        entry.selectAll()
+    }
+
+    property alias input: entry
 
     spacing: 5
 
@@ -43,6 +57,12 @@ Column {
             selectByMouse: true
             onTextChanged: if (activeFocus) field.edited(text)
             onAccepted: field.committed(text)
+            // Escape leaves the field. Without it, a text box is a trap: the
+            // arrows belong to it for as long as it holds focus, and nothing
+            // says so.
+            Keys.onEscapePressed: field.escaped()
+            Keys.onUpPressed: field.stepped(-1)
+            Keys.onDownPressed: field.stepped(1)
         }
     }
 }

@@ -7,6 +7,16 @@
         <file>qml/Field.qml</file>
         <file>qml/Label.qml</file>
         <file>qml/Rail.qml</file>
+                <file>qml/Section.qml</file>
+                <file>qml/ToolButton.qml</file>
+                <file>qml/StatusBar.qml</file>
+                <file>qml/StatusText.qml</file>
+                <file>qml/Bar.qml</file>
+                <file>qml/Drop.qml</file>
+                <file>qml/Sheet.qml</file>
+                <file>qml/Rule.qml</file>
+                <file>qml/Cmd.qml</file>
+                <file>qml/Hints.qml</file>
         <file>qml/qmldir</file>
     </qresource>
 </RCC>
