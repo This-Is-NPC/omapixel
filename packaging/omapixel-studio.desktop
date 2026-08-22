@@ -1,0 +1,18 @@
+# The studio's menu entry. The CLI has none on purpose: it is a terminal
+# program, and a launcher that opens a window with no window is a bug report
+# waiting to happen.
+#
+# The icon is the project's own: a pixel heart, drawn in omapixel. Its source --
+# the commands that draw it -- is icon/omapixel.batch, beside this file.
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=omapixel
+GenericName=Pixel Art Studio
+Comment=Draw and animate pixel art
+Exec=omapixel-studio %f
+Icon=omapixel
+Terminal=false
+Categories=Graphics;2DGraphics;RasterGraphics;
+Keywords=pixel;art;sprite;animation;drawing;
+StartupWMClass=omapixel-studio

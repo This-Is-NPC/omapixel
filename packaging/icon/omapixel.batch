@@ -1,0 +1,14 @@
+# A pixel heart -- the document omapixel's own docs teach you to draw.
+line --from 3,3 --to 6,3 --slot R
+line --from 9,3 --to 12,3 --slot R
+line --from 2,4 --to 13,4 --slot R
+line --from 2,5 --to 13,5 --slot R
+line --from 2,6 --to 13,6 --slot R
+line --from 3,7 --to 12,7 --slot R
+line --from 4,8 --to 11,8 --slot R
+line --from 5,9 --to 10,9 --slot R
+line --from 6,10 --to 9,10 --slot R
+line --from 7,11 --to 8,11 --slot R
+# a specular highlight, so it reads as drawn and not as a glyph
+line --from 4,4 --to 5,4 --slot S
+paint --at 3,5 --slot S
