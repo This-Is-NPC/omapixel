@@ -13,6 +13,34 @@ Rectangle {
     property color role: theme.accent
     signal clicked
 
+    // Reachable by Tab, and worked by Space or Enter. Almost every control in
+    // this window is a Chip, so the keyboard reaches almost all of them from
+    // this one place -- and a control that can only be clicked is a control
+    // somebody cannot use.
+    activeFocusOnTab: usable
+    Keys.onSpacePressed: function (event) {
+        if (chip.usable) { chip.clicked(); event.accepted = true }
+    }
+    Keys.onReturnPressed: function (event) {
+        if (chip.usable) { chip.clicked(); event.accepted = true }
+    }
+    Keys.onEnterPressed: function (event) {
+        if (chip.usable) { chip.clicked(); event.accepted = true }
+    }
+
+    // The focus ring is drawn outside the control rather than as its border,
+    // which is already carrying the on/off state. Two meanings on one line is
+    // how you end up unable to tell them apart.
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: -3
+        radius: theme.rounding + 2
+        color: "transparent"
+        border.width: 1
+        border.color: theme.accent
+        visible: chip.activeFocus
+    }
+
     implicitWidth: caption.implicitWidth + 20
     implicitHeight: 24
     width: implicitWidth

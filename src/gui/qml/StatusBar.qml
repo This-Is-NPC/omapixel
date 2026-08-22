@@ -34,7 +34,8 @@ Rectangle {
                 width: 12
                 height: 12
                 radius: theme.rounding
-                color: win.slot === "." ? "transparent" : doc.colourOf(win.slot)
+                color: (doc.paletteRevision,
+                       win.slot === "." ? "transparent" : doc.colourOf(win.slot))
                 border.width: 1
                 border.color: theme.fill(theme.foreground, 0.35)
 

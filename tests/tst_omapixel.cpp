@@ -15,6 +15,9 @@
 #include <qpa/qwindowsysteminterface.h>
 #include <QProcess>
 #include <QDir>
+#include <QAbstractItemModel>
+#include <QElapsedTimer>
+#include <QSignalSpy>
 #include <QSet>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -1297,15 +1300,6 @@ private slots:
 
         QCOMPARE(root->property("caretColumn").toInt(), -1);
 
-        // Tab means "give me the drawing", and brings the cursor out. Left to
-        // Qt it walks the focus chain to somewhere with nothing to show for
-        // it, which is how you end up not knowing where the focus is.
-        QTest::keyClick(window, Qt::Key_Tab);
-        QCOMPARE(root->property("caretColumn").toInt(), 16);
-        QCOMPARE(root->property("caretRow").toInt(), 12);
-        root->setProperty("caretColumn", -1);
-        root->setProperty("caretRow", -1);
-
         // First press puts the cursor in the middle rather than a corner.
         QTest::keyClick(window, Qt::Key_Right);
         QCOMPARE(root->property("caretColumn").toInt(), 16);
@@ -1472,6 +1466,70 @@ private slots:
         QCOMPARE(root->property("caretColumn").toInt(), before + 1);
     }
 
+    void everyControlIsReachableWithTab()
+    {
+        // The audit this came from: nothing but the text fields accepted focus,
+        // and Tab was intercepted to jump back to the drawing -- which answered
+        // one complaint by making every button in the window unreachable.
+        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+
+        QQmlEngine engine;
+        DocumentModel document;
+        Theme theme;
+        static InputLog still(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &still);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        window->resize(1200, 860);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        // Walk the window with Tab and collect what the focus lands on.
+        QSet<QQuickItem *> visited;
+        QStringList kinds;
+        for (int i = 0; i < 60; ++i) {
+            QTest::keyClick(window, Qt::Key_Tab);
+            QQuickItem *here = window->activeFocusItem();
+            if (!here)
+                continue;
+            if (!visited.contains(here)) {
+                visited.insert(here);
+                kinds << QString::fromUtf8(here->metaObject()->className());
+            }
+        }
+        qInfo("tab reached %lld controls", qint64(visited.size()));
+
+        QVERIFY2(visited.size() > 12,
+                 "Tab walks past almost everything: the controls do not take focus");
+
+        // The menu bar answers to the keyboard too. Nothing in the window
+        // should need a pointer, and a menu you can only open by clicking is
+        // the whole command set behind one.
+        QTest::keyClick(window, Qt::Key_F10);
+        QTest::qWait(30);
+        QQuickItem *onMenus = window->activeFocusItem();
+        QVERIFY2(onMenus && (onMenus->inherits("QQuickMenuBar")
+                             || onMenus->inherits("QQuickMenuBarItem")
+                             || (onMenus->parentItem()
+                                 && onMenus->parentItem()->inherits("QQuickMenuBar"))),
+                 "F10 did not put the keyboard on the menu bar");
+
+        // Escape brings the keyboard back to the drawing from wherever Tab
+        // left it, so getting lost is one key rather than a hunt.
+        QTest::keyClick(window, Qt::Key_Escape);
+        QTest::keyClick(window, Qt::Key_Right);
+        QVERIFY2(root->property("caretColumn").toInt() >= 0,
+                 "escape did not hand the keyboard back to the drawing");
+    }
+
     void theColourPanelIsDrivenFromTheKeyboardAlone()
     {
         // Opening a search panel and then having to reach for the mouse to
@@ -1614,6 +1672,139 @@ private slots:
             kept = kept || entry.toMap().value(QStringLiteral("slot"))
                                == QStringLiteral("R");
         QVERIFY2(kept, "a slot still in use was dropped from the palette");
+    }
+
+    void drawingCostsTheSameWhateverThePaletteHolds()
+    {
+        // `Palette::colour` is called once per pixel by the renderer. While it
+        // was a linear scan, a document with three hundred slots drew a hundred
+        // times slower than one with three, for no reason a person could see --
+        // and the studio renders the canvas, three previews and one thumbnail
+        // per frame on every change.
+        //
+        // Wall-clock, but the ratio being measured is around a hundred if the
+        // lookup is linear, so noise cannot hide it.
+        const auto timeOne = [](int extraSlots) {
+            Document doc = Document::blank(64, 64);
+            Grid grid = doc.frame(doc.clipNames().value(0), 0);
+            for (int y = 0; y < 64; ++y)
+                for (int x = 0; x < 64; ++x)
+                    ops::paint(grid, x, y, u'I');
+            doc.setFrame(doc.clipNames().value(0), 0, grid);
+
+            for (int i = 0; i < extraSlots; ++i)
+                doc.palette().set(QChar(0x100 + i), QColor(Qt::red));
+
+            QElapsedTimer clock;
+            clock.start();
+            for (int i = 0; i < 40; ++i)
+                render::toImage(doc, doc.clipNames().value(0), 0, {});
+            return clock.nsecsElapsed();
+        };
+
+        const qint64 small = timeOne(0);
+        const qint64 large = timeOne(300);
+        qInfo("forty renders: %lld us with a small palette, %lld us with 300 slots",
+              small / 1000, large / 1000);
+        QVERIFY2(large < small * 4 + 2000000,
+                 "rendering slows down as the palette grows");
+    }
+
+    void addingAColourTouchesOneRow()
+    {
+        // The deterministic half of the stutter. Wall-clock on a loaded
+        // machine swung by a factor of four between runs and proved nothing;
+        // what the palette view is TOLD is exact. A reset makes it rebuild
+        // every delegate, and holding a colour-adding key down does that
+        // hundreds of times.
+        DocumentModel doc;
+        auto *rows = doc.paletteModel();
+        QSignalSpy reset(rows, &QAbstractItemModel::modelReset);
+        QSignalSpy inserted(rows, &QAbstractItemModel::rowsInserted);
+        QSignalSpy touched(rows, &QAbstractItemModel::dataChanged);
+
+        const int before = rows->rowCount();
+        doc.setPaletteColour(QStringLiteral("¢"), QStringLiteral("#123456"));
+        QCOMPARE(inserted.size(), 1);
+        QCOMPARE(reset.size(), 0);
+        QCOMPARE(rows->rowCount(), before + 1);
+
+        // Recolouring one slot touches one row and inserts nothing.
+        doc.setPaletteColour(QStringLiteral("¢"), QStringLiteral("#654321"));
+        QCOMPARE(touched.size(), 1);
+        QCOMPARE(inserted.size(), 1);
+        QCOMPARE(reset.size(), 0);
+
+        // Painting is not a palette change at all, so the view hears nothing.
+        doc.paint(1, 1, QStringLiteral("R"));
+        QCOMPARE(touched.size(), 1);
+        QCOMPARE(inserted.size(), 1);
+        QCOMPARE(reset.size(), 0);
+
+        // Opening another document is a genuine reset, and says so once.
+        doc.reset(8, 8);
+        QCOMPARE(reset.size(), 1);
+    }
+
+    void repeatedPaintingDoesNotGetSlower()
+    {
+        // The studio stutters when russian roulette is held down. This drives
+        // the real window so the cost of the QML side is in the measurement --
+        // a C++-only benchmark would miss it entirely, and the QML side is
+        // where the suspicion is.
+        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+
+        QQmlEngine engine;
+        DocumentModel document;
+        Theme theme;
+        static InputLog hush(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &hush);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        window->resize(1100, 800);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        // A document with frames, because the timeline draws one thumbnail per
+        // frame and they all repaint on any change.
+        document.reset(64, 64);
+        for (int i = 0; i < 11; ++i)
+            document.addFrame(false);
+        QCoreApplication::processEvents();
+
+        QElapsedTimer clock;
+        qint64 first = 0;
+        qint64 last = 0;
+        for (int round = 0; round < 6; ++round) {
+            clock.restart();
+            for (int i = 0; i < 10; ++i) {
+                QTest::keyClick(window, Qt::Key_R);
+                QCoreApplication::processEvents();
+            }
+            const qint64 took = clock.elapsed();
+            if (round == 0)
+                first = took;
+            last = took;
+        }
+        qInfo("ten presses: %lld ms at the start, %lld ms after sixty", first, last);
+
+        // The palette grows by one slot per press, and everything bound to it
+        // is rebuilt on every change. If that is what costs, the last ten
+        // presses take far longer than the first ten.
+        // Deliberately loose: this machine's wall-clock swung by a factor of
+        // four between runs of the same code. The tight guards on this are
+        // `addingAColourTouchesOneRow` and the render test above, which measure
+        // things that do not depend on how busy the machine is.
+        QVERIFY2(last < first * 4 + 200,
+                 "painting got dramatically slower as the palette grew");
     }
 
     void theRoundingComesFromHyprland()

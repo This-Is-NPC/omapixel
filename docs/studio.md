@@ -129,7 +129,11 @@ the drawing has pixels, and it stops measuring the grid and starts hiding it.
 |---|---|
 | <kbd>b</kbd> <kbd>e</kbd> <kbd>f</kbd> <kbd>i</kbd> <kbd>h</kbd> | pencil, eraser, bucket, picker, hand |
 | <kbd>Space</kbd> | play and pause the clip |
-| <kbd>Tab</kbd> | give the keyboard to the drawing, and bring the cursor out |
+| <kbd>Tab</kbd> | walk the window's controls |
+| <kbd>F10</kbd>, <kbd>Alt</kbd>+<kbd>F</kbd> … | the menu bar |
+| <kbd>Esc</kbd> | back to the drawing, from anywhere |
+| <kbd>[</kbd> <kbd>]</kbd> | previous and next clip |
+| <kbd>Shift</kbd>+<kbd>,</kbd> <kbd>Shift</kbd>+<kbd>.</kbd> | move this frame earlier or later |
 | <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> | move the cursor one pixel · <kbd>Shift</kbd> for eight |
 | <kbd>Return</kbd>, <kbd>x</kbd> | paint the one pixel under the cursor |
 | <kbd>d</kbd> | draw-as-you-move mode · hold <kbd>1</kbd>–<kbd>0</kbd> to paint |
@@ -160,9 +164,16 @@ The arrow keys walk a cursor across the drawing, one pixel at a time, eight with
 <kbd>Shift</kbd>. <kbd>Return</kbd> or <kbd>x</kbd> draws at it with the selected
 slot, <kbd>Backspace</kbd> erases, <kbd>Esc</kbd> puts it away.
 
-<kbd>Tab</kbd> hands the keyboard back to the drawing from anywhere — a field, a
-menu — and brings the cursor out if it was put away. Clicking on the drawing
-does the same, and so does <kbd>Esc</kbd> from inside a text field.
+Nothing here needs a pointer. <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd>
+walk every control in the window — tools, colours, panel headers, the timeline,
+the buttons in a panel — and <kbd>Space</kbd> or <kbd>Enter</kbd> works whatever
+the focus is on. <kbd>F10</kbd> puts the keyboard on the menu bar, and
+<kbd>Alt</kbd> with a menu's underlined letter opens it directly.
+
+<kbd>Esc</kbd> hands the keyboard back to the drawing from anywhere — a button,
+a field, a menu. Clicking on the drawing does the same. It is one key, and it
+always means the same thing, which is what you want from the key you reach for
+when you are lost.
 
 A mouse is good at shapes and hopeless at placing one pixel exactly, which is
 most of what pixel art is. The cursor is drawn in the accent, heavier than the

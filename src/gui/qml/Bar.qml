@@ -39,7 +39,10 @@ C.MenuBar {
         padding: 11
 
         contentItem: Text {
-            text: barItem.text
+            // The ampersand marks the Alt key and is not meant to be read.
+            // The style's own label strips it; a plain Text does not, so the
+            // menu bar said "&File".
+            text: barItem.text.replace("&", "")
             // Dimmed at rest, but not so far that reading the bar takes
             // effort: these are the names of everything the program can do.
             color: barItem.showing || barItem.hovered

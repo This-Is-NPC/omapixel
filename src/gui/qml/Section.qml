@@ -68,6 +68,26 @@ Item {
 
         HoverHandler { id: hover }
         TapHandler { onTapped: section.open = !section.open }
+
+        activeFocusOnTab: true
+        Keys.onSpacePressed: function (event) {
+            section.open = !section.open
+            event.accepted = true
+        }
+        Keys.onReturnPressed: function (event) {
+            section.open = !section.open
+            event.accepted = true
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -2
+            radius: theme.rounding
+            color: "transparent"
+            border.width: 1
+            border.color: theme.accent
+            visible: header.activeFocus
+        }
     }
 
     Column {

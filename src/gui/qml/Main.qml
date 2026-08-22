@@ -125,10 +125,13 @@ Window {
             doc.say("the palette is full — remove a slot first")
             return
         }
+        // One stroke around both edits: adding the colour and painting with it
+        // is one act, so it costs one document snapshot and one undo step
+        // rather than two of each.
         var hex = doc.randomColour()
+        doc.beginStroke()
         doc.setPaletteColour(letter, hex)
         slot = letter
-        doc.beginStroke()
         doc.paint(caretColumn, caretRow, letter)
         doc.endStroke()
         doc.say("russian roulette — " + hex + " on slot " + letter)
@@ -215,12 +218,15 @@ Window {
                     { key: "l", label: "straight line" },
                     { key: "Esc", label: "put away" }]
 
-        return [{ key: "Tab", label: "draw with the keyboard" },
+        return [{ key: "arrows", label: "draw with the keyboard" },
                 { key: "b e f i h", label: "tools" },
                 { key: "1–0", label: "colours" },
                 { key: ";", label: "change colour" },
                 { key: "Space", label: "play" },
                 { key: ",  .", label: "frame" },
+                { key: "[  ]", label: "clip" },
+                { key: "Tab", label: "the controls" },
+                { key: "F10", label: "the menus" },
                 { key: "^Z", label: "undo" },
                 { key: "^S", label: "save" },
                 { key: "^E", label: "export" }]
@@ -241,6 +247,16 @@ Window {
     /// name, clicking a field. Nothing gave it back, so the arrows worked until
     /// the first click anywhere and then never again -- which reads as "the
     /// keyboard does not work" rather than "the keyboard is somewhere else".
+    /// The clip before or after this one, wrapping. Switching clip was
+    /// mouse-only, and it is the one thing you do as often as switching frame.
+    function stepClip(by) {
+        var names = doc.clipNames
+        if (names.length < 2)
+            return
+        var at = names.indexOf(doc.clip)
+        doc.clip = names[(at + by + names.length) % names.length]
+    }
+
     function focusCanvas() {
         keys.forceActiveFocus()
     }
@@ -419,6 +435,24 @@ Window {
     C.Action { id: actReplace; text: "Replace this colour…"
              enabled: win.focusedSlot !== ""
              onTriggered: colourSheet.show("replace") }
+    // F10 puts the keyboard on the menu bar, where the arrows walk it. Alt and
+    // the underlined letter opens one directly. Both are what every menu bar
+    // has done for thirty years, and neither existed here.
+    Shortcut { sequence: "F10"; onActivated: menus.forceActiveFocus() }
+
+    C.Action { id: actNextClip; text: "Next clip"; shortcut: "]"
+             enabled: doc.clipNames.length > 1
+             onTriggered: win.stepClip(1) }
+    C.Action { id: actPrevClip; text: "Previous clip"; shortcut: "["
+             enabled: doc.clipNames.length > 1
+             onTriggered: win.stepClip(-1) }
+    C.Action { id: actFrameBack; text: "Move frame earlier"; shortcut: "Shift+,"
+             enabled: doc.frame > 0
+             onTriggered: doc.moveFrame(-1) }
+    C.Action { id: actFrameOn; text: "Move frame later"; shortcut: "Shift+."
+             enabled: doc.frame < doc.frameCount - 1
+             onTriggered: doc.moveFrame(1) }
+
     C.Action { id: actHints; text: "Key hints"; checkable: true; checked: win.showHints
              onTriggered: win.showHints = !win.showHints }
 
@@ -548,6 +582,15 @@ Window {
             // you were about to draw, then the pen, then the cursor. One key
             // that always means "not that" is worth more than three.
             case Qt.Key_Escape:
+                // Reached from anywhere: a key event that nothing else wanted
+                // arrives here, because this item is an ancestor of every
+                // control in the window. So Escape always means "back to the
+                // drawing", whichever button Tab had walked to.
+                if (!keys.activeFocus) {
+                    win.focusCanvas()
+                    event.accepted = true
+                    return
+                }
                 if (win.linePoints.length > 0) {
                     win.linePoints = []
                 } else if (win.mode !== "") {
@@ -606,15 +649,12 @@ Window {
                     [{ c: win.caretColumn, r: win.caretRow }])
                 break
 
-            // Tab means "give me the drawing". Left to Qt it walks the focus
-            // chain and lands somewhere with nothing to show for it, which is
-            // how you end up not knowing where the focus is at all.
-            case Qt.Key_Tab:
-            case Qt.Key_Backtab:
-                win.focusCanvas()
-                if (win.caretColumn < 0)
-                    win.moveCaret(0, 0)
-                break
+            // Tab is left alone, so it walks the window's controls the way it
+            // does everywhere else. It used to be taken for "give me the
+            // drawing back", which answered one complaint by making every
+            // button in the window unreachable -- Escape does that job now,
+            // from anywhere, and it is the key people already press to leave
+            // something.
             case Qt.Key_Plus:
             case Qt.Key_Equal:
                 stage.zoomStep(stage.width / 2, stage.height / 2, true); break
@@ -720,7 +760,7 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter
 
                 Drop {
-                    title: "File"
+                    title: "&File"
                     Cmd { action: actNew }
                     Cmd { action: actOpen }
                     Rule {}
@@ -734,7 +774,7 @@ Window {
                 }
 
                 Drop {
-                    title: "Edit"
+                    title: "&Edit"
                     Cmd { action: actUndo }
                     Cmd { action: actRedo }
                     Rule {}
@@ -744,7 +784,7 @@ Window {
                 }
 
                 Drop {
-                    title: "Sprite"
+                    title: "&Sprite"
                     Cmd { action: actResize }
                     Rule {}
                     Cmd { action: actAddClip }
@@ -754,15 +794,20 @@ Window {
                     Cmd { action: actReplace }
                     Cmd { action: actRoulette }
                     Rule {}
+                    Cmd { action: actPrevClip }
+                    Cmd { action: actNextClip }
+                    Rule {}
                     Cmd { action: actAddFrame }
                     Cmd { action: actDupFrame }
                     Cmd { action: actDelFrame }
+                    Cmd { action: actFrameBack }
+                    Cmd { action: actFrameOn }
                     Rule {}
                     Cmd { action: actPlay }
                 }
 
                 Drop {
-                    title: "View"
+                    title: "&View"
                     Cmd { action: actZoomIn }
                     Cmd { action: actZoomOut }
                     Cmd { action: actFit }
@@ -852,7 +897,7 @@ Window {
                                 width: 34
                                 height: 34
                                 radius: theme.rounding
-                                color: letter === "" ? "transparent" : doc.colourOf(letter)
+                                color: (doc.paletteRevision, letter === "" ? "transparent" : doc.colourOf(letter))
                                 border.width: inUse ? 2 : 1
                                 border.color: inUse ? theme.accent
                                             : chipHover.hovered
@@ -1041,99 +1086,93 @@ Window {
                                 readonly property int rowsShown: 9
                                 readonly property int swatchPitch: 28
 
-                                Flickable {
+                                // A list model, not a JS array: assigning a
+                                // new array rebuilds every delegate, and this
+                                // list is rebuilt whenever a colour is added.
+                                // With a few hundred slots that is a few
+                                // hundred items destroyed and made again on a
+                                // keypress, which is the stutter.
+                                GridView {
+                                    id: swatches
                                     width: parent.width
-                                    height: Math.min(swatches.implicitHeight,
+                                    height: Math.min(contentHeight,
                                                      paletteSection.showAll
-                                                     ? swatches.implicitHeight
+                                                     ? contentHeight
                                                      : paletteSection.rowsShown
                                                        * paletteSection.swatchPitch)
-                                    contentHeight: swatches.implicitHeight
+                                    cellWidth: paletteSection.swatchPitch
+                                    cellHeight: paletteSection.swatchPitch
                                     boundsBehavior: Flickable.StopAtBounds
                                     clip: true
+                                    model: doc.paletteModel
+                                    cacheBuffer: 0
 
                                     Behavior on height {
                                         NumberAnimation { duration: 110
                                                           easing.type: Easing.OutCubic }
                                     }
 
-                                Flow {
-                                    id: swatches
-                                    width: parent.width
-                                    spacing: 4
+                                    delegate: Rectangle {
+                                        id: pip
+                                        required property string slot
+                                        required property color colour
+                                        width: 24
+                                        height: 24
+                                        radius: theme.rounding
+                                        color: slot === "." ? "transparent" : colour
+                                        border.width: win.slot === slot ? 2 : 1
+                                        border.color: win.slot === slot
+                                                      ? theme.accent
+                                                      : theme.fill(theme.foreground, 0.18)
 
-                                    Repeater {
-                                        model: [{ slot: ".", colour: "" }].concat(doc.palette)
+                                        // The digit that reaches this slot, in
+                                        // the corner. A shortcut you cannot see
+                                        // is a shortcut only its author
+                                        // remembers.
+                                        Text {
+                                            anchors.right: parent.right
+                                            anchors.top: parent.top
+                                            anchors.margins: 1
+                                            readonly property int at:
+                                                win.registers.indexOf(pip.slot)
+                                            visible: at >= 0
+                                            text: at === 9 ? "0" : String(at + 1)
+                                            color: theme.accent
+                                            font.family: theme.fontFamily
+                                            font.pixelSize: 8
+                                            font.bold: true
+                                        }
 
-                                        Rectangle {
-                                            id: pip
-                                            required property var modelData
-                                            width: 24
-                                            height: 24
-                                            radius: theme.rounding
-                                            color: modelData.slot === "." ? "transparent"
-                                                                          : modelData.colour
-                                            border.width: win.slot === modelData.slot ? 2 : 1
-                                            border.color: win.slot === modelData.slot
-                                                          ? theme.accent
-                                                          : theme.fill(theme.foreground, 0.18)
-
-                                            // The empty slot draws as an X: a
-                                            // transparent square is a square the
-                                            // colour of the background, and
-                                            // nobody guesses that is the eraser.
-                                            // The digit that reaches this
-                                            // slot, in the corner. A shortcut
-                                            // you cannot see is a shortcut
-                                            // only its author remembers.
-                                            Text {
-                                                anchors.right: parent.right
-                                                anchors.top: parent.top
-                                                anchors.margins: 1
-                                                readonly property int at:
-                                                    win.registers.indexOf(pip.modelData.slot)
-                                                visible: at >= 0
-                                                text: at === 9 ? "0" : String(at + 1)
-                                                color: theme.accent
-                                                font.family: theme.fontFamily
-                                                font.pixelSize: 8
-                                                font.bold: true
+                                        // Against the swatch's own colour, not
+                                        // the theme's: a dark slot with a dark
+                                        // letter is an unlabelled square.
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: pip.slot === "." ? "×" : pip.slot
+                                            color: {
+                                                if (pip.slot === ".")
+                                                    return theme.dim
+                                                var lum = 0.2126 * pip.colour.r
+                                                        + 0.7152 * pip.colour.g
+                                                        + 0.0722 * pip.colour.b
+                                                return lum > 0.5 ? "#101010" : "#f0f0f0"
                                             }
+                                            font.family: theme.fontFamily
+                                            font.pixelSize: 10
+                                        }
 
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: pip.modelData.slot === "." ? "×"
-                                                                                 : pip.modelData.slot
-                                                // Against the swatch's own
-                                                // colour, not the theme's: a
-                                                // dark slot with a dark letter
-                                                // is an unlabelled square.
-                                                color: {
-                                                    if (pip.modelData.slot === ".")
-                                                        return theme.dim
-                                                    var c = Qt.color(pip.modelData.colour)
-                                                    var lum = 0.2126 * c.r + 0.7152 * c.g
-                                                            + 0.0722 * c.b
-                                                    return lum > 0.5 ? "#101010" : "#f0f0f0"
-                                                }
-                                                font.family: theme.fontFamily
-                                                font.pixelSize: 10
-                                            }
-
-                                            TapHandler {
-                                                onTapped: {
-                                                    win.slot = pip.modelData.slot
-                                                    if (win.tool === "eraser")
-                                                        win.tool = "pencil"
-                                                }
+                                        TapHandler {
+                                            onTapped: {
+                                                win.slot = pip.slot
+                                                if (win.tool === "eraser")
+                                                    win.tool = "pencil"
                                             }
                                         }
                                     }
                                 }
-                                }
 
                                 Chip {
-                                    visible: swatches.implicitHeight
+                                    visible: swatches.contentHeight
                                              > paletteSection.rowsShown
                                                * paletteSection.swatchPitch
                                     label: paletteSection.showAll
@@ -1152,8 +1191,9 @@ Window {
                                         width: 26
                                         height: 26
                                         radius: theme.rounding
-                                        color: win.slot === "." ? "transparent"
-                                                                : doc.colourOf(win.slot)
+                                        color: (doc.paletteRevision,
+                                                win.slot === "." ? "transparent"
+                                                                 : doc.colourOf(win.slot))
                                         border.width: 1
                                         border.color: theme.fill(theme.foreground, 0.25)
                                     }
@@ -1781,7 +1821,7 @@ Window {
                             height: 34
                             radius: theme.rounding
                             readonly property string letter: win.registerAt(index)
-                            color: letter === "" ? "transparent" : doc.colourOf(letter)
+                            color: (doc.paletteRevision, letter === "" ? "transparent" : doc.colourOf(letter))
                             border.width: 1
                             border.color: colourSheet.armed
                                           ? theme.accent

@@ -15,6 +15,20 @@ Rectangle {
     property bool on: false
     signal clicked
 
+    activeFocusOnTab: true
+    Keys.onSpacePressed: function (event) { button.clicked(); event.accepted = true }
+    Keys.onReturnPressed: function (event) { button.clicked(); event.accepted = true }
+
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: -3
+        radius: theme.rounding + 2
+        color: "transparent"
+        border.width: 1
+        border.color: theme.accent
+        visible: button.activeFocus
+    }
+
     width: 34
     height: 34
     radius: theme.rounding
