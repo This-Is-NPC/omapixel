@@ -15,6 +15,7 @@
 #include <qpa/qwindowsysteminterface.h>
 #include <QProcess>
 #include <QDir>
+#include <QSet>
 #include <QJsonArray>
 #include <QJsonDocument>
 
@@ -109,6 +110,13 @@ void pointAt(const QString &state, const QString &name)
 }
 
 } // namespace
+
+/// `undo` is a slot on the model; calling it from a test needs no ceremony,
+/// but naming it here keeps the key tests readable.
+void doc_undo(omapixel::DocumentModel *model)
+{
+    model->undo();
+}
 
 class OmapixelTest : public QObject
 {
@@ -1086,6 +1094,7 @@ private slots:
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         static InputLog silent(false);
         engine.rootContext()->setContextProperty(QStringLiteral("log"), &silent);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
 
         QQmlComponent main(&engine,
                            QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
@@ -1116,6 +1125,381 @@ private slots:
         QCoreApplication::processEvents();
         QVERIFY2(!qFuzzyCompare(surface->property("panY").toReal(), restingY),
                  "a wheel over the drawing did not scroll it");
+    }
+
+    void thePaletteGoesWellPastTheAlphabet()
+    {
+        // A slot is one character -- that is the format. One character is far
+        // more than the letters and digits, though, and stopping at sixty-two
+        // was a limit nobody chose on purpose.
+        DocumentModel doc;
+        QSet<QString> handed;
+        for (int i = 0; i < 300; ++i) {
+            const QString slot = doc.freeSlot();
+            QVERIFY2(!slot.isEmpty(), "ran out of slots before three hundred");
+            QCOMPARE(slot.size(), 1);
+            QVERIFY(slot != QStringLiteral("."));      // emptiness is not a slot
+            // The digits belong to the studio's colour keys. A slot called `3`
+            // whose colour is not what pressing 3 draws is a contradiction
+            // sitting on screen.
+            QVERIFY2(!slot.at(0).isDigit(), "a digit was handed out as a slot");
+            QVERIFY(slot != QStringLiteral("\""));     // and these two would
+            QVERIFY(slot != QStringLiteral("\\"));     // turn a row into escapes
+            QVERIFY2(!handed.contains(slot), "the same slot was handed out twice");
+            handed.insert(slot);
+            doc.setPaletteColour(slot, QStringLiteral("#123456"));
+        }
+
+        // Letters and digits come first, so a palette that stays small stays
+        // legible in the file.
+        DocumentModel fresh;
+        QCOMPARE(fresh.freeSlot(), QStringLiteral("J"));   // the standard palette's first gap
+    }
+
+    void russianRouletteDrawsFromTheWholeOfRgb()
+    {
+        DocumentModel doc;
+        QSet<QString> seen;
+        for (int i = 0; i < 40; ++i) {
+            const QString hex = doc.randomColour();
+            QCOMPARE(hex.size(), 7);
+            QVERIFY(hex.startsWith(QLatin1Char('#')));
+            QVERIFY(QColor(hex).isValid());
+            seen.insert(hex);
+        }
+        // Genuinely random, which is the point: drawing from what is already
+        // in the palette would be a shuffle, and a shuffle is not a gamble.
+        QVERIFY2(seen.size() > 30, "the same few colours keep coming back");
+    }
+
+    void coloursCanBeFoundByName()
+    {
+        DocumentModel doc;
+
+        // The point of the thing: somebody who wants "a teal" should not have
+        // to compose one out of three numbers.
+        const QVariantList teals = doc.findColours(QStringLiteral("teal"));
+        QVERIFY(!teals.isEmpty());
+        QVERIFY(teals.first().toMap().value(QStringLiteral("name")).toString()
+                    .contains(QStringLiteral("teal"), Qt::CaseInsensitive));
+
+        // A hex comes back first, under what was typed, so there is no need
+        // for a second field that only takes hexes.
+        const QVariantList hex = doc.findColours(QStringLiteral("#3AA9C0"));
+        QVERIFY(!hex.isEmpty());
+        QCOMPARE(hex.first().toMap().value(QStringLiteral("colour")).toString(),
+                 QStringLiteral("#3AA9C0"));
+
+        // Nothing typed lists them all, which is what opening the panel does.
+        QVERIFY(doc.findColours(QString()).size() > 40);
+
+        // And a search that matches nothing says so by being empty rather than
+        // by falling back to something arbitrary.
+        QVERIFY(doc.findColours(QStringLiteral("zzzz")).isEmpty());
+    }
+
+    void theCursorTakesAColourThatShowsAgainstThePixelUnderIt()
+    {
+        DocumentModel doc;
+        doc.setPaletteColour(QStringLiteral("W"), QStringLiteral("#ffffff"));
+        doc.setPaletteColour(QStringLiteral("K"), QStringLiteral("#000000"));
+        doc.setPaletteColour(QStringLiteral("G"), QStringLiteral("#808080"));
+
+        // An empty pixel shows the chequerboard, which is the window's, not
+        // the document's: no opinion offered.
+        QVERIFY(!doc.contrastAt(1, 1).isValid());
+
+        doc.paint(1, 1, QStringLiteral("W"));
+        QCOMPARE(doc.contrastAt(1, 1), QColor(Qt::black));
+        doc.paint(2, 1, QStringLiteral("K"));
+        QCOMPARE(doc.contrastAt(2, 1), QColor(Qt::white));
+
+        // The one that matters: inverting a mid grey gives another mid grey,
+        // and a cursor drawn in it vanishes exactly where a drawing is busiest.
+        doc.paint(3, 1, QStringLiteral("G"));
+        const QColor against = doc.contrastAt(3, 1);
+        const auto lum = [](const QColor &c) {
+            return 0.2126 * c.redF() + 0.7152 * c.greenF() + 0.0722 * c.blueF();
+        };
+        QVERIFY2(qAbs(lum(against) - lum(QColor(QStringLiteral("#808080")))) > 0.28,
+                 "the cursor colour is as bright as the pixel it sits on");
+    }
+
+    void theArrowKeysWalkAPixelCursorOverTheDrawing()
+    {
+        // Drawing with a mouse is fine for shapes and hopeless for placing one
+        // pixel exactly. This asserts the keys actually reach the canvas --
+        // which is a question about focus, and focus is the thing a window full
+        // of controls quietly takes away.
+        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+
+        QQmlEngine engine;
+        DocumentModel document;
+        document.reset(32, 24);
+        Theme theme;
+        static InputLog mute(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &mute);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        window->resize(1000, 720);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        QCOMPARE(root->property("caretColumn").toInt(), -1);
+
+        // Tab means "give me the drawing", and brings the cursor out. Left to
+        // Qt it walks the focus chain to somewhere with nothing to show for
+        // it, which is how you end up not knowing where the focus is.
+        QTest::keyClick(window, Qt::Key_Tab);
+        QCOMPARE(root->property("caretColumn").toInt(), 16);
+        QCOMPARE(root->property("caretRow").toInt(), 12);
+        root->setProperty("caretColumn", -1);
+        root->setProperty("caretRow", -1);
+
+        // First press puts the cursor in the middle rather than a corner.
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(root->property("caretColumn").toInt(), 16);
+        QCOMPARE(root->property("caretRow").toInt(), 12);
+
+        QTest::keyClick(window, Qt::Key_Right);
+        QTest::keyClick(window, Qt::Key_Down);
+        QCOMPARE(root->property("caretColumn").toInt(), 17);
+        QCOMPARE(root->property("caretRow").toInt(), 13);
+
+        // Shift takes eight at a time.
+        QTest::keyClick(window, Qt::Key_Left, Qt::ShiftModifier);
+        QCOMPARE(root->property("caretColumn").toInt(), 9);
+
+        // And it draws where it stands.
+        QCOMPARE(document.slotAt(9, 13), QStringLiteral("."));
+        QTest::keyClick(window, Qt::Key_Return);
+        QCOMPARE(document.slotAt(9, 13), root->property("slot").toString());
+
+        QTest::keyClick(window, Qt::Key_Backspace);
+        QCOMPARE(document.slotAt(9, 13), QStringLiteral("."));
+
+        // The cursor stays inside the drawing however long you lean on a key.
+        for (int i = 0; i < 40; ++i)
+            QTest::keyClick(window, Qt::Key_Up);
+        QCOMPARE(root->property("caretRow").toInt(), 0);
+
+        // The leader: a key that says the next one names a colour. Needed
+        // because every letter is already a tool or a toggle, so the letters
+        // that name palette slots had nowhere to go.
+        QTest::keyClick(window, Qt::Key_Semicolon);
+        QCOMPARE(root->property("awaitingSlot").toBool(), true);
+        // Shift, because slots tell the cases apart: this palette has B and
+        // not b, and a studio that quietly accepted either would pick the
+        // wrong colour in any document that uses both.
+        QTest::keyClick(window, Qt::Key_B, Qt::ShiftModifier);   // normally the pencil
+        QCOMPARE(root->property("awaitingSlot").toBool(), false);
+        QCOMPARE(root->property("slot").toString(), QStringLiteral("B"));
+        QCOMPARE(document.slotAt(root->property("caretColumn").toInt(),
+                                 root->property("caretRow").toInt()),
+                 QStringLiteral("B"));
+
+        // A letter no slot uses changes nothing, and says so.
+        QTest::keyClick(window, Qt::Key_Semicolon);
+        QTest::keyClick(window, Qt::Key_Slash);
+        QCOMPARE(root->property("slot").toString(), QStringLiteral("B"));
+        QVERIFY(document.note().contains(QStringLiteral("no slot")));
+
+        // And escape backs out of it without painting anything.
+        QTest::keyClick(window, Qt::Key_Semicolon);
+        QTest::keyClick(window, Qt::Key_Escape);
+        QCOMPARE(root->property("awaitingSlot").toBool(), false);
+        QCOMPARE(root->property("caretColumn").toInt() >= 0, true);
+
+        // Draw mode. Entered with a key and left with Escape -- a toggle whose
+        // state you have to remember is a toggle you get wrong. Inside it the
+        // arrows paint only while a colour is held: moving and drawing are the
+        // same gesture with and without your other hand on a number.
+        root->setProperty("caretColumn", 4);
+        root->setProperty("caretRow", 4);
+        QTest::keyClick(window, Qt::Key_D);
+        QCOMPARE(root->property("mode").toString(), QStringLiteral("draw"));
+
+        // Moving alone leaves the drawing alone.
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(document.slotAt(5, 4), QStringLiteral("."));
+
+        const QString first = root->property("registers").toStringList().value(0);
+        QTest::keyPress(window, Qt::Key_1);          // and hold it
+        for (int i = 0; i < 4; ++i)
+            QTest::keyClick(window, Qt::Key_Right);
+        QTest::keyRelease(window, Qt::Key_1);
+        for (int x = 5; x <= 9; ++x)
+            QCOMPARE(document.slotAt(x, 4), first);
+
+        // Letting go ends the run, and the undo step with it: one press takes
+        // back everything that one press drew.
+        QTest::keySequence(window, QKeySequence::Undo);
+        for (int x = 5; x <= 9; ++x)
+            QCOMPARE(document.slotAt(x, 4), QStringLiteral("."));
+
+        QTest::keyClick(window, Qt::Key_Escape);
+        QCOMPARE(root->property("mode").toString(), QString());
+
+        // A line is a set of corners and nothing is drawn until a colour is
+        // named, so a right angle is two corners and one press rather than two
+        // lines whose ends have to be lined up by hand.
+        root->setProperty("caretColumn", 2);
+        root->setProperty("caretRow", 10);
+        QTest::keyClick(window, Qt::Key_L);
+        for (int i = 0; i < 6; ++i)
+            QTest::keyClick(window, Qt::Key_Right);
+        QTest::keyClick(window, Qt::Key_L);          // the corner
+        for (int i = 0; i < 3; ++i)
+            QTest::keyClick(window, Qt::Key_Down);
+        QCOMPARE(document.slotAt(5, 10), QStringLiteral("."));   // still nothing
+
+        QTest::keyClick(window, Qt::Key_1);          // draw it, in that colour
+        QCOMPARE(root->property("linePoints").toList().size(), 0);
+        for (int x = 2; x <= 8; ++x)
+            QCOMPARE(document.slotAt(x, 10), first);
+        for (int y = 10; y <= 13; ++y)
+            QCOMPARE(document.slotAt(8, y), first);
+
+        // The whole shape is one undo step: it was one line as far as the
+        // person drawing it was concerned.
+        QTest::keySequence(window, QKeySequence::Undo);
+        QCOMPARE(document.slotAt(5, 10), QStringLiteral("."));
+        QCOMPARE(document.slotAt(8, 13), QStringLiteral("."));
+
+        // Escape throws away a line that has not been drawn.
+        QTest::keyClick(window, Qt::Key_L);
+        QCOMPARE(root->property("linePoints").toList().size(), 1);
+        QTest::keyClick(window, Qt::Key_Escape);
+        QCOMPARE(root->property("linePoints").toList().size(), 0);
+
+        // Pick mode: the digits stop choosing a colour and start collecting
+        // one. Point at a pixel, press a number, that colour is on that number.
+        root->setProperty("caretColumn", 6);
+        root->setProperty("caretRow", 6);
+        root->setProperty("slot", QStringLiteral("R"));
+        QTest::keyClick(window, Qt::Key_Return);              // put an R there
+        QCOMPARE(document.slotAt(6, 6), QStringLiteral("R"));
+
+        QTest::keyClick(window, Qt::Key_P);
+        QCOMPARE(root->property("mode").toString(), QStringLiteral("pick"));
+        QTest::keyClick(window, Qt::Key_4);
+        QCOMPARE(root->property("registers").toStringList().value(3), QStringLiteral("R"));
+        // ... and it did not paint while picking.
+        QCOMPARE(document.slotAt(6, 6), QStringLiteral("R"));
+
+        QTest::keyClick(window, Qt::Key_Escape);
+        QCOMPARE(root->property("mode").toString(), QString());
+
+        // roleta russa: paints with a colour nobody chose. It ADDS a slot like
+        // every other way a colour arrives here -- the gamble is which colour
+        // you get, not which of the ones already in the drawing gets ruined.
+        root->setProperty("caretColumn", 12);
+        root->setProperty("caretRow", 12);
+        const QVariantList palette = document.palette();
+        QTest::keyClick(window, Qt::Key_R);
+
+        QCOMPARE(document.palette().size(), palette.size() + 1);
+        for (int i = 0; i < palette.size(); ++i) {
+            QCOMPARE(document.palette().at(i).toMap().value(QStringLiteral("colour")),
+                     palette.at(i).toMap().value(QStringLiteral("colour")));
+        }
+        const QString shot = root->property("slot").toString();
+        QCOMPARE(document.slotAt(12, 12), shot);
+        QVERIFY(document.colourOf(shot).isValid());
+
+        // And it is one undo step, like anything else that paints.
+        QTest::keySequence(window, QKeySequence::Undo);
+        QCOMPARE(document.slotAt(12, 12), QStringLiteral("."));
+
+        // Focus can be taken away by anything in the window, so there is a way
+        // to take it back. Constructing the theft reliably in a test proved
+        // beyond me -- the first attempt focused a field inside a closed dialog
+        // and passed while the bug was real -- so this asserts only the recovery
+        // itself, and the window calls it whenever the drawing is pressed.
+        QMetaObject::invokeMethod(root.data(), "focusCanvas");
+        const int before = root->property("caretColumn").toInt();
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(root->property("caretColumn").toInt(), before + 1);
+    }
+
+    void theColourPanelIsDrivenFromTheKeyboardAlone()
+    {
+        // Opening a search panel and then having to reach for the mouse to
+        // type in it defeats the point of having it on a key.
+        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+
+        QQmlEngine engine;
+        DocumentModel document;
+        document.reset(16, 16);
+        Theme theme;
+        static InputLog quiet2(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &quiet2);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        window->resize(1100, 800);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        QTest::keyClick(window, Qt::Key_C);
+        QTest::qWait(50);
+
+        // The keyboard has to be IN the search box, not merely near it.
+        QQuickItem *focused = window->activeFocusItem();
+        QVERIFY2(focused && focused->inherits("QQuickTextInput"),
+                 "the colour panel opened without the keyboard in its search box");
+
+        // Typing filters, and the arrows walk the matches without leaving the
+        // box: searching and choosing are one gesture rather than two.
+        for (QChar c : QStringLiteral("teal"))
+            QTest::keyClick(window, c.toLatin1());
+        QTest::qWait(50);
+        QTest::keyClick(window, Qt::Key_Down);
+        QTest::qWait(20);
+
+        const QString picked = root->property("chosenColour").toString();
+        QVERIFY(!picked.isEmpty());
+        const QVariantList before = document.palette();
+
+        // Return settles the colour; the panel then waits to be told which
+        // number key it goes on. Two steps because the digits are needed for
+        // typing a hex until the colour is chosen, and one key cannot mean two
+        // things at once.
+        QTest::keyClick(window, Qt::Key_Return);
+        QTest::qWait(50);
+
+        QTest::keyClick(window, Qt::Key_3);
+        QTest::qWait(50);
+
+        // The drawing must not have changed. A slot is not a swatch: every
+        // pixel drawn with it refers to it, so recolouring one repaints all of
+        // them at once. Reaching for a nicer blue must not repaint the sky.
+        for (int i = 0; i < before.size(); ++i) {
+            QCOMPARE(document.palette().at(i).toMap().value(QStringLiteral("colour")),
+                     before.at(i).toMap().value(QStringLiteral("colour")));
+        }
+        QCOMPARE(document.palette().size(), before.size() + 1);
+
+        // The digit now carries the colour, and drawing switches to it.
+        const QString letter = root->property("registers").toStringList().value(2);
+        QVERIFY(!letter.isEmpty());
+        QCOMPARE(document.colourOf(letter).name(QColor::HexRgb).toUpper(), picked);
+        QCOMPARE(root->property("slot").toString(), letter);
     }
 
     void theRoundingComesFromHyprland()
