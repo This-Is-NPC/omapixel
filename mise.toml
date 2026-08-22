@@ -55,8 +55,8 @@ cd "$BUILD_DIR"
 qmake6 "{{config_root}}/omapixel.pro"
 make -j"$(nproc 2>/dev/null || echo 1)"
 echo
-echo "cli    $BUILD_DIR/cli/omapixel"
-echo "studio $BUILD_DIR/gui/omapixel-studio"
+echo "cli    $BUILD_DIR/bin/omapixel"
+echo "studio $BUILD_DIR/bin/omapixel-studio"
 """
 
 [tasks.clean]
@@ -88,19 +88,19 @@ run = "echo 'build and tests are green'"
 [tasks.cli]
 description = "Run the CLI — mise run cli -- check drawing.json"
 depends = ["build"]
-run = '"$BUILD_DIR/cli/omapixel" "$@"'
+run = '"$BUILD_DIR/bin/omapixel" "$@"'
 
 [tasks.studio]
 description = "Open the studio — mise run studio -- drawing.json"
 depends = ["build"]
-run = '"$BUILD_DIR/gui/omapixel-studio" "$@"'
+run = '"$BUILD_DIR/bin/omapixel-studio" "$@"'
 
 [tasks.install]
 description = "Install both binaries into ~/.local/bin"
 depends = ["build"]
 run = """
 mkdir -p "$HOME/.local/bin"
-install -m755 "$BUILD_DIR/cli/omapixel" "$HOME/.local/bin/omapixel"
-install -m755 "$BUILD_DIR/gui/omapixel-studio" "$HOME/.local/bin/omapixel-studio"
+install -m755 "$BUILD_DIR/bin/omapixel" "$HOME/.local/bin/omapixel"
+install -m755 "$BUILD_DIR/bin/omapixel-studio" "$HOME/.local/bin/omapixel-studio"
 echo "installed to $HOME/.local/bin"
 """

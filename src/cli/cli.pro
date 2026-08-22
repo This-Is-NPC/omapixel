@@ -5,6 +5,12 @@ CONFIG   -= app_bundle
 TEMPLATE  = app
 TARGET    = omapixel
 
+# One place for the finished binaries, whatever the build tree looks
+# like. qmake's subdirs mirror the source layout, so without this the
+# programs land in build/src/cli and build/src/gui, and every task and
+# every line of documentation has to know that.
+DESTDIR = $$OUT_PWD/../../bin
+
 INCLUDEPATH += $$PWD/../core
 HEADERS     += Commands.h
 SOURCES     += main.cpp Commands.cpp

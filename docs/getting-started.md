@@ -26,8 +26,8 @@ file, run `mise trust` once.
 The two programs land in `build/`:
 
 ```
-build/src/cli/omapixel          the command line
-build/src/gui/omapixel-studio   the window
+build/bin/omapixel          the command line
+build/bin/omapixel-studio   the window
 ```
 
 `mise run cli -- <args>` and `mise run studio <file>` run them without typing the
