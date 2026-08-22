@@ -8,3 +8,4 @@ Makefile
 .qmake.stash
 version.h
 dist/
+.temp/
