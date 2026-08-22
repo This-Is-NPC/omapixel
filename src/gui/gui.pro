@@ -10,6 +10,8 @@ TARGET    = omapixel-studio
 # every line of documentation has to know that.
 DESTDIR = $$OUT_PWD/../../bin
 
+# Where the language catalogues live in a checkout. Installed builds also
+# look beside the binary, and the user's own config directory wins over both.
 INCLUDEPATH += $$PWD/../core
 
 HEADERS += DocumentModel.h PaletteModel.h PixelGridItem.h Theme.h InputLog.h

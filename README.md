@@ -15,6 +15,7 @@ other, because both call the same code.
 | [The command line](docs/cli.md) | every command, every flag, with examples |
 | [The studio](docs/studio.md) | the window: tools, panels, keys |
 | [The format](docs/format.md) | what is in the file, and how to write one by hand |
+| [Adding a language](docs/i18n.md) | every word comes from a JSON file; translating is copying one |
 
 The rest of this page is how the project is built and why it is shaped the way
 it is — for working on omapixel rather than with it.
@@ -226,6 +227,7 @@ src/gui/
   PixelGridItem  the drawing surface, painted from Render at scale 1
   Theme          the omarchy theme, followed live
   qml/           Main, Surface, Timeline, and the controls
+i18n/            one JSON catalogue per language; en.json is the full list
 src/cli/         Commands: what each command does, over an open document
                  main: arguments and files, and the `batch` loop
 tests/           QtTest over the core

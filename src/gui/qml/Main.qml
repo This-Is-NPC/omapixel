@@ -38,7 +38,7 @@ Window {
     minimumWidth: 900
     minimumHeight: 560
     visible: true
-    title: (doc.dirty ? "• " : "") + (doc.path === "" ? "untitled" : doc.path)
+    title: (doc.dirty ? "• " : "") + (doc.path === "" ? T.t("file.untitled") : doc.path)
            + " — omapixel"
     color: theme.background
 
@@ -182,54 +182,54 @@ Window {
     /// bury it.
     readonly property var hints: {
         if (awaitingSlot)
-            return [{ key: "A–Z  a–g", label: "the palette slot to use" },
-                    { key: ".", label: "empty" },
-                    { key: "Esc", label: "cancel" }]
+            return [{ key: "A–Z  a–g", label: T.t("hint.slotToUse") },
+                    { key: ".", label: T.t("hint.empty") },
+                    { key: "Esc", label: T.t("hint.cancel") }]
 
         if (linePoints.length > 0)
-            return [{ key: "arrows", label: "move the free end" },
-                    { key: "l", label: "pin a corner here" },
-                    { key: "1–0", label: "draw it in that colour" },
-                    { key: "Enter", label: "draw it" },
-                    { key: "Esc", label: "throw it away" }]
+            return [{ key: "arrows", label: T.t("hint.moveFreeEnd") },
+                    { key: "l", label: T.t("hint.pinCorner") },
+                    { key: "1–0", label: T.t("hint.drawInColour") },
+                    { key: "Enter", label: T.t("hint.drawIt") },
+                    { key: "Esc", label: T.t("hint.throwAway") }]
 
         if (mode === "pick")
-            return [{ key: "arrows", label: "move over the colour you want" },
-                    { key: "1–0", label: "put it on that number" },
-                    { key: "Esc", label: "leave picking" }]
+            return [{ key: "arrows", label: T.t("hint.moveOverColour") },
+                    { key: "1–0", label: T.t("hint.putOnNumber") },
+                    { key: "Esc", label: T.t("hint.leavePicking") }]
 
         if (mode === "draw")
-            return [{ key: "hold 1–0", label: "paint as you move, in that colour" },
-                    { key: "Enter", label: "one pixel" },
-                    { key: "l", label: "straight line" },
-                    { key: "Esc", label: "leave drawing" }]
+            return [{ key: "hold 1–0", label: T.t("hint.paintAsYouMove") },
+                    { key: "Enter", label: T.t("hint.onePixel") },
+                    { key: "l", label: T.t("hint.straightLine") },
+                    { key: "Esc", label: T.t("hint.leaveDrawing") }]
 
         if (caretColumn >= 0)
-            return [{ key: "arrows", label: "move" },
-                    { key: "Shift", label: "by eight" },
-                    { key: "Enter", label: "paint this pixel" },
-                    { key: "Bksp", label: "erase it" },
-                    { key: "1–0", label: "colours" },
-                    { key: "d", label: "draw as you move" },
-                    { key: "p", label: "pick up colours" },
-                    { key: "c", label: "find a colour" },
-                    { key: "r", label: "russian roulette" },
-                    { key: "⇧c", label: "replace this colour" },
-                    { key: "l", label: "straight line" },
-                    { key: "Esc", label: "put away" }]
+            return [{ key: "arrows", label: T.t("hint.move") },
+                    { key: "Shift", label: T.t("hint.byEight") },
+                    { key: "Enter", label: T.t("hint.paintPixel") },
+                    { key: "Bksp", label: T.t("hint.eraseIt") },
+                    { key: "1–0", label: T.t("hint.colours") },
+                    { key: "d", label: T.t("hint.drawAsYouMove") },
+                    { key: "p", label: T.t("hint.pickColours") },
+                    { key: "c", label: T.t("hint.findColour") },
+                    { key: "r", label: T.t("hint.roulette") },
+                    { key: "⇧c", label: T.t("hint.replaceColour") },
+                    { key: "l", label: T.t("hint.straightLine") },
+                    { key: "Esc", label: T.t("hint.putAway") }]
 
-        return [{ key: "arrows", label: "draw with the keyboard" },
-                { key: "b e f i h", label: "tools" },
-                { key: "1–0", label: "colours" },
-                { key: ";", label: "change colour" },
-                { key: "Space", label: "play" },
-                { key: ",  .", label: "frame" },
-                { key: "[  ]", label: "clip" },
-                { key: "Tab", label: "the controls" },
-                { key: "F10", label: "the menus" },
-                { key: "^Z", label: "undo" },
-                { key: "^S", label: "save" },
-                { key: "^E", label: "export" }]
+        return [{ key: "arrows", label: T.t("hint.drawWithKeyboard") },
+                { key: "b e f i h", label: T.t("hint.tools") },
+                { key: "1–0", label: T.t("hint.colours") },
+                { key: ";", label: T.t("hint.changeColour") },
+                { key: "Space", label: T.t("hint.play") },
+                { key: ",  .", label: T.t("hint.frame") },
+                { key: "[  ]", label: T.t("hint.clip") },
+                { key: "Tab", label: T.t("hint.controls") },
+                { key: "F10", label: T.t("hint.menus") },
+                { key: "^Z", label: T.t("hint.undo") },
+                { key: "^S", label: T.t("hint.save") },
+                { key: "^E", label: T.t("hint.export") }]
     }
 
     // Waiting for the letter of a palette slot. Every letter is already a tool
@@ -376,63 +376,63 @@ Window {
     // command that exists twice -- once in a menu handler and once in a key
     // handler -- is a command that will one day do two different things.
 
-    C.Action { id: actNew; text: "New…"; shortcut: "Ctrl+N"
+    C.Action { id: actNew; text: T.t("menu.new"); shortcut: "Ctrl+N"
              onTriggered: newSheet.open() }
-    C.Action { id: actOpen; text: "Open…"; shortcut: "Ctrl+O"
+    C.Action { id: actOpen; text: T.t("menu.open"); shortcut: "Ctrl+O"
              onTriggered: openDialog.open() }
-    C.Action { id: actSave; text: "Save"; shortcut: "Ctrl+S"
+    C.Action { id: actSave; text: T.t("menu.save"); shortcut: "Ctrl+S"
              onTriggered: doc.path === "" ? saveDialog.open() : doc.save() }
-    C.Action { id: actSaveAs; text: "Save as…"; shortcut: "Ctrl+Shift+S"
+    C.Action { id: actSaveAs; text: T.t("menu.saveAs"); shortcut: "Ctrl+Shift+S"
              onTriggered: saveDialog.open() }
-    C.Action { id: actExport; text: "Export PNG…"; shortcut: "Ctrl+E"
+    C.Action { id: actExport; text: T.t("menu.exportPng"); shortcut: "Ctrl+E"
              onTriggered: { exportSheet.asSheet = false; exportSheet.open() } }
-    C.Action { id: actExportSheet; text: "Export sprite sheet…"; shortcut: "Ctrl+Shift+E"
+    C.Action { id: actExportSheet; text: T.t("menu.exportSheet"); shortcut: "Ctrl+Shift+E"
              onTriggered: { exportSheet.asSheet = true; exportSheet.open() } }
-    C.Action { id: actQuit; text: "Quit"; shortcut: "Ctrl+Q"
+    C.Action { id: actQuit; text: T.t("menu.quit"); shortcut: "Ctrl+Q"
              onTriggered: Qt.quit() }
 
-    C.Action { id: actUndo; text: "Undo"; shortcut: "Ctrl+Z"
+    C.Action { id: actUndo; text: T.t("menu.undo"); shortcut: "Ctrl+Z"
              enabled: doc.canUndo; onTriggered: doc.undo() }
-    C.Action { id: actRedo; text: "Redo"; shortcut: "Ctrl+Shift+Z"
+    C.Action { id: actRedo; text: T.t("menu.redo"); shortcut: "Ctrl+Shift+Z"
              enabled: doc.canRedo; onTriggered: doc.redo() }
-    C.Action { id: actClear; text: "Clear frame"; shortcut: "Delete"
+    C.Action { id: actClear; text: T.t("menu.clearFrame"); shortcut: "Delete"
              onTriggered: doc.clearFrame() }
-    C.Action { id: actFlipX; text: "Flip horizontally"; onTriggered: doc.flip("x") }
-    C.Action { id: actFlipY; text: "Flip vertically"; onTriggered: doc.flip("y") }
+    C.Action { id: actFlipX; text: T.t("menu.flipX"); onTriggered: doc.flip("x") }
+    C.Action { id: actFlipY; text: T.t("menu.flipY"); onTriggered: doc.flip("y") }
 
-    C.Action { id: actResize; text: "Canvas size…"
+    C.Action { id: actResize; text: T.t("menu.canvasSize")
              onTriggered: { spriteSection.open = true; dock.contentY = spriteSection.y } }
-    C.Action { id: actAddClip; text: "Add clip"
+    C.Action { id: actAddClip; text: T.t("menu.addClip")
              onTriggered: doc.addClip("clip " + (doc.clipNames.length + 1)) }
-    C.Action { id: actRemoveClip; text: "Delete clip"
+    C.Action { id: actRemoveClip; text: T.t("menu.deleteClip")
              enabled: doc.clipNames.length > 1
              onTriggered: doc.removeClip(doc.clip) }
-    C.Action { id: actAddFrame; text: "Add frame"; shortcut: "Ctrl+Shift+N"
+    C.Action { id: actAddFrame; text: T.t("menu.addFrame"); shortcut: "Ctrl+Shift+N"
              onTriggered: doc.addFrame(false) }
-    C.Action { id: actDupFrame; text: "Duplicate frame"; shortcut: "Ctrl+D"
+    C.Action { id: actDupFrame; text: T.t("menu.dupFrame"); shortcut: "Ctrl+D"
              onTriggered: doc.addFrame(true) }
-    C.Action { id: actDelFrame; text: "Delete frame"
+    C.Action { id: actDelFrame; text: T.t("menu.delFrame")
              enabled: doc.frameCount > 1; onTriggered: doc.removeFrame() }
-    C.Action { id: actPlay; text: "Play"; shortcut: "Space"
+    C.Action { id: actPlay; text: T.t("menu.play"); shortcut: "Space"
              enabled: doc.frameCount > 1; onTriggered: win.playing = !win.playing }
 
-    C.Action { id: actZoomIn; text: "Zoom in"; shortcut: "Ctrl++"
+    C.Action { id: actZoomIn; text: T.t("menu.zoomIn"); shortcut: "Ctrl++"
              onTriggered: stage.zoomStep(stage.width / 2, stage.height / 2, true) }
-    C.Action { id: actZoomOut; text: "Zoom out"; shortcut: "Ctrl+-"
+    C.Action { id: actZoomOut; text: T.t("menu.zoomOut"); shortcut: "Ctrl+-"
              onTriggered: stage.zoomStep(stage.width / 2, stage.height / 2, false) }
-    C.Action { id: actFit; text: "Fit to window"; shortcut: "Ctrl+0"
+    C.Action { id: actFit; text: T.t("menu.fit"); shortcut: "Ctrl+0"
              onTriggered: { stage.touched = false; stage.fit() } }
-    C.Action { id: actOnion; text: "Onion skin"; checkable: true; checked: win.onion
+    C.Action { id: actOnion; text: T.t("menu.onion"); checkable: true; checked: win.onion
              onTriggered: win.onion = !win.onion }
-    C.Action { id: actMesh; text: "Pixel grid"; checkable: true; checked: win.mesh
+    C.Action { id: actMesh; text: T.t("menu.grid"); checkable: true; checked: win.mesh
              onTriggered: win.mesh = !win.mesh }
-    C.Action { id: actReference; text: "Reference image…"
+    C.Action { id: actReference; text: T.t("menu.reference")
              onTriggered: referenceDialog.open() }
-    C.Action { id: actColour; text: "Choose a colour…"
+    C.Action { id: actColour; text: T.t("menu.chooseColour")
              onTriggered: colourSheet.show() }
-    C.Action { id: actRoulette; text: "Russian roulette"
+    C.Action { id: actRoulette; text: T.t("menu.roulette")
              onTriggered: win.russianRoulette() }
-    C.Action { id: actReplace; text: "Replace this colour…"
+    C.Action { id: actReplace; text: T.t("menu.replaceColour")
              enabled: win.focusedSlot !== ""
              onTriggered: colourSheet.show("replace") }
     // F10 puts the keyboard on the menu bar, where the arrows walk it. Alt and
@@ -440,20 +440,20 @@ Window {
     // has done for thirty years, and neither existed here.
     Shortcut { sequence: "F10"; onActivated: menus.forceActiveFocus() }
 
-    C.Action { id: actNextClip; text: "Next clip"; shortcut: "]"
+    C.Action { id: actNextClip; text: T.t("menu.nextClip"); shortcut: "]"
              enabled: doc.clipNames.length > 1
              onTriggered: win.stepClip(1) }
-    C.Action { id: actPrevClip; text: "Previous clip"; shortcut: "["
+    C.Action { id: actPrevClip; text: T.t("menu.prevClip"); shortcut: "["
              enabled: doc.clipNames.length > 1
              onTriggered: win.stepClip(-1) }
-    C.Action { id: actFrameBack; text: "Move frame earlier"; shortcut: "Shift+,"
+    C.Action { id: actFrameBack; text: T.t("menu.frameBack"); shortcut: "Shift+,"
              enabled: doc.frame > 0
              onTriggered: doc.moveFrame(-1) }
-    C.Action { id: actFrameOn; text: "Move frame later"; shortcut: "Shift+."
+    C.Action { id: actFrameOn; text: T.t("menu.frameOn"); shortcut: "Shift+."
              enabled: doc.frame < doc.frameCount - 1
              onTriggered: doc.moveFrame(1) }
 
-    C.Action { id: actHints; text: "Key hints"; checkable: true; checked: win.showHints
+    C.Action { id: actHints; text: T.t("menu.keyHints"); checkable: true; checked: win.showHints
              onTriggered: win.showHints = !win.showHints }
 
     // ------------------------------------------------------------- the window
@@ -745,7 +745,7 @@ Window {
                     anchors.right: parent.right
                     anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
-                    text: (doc.path === "" ? "untitled"
+                    text: (doc.path === "" ? T.t("file.untitled")
                                            : doc.path.split("/").pop())
                           + (doc.dirty ? "  •" : "")
                     color: doc.dirty ? theme.foreground : theme.dim
@@ -760,7 +760,7 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter
 
                 Drop {
-                    title: "&File"
+                    title: T.t("menu.file")
                     Cmd { action: actNew }
                     Cmd { action: actOpen }
                     Rule {}
@@ -774,7 +774,7 @@ Window {
                 }
 
                 Drop {
-                    title: "&Edit"
+                    title: T.t("menu.edit")
                     Cmd { action: actUndo }
                     Cmd { action: actRedo }
                     Rule {}
@@ -784,7 +784,7 @@ Window {
                 }
 
                 Drop {
-                    title: "&Sprite"
+                    title: T.t("menu.sprite")
                     Cmd { action: actResize }
                     Rule {}
                     Cmd { action: actAddClip }
@@ -807,7 +807,7 @@ Window {
                 }
 
                 Drop {
-                    title: "&View"
+                    title: T.t("menu.view")
                     Cmd { action: actZoomIn }
                     Cmd { action: actZoomOut }
                     Cmd { action: actFit }
@@ -860,19 +860,19 @@ Window {
                         anchors.horizontalCenter: parent.horizontalCenter
                         spacing: 4
 
-                        ToolButton { glyph: "B"; key: "B"; caption: "Pencil"
+                        ToolButton { glyph: "B"; key: "B"; caption: T.t("tool.pencil")
                                      on: win.tool === "pencil"
                                      onClicked: win.tool = "pencil" }
-                        ToolButton { glyph: "E"; key: "E"; caption: "Eraser"
+                        ToolButton { glyph: "E"; key: "E"; caption: T.t("tool.eraser")
                                      on: win.tool === "eraser"
                                      onClicked: win.tool = "eraser" }
-                        ToolButton { glyph: "F"; key: "F"; caption: "Bucket"
+                        ToolButton { glyph: "F"; key: "F"; caption: T.t("tool.bucket")
                                      on: win.tool === "bucket"
                                      onClicked: win.tool = "bucket" }
-                        ToolButton { glyph: "I"; key: "I"; caption: "Picker"
+                        ToolButton { glyph: "I"; key: "I"; caption: T.t("tool.picker")
                                      on: win.tool === "picker"
                                      onClicked: win.tool = "picker" }
-                        ToolButton { glyph: "H"; key: "H"; caption: "Pan"
+                        ToolButton { glyph: "H"; key: "H"; caption: T.t("tool.pan")
                                      on: win.tool === "hand"
                                      onClicked: win.tool = "hand" }
 
@@ -944,8 +944,8 @@ Window {
                                         id: note
                                         anchors.centerIn: parent
                                         text: chip.letter === ""
-                                              ? "empty — press c to find a colour"
-                                              : "slot " + chip.letter + "   "
+                                              ? T.t("strip.emptyColour")
+                                              : T.t("strip.slot").arg(chip.letter) + "   "
                                                 + String(doc.colourOf(chip.letter)).toUpperCase()
                                         color: theme.foreground
                                         font.family: theme.fontFamily
@@ -999,7 +999,7 @@ Window {
                                 Text {
                                     id: shot
                                     anchors.centerIn: parent
-                                    text: "russian roulette   R"
+                                    text: T.t("menu.roulette") + "   R"
                                     color: theme.foreground
                                     font.family: theme.fontFamily
                                     font.pixelSize: 11
@@ -1073,8 +1073,8 @@ Window {
 
                             Section {
                                 id: paletteSection
-                                title: "Palette"
-                                hint: doc.palette.length + " slots"
+                                title: T.t("panel.palette")
+                                hint: T.t("panel.palette.slots").arg(doc.palette.length)
 
                                 // Nine rows, then it scrolls. A palette can run
                                 // to hundreds of slots, and letting it push the
@@ -1200,7 +1200,7 @@ Window {
 
                                 Field {
                                     onEscaped: win.focusCanvas()
-                                    label: "colour of slot " + win.slot
+                                    label: T.t("panel.palette.colourOf").arg(win.slot)
                                     boxWidth: 168
                                     value: {
                                         var found = doc.palette.filter(function (e) {
@@ -1226,13 +1226,14 @@ Window {
                                 Label {
                                     width: parent.width
                                     wrapMode: Text.Wrap
-                                    text: "changes every pixel drawn with "
-                                          + (win.slot === "." ? "it" : win.slot)
+                                    text: T.t("panel.palette.warning")
+                                          .arg(win.slot === "." ? T.t("panel.palette.it")
+                                                                : win.slot)
                                 }
                             }
 
                             Section {
-                                title: "Preview"
+                                title: T.t("panel.preview")
                                 hint: Math.round(win.zoom) + "×"
 
                                 // The 1x tile doubles as the overview: it shows
@@ -1317,13 +1318,13 @@ Window {
                                     width: parent.width
                                     wrapMode: Text.Wrap
                                     visible: doc.columns > 240
-                                    text: "too wide to show at true size"
+                                    text: T.t("panel.preview.tooWide")
                                 }
                             }
 
                             Section {
                                 id: spriteSection
-                                title: "Sprite"
+                                title: T.t("panel.sprite")
                                 hint: doc.columns + "×" + doc.rows
                                 open: false
 
@@ -1351,7 +1352,7 @@ Window {
                                     spacing: 6
                                     Field {
                                         onEscaped: win.focusCanvas()
-                                        label: "columns"
+                                        label: T.t("field.columns")
                                         boxWidth: 97
                                         value: String(win.wantColumns)
                                         onEdited: function (text) {
@@ -1362,7 +1363,7 @@ Window {
                                     }
                                     Field {
                                         onEscaped: win.focusCanvas()
-                                        label: "rows"
+                                        label: T.t("field.rows")
                                         boxWidth: 97
                                         value: String(win.wantRows)
                                         onEdited: function (text) {
@@ -1381,11 +1382,11 @@ Window {
                                     wrapMode: Text.Wrap
                                     visible: win.wouldLose > 0
                                     color: theme.urgent
-                                    text: "resizing crops " + win.wouldLose + " drawn pixel(s)"
+                                    text: T.t("panel.sprite.crops").arg(win.wouldLose)
                                 }
 
                                 Chip {
-                                    label: "resize"
+                                    label: T.t("panel.sprite.resize")
                                     on: win.sizeChanged
                                     usable: win.sizeChanged
                                     role: win.wouldLose > 0 ? theme.urgent : theme.accent
@@ -1394,13 +1395,14 @@ Window {
                             }
 
                             Section {
-                                title: "Reference"
+                                title: T.t("panel.reference")
                                 hint: win.referencePath === ""
-                                      ? "none" : Math.round(win.referenceAlpha * 100) + "%"
+                                      ? T.t("panel.reference.none")
+                                      : Math.round(win.referenceAlpha * 100) + "%"
                                 open: false
 
                                 Chip {
-                                    label: "choose an image…"
+                                    label: T.t("panel.reference.choose")
                                     onClicked: referenceDialog.open()
                                 }
 
@@ -1423,13 +1425,13 @@ Window {
                                 Row {
                                     spacing: 5
                                     Chip {
-                                        label: win.referenceOnTop ? "on top" : "behind"
+                                        label: win.referenceOnTop ? T.t("panel.reference.onTop") : T.t("panel.reference.behind")
                                         on: win.referenceOnTop
                                         usable: win.referencePath !== ""
                                         onClicked: win.referenceOnTop = !win.referenceOnTop
                                     }
                                     Chip {
-                                        label: "clear"
+                                        label: T.t("panel.reference.clear")
                                         usable: win.referencePath !== ""
                                         onClicked: win.referencePath = ""
                                     }
@@ -1461,14 +1463,14 @@ Window {
 
     FileDialog {
         id: openDialog
-        title: "Open a document"
+        title: T.t("dialog.open")
         nameFilters: ["omapixel documents (*.json)", "All files (*)"]
         onAccepted: doc.open(selectedFile)
     }
 
     FileDialog {
         id: saveDialog
-        title: "Save the document"
+        title: T.t("dialog.save")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "json"
         nameFilters: ["omapixel documents (*.json)", "All files (*)"]
@@ -1477,7 +1479,7 @@ Window {
 
     FileDialog {
         id: referenceDialog
-        title: "Choose a reference image"
+        title: T.t("dialog.reference")
         nameFilters: ["Images (*.png *.jpg *.jpeg *.webp)", "All files (*)"]
         onAccepted: {
             win.referencePath = selectedFile.toString().replace("file://", "")
@@ -1488,7 +1490,7 @@ Window {
 
     FileDialog {
         id: exportDialog
-        title: "Export a PNG"
+        title: T.t("dialog.export")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "png"
         nameFilters: ["PNG images (*.png)", "All files (*)"]
@@ -1499,7 +1501,7 @@ Window {
     Sheet {
         id: newSheet
         onClosed: win.focusCanvas()
-        title: "New document"
+        title: T.t("sheet.new")
 
         property int columns: 32
         property int rows: 24
@@ -1528,7 +1530,7 @@ Window {
                 spacing: 6
                 Field {
                     onEscaped: win.focusCanvas()
-                    label: "columns"
+                    label: T.t("field.columns")
                     boxWidth: 130
                     value: String(newSheet.columns)
                     onEdited: function (text) {
@@ -1538,7 +1540,7 @@ Window {
                 }
                 Field {
                     onEscaped: win.focusCanvas()
-                    label: "rows"
+                    label: T.t("field.rows")
                     boxWidth: 130
                     value: String(newSheet.rows)
                     onEdited: function (text) {
@@ -1552,27 +1554,27 @@ Window {
                 wrapMode: Text.Wrap
                 visible: doc.dirty
                 color: theme.urgent
-                text: "the open document has unsaved changes — this replaces it"
+                text: T.t("sheet.new.unsaved")
             },
             Row {
                 spacing: 6
                 Chip {
-                    label: "create"
+                    label: T.t("sheet.new.create")
                     on: true
                     onClicked: {
                         doc.reset(newSheet.columns, newSheet.rows)
                         newSheet.close()
                     }
                 }
-                Chip { label: "cancel"; onClicked: newSheet.close() }
+                Chip { label: T.t("action.cancel"); onClicked: newSheet.close() }
             }
         ]
     }
 
     Sheet {
         id: colourSheet
-        title: purpose === "replace" ? "Replace slot " + replacing
-                                      : "Choose a colour"
+        title: purpose === "replace" ? T.t("sheet.replace").arg(replacing)
+                                      : T.t("sheet.colour")
         onClosed: { armed = false; win.focusCanvas() }
 
         property string chosen: "#7AA2F7"
@@ -1635,7 +1637,7 @@ Window {
         body: [
             Field {
                 id: search
-                label: "search by name, or type a hex"
+                label: T.t("sheet.colour.search")
                 boxWidth: 380
                 enabled: !colourSheet.armed
                 onEdited: function (text) { colourSheet.refine(text) }
@@ -1755,14 +1757,13 @@ Window {
                     color: colourSheet.armed ? theme.accent : theme.dim
                     text: {
                         if (colourSheet.purpose === "replace")
-                            return colourSheet.chosen + " — Enter repaints "
-                                   + doc.countSlot(colourSheet.replacing, false)
-                                   + " pixel(s) in this frame,  Shift+Enter "
-                                   + doc.countSlot(colourSheet.replacing, true)
-                                   + " in every frame"
+                            return T.t("sheet.replace.counts")
+                                       .arg(colourSheet.chosen)
+                                       .arg(doc.countSlot(colourSheet.replacing, false))
+                                       .arg(doc.countSlot(colourSheet.replacing, true))
                         return colourSheet.armed
-                               ? colourSheet.chosen + " — now press a number key to keep it there"
-                               : colourSheet.chosen + " — Enter to choose it"
+                               ? T.t("sheet.colour.armed").arg(colourSheet.chosen)
+                               : T.t("sheet.colour.choose").arg(colourSheet.chosen)
                     }
                 }
             },
@@ -1774,16 +1775,16 @@ Window {
                 visible: colourSheet.purpose === "replace"
 
                 Chip {
-                    label: "this frame"
+                    label: T.t("sheet.replace.thisFrame")
                     on: true
                     onClicked: colourSheet.arm(false)
                 }
                 Chip {
-                    label: "every frame"
+                    label: T.t("sheet.replace.everyFrame")
                     role: theme.urgent
                     onClicked: colourSheet.arm(true)
                 }
-                Chip { label: "cancel"; onClicked: colourSheet.close() }
+                Chip { label: T.t("action.cancel"); onClicked: colourSheet.close() }
             },
 
             Item {
@@ -1853,7 +1854,7 @@ Window {
     Sheet {
         id: exportSheet
         onClosed: win.focusCanvas()
-        title: asSheet ? "Export a sprite sheet" : "Export a PNG"
+        title: asSheet ? T.t("sheet.exportSheet") : T.t("sheet.exportPng")
 
         property bool asSheet: false
         property int factor: 8
@@ -1864,15 +1865,16 @@ Window {
                 width: 320
                 wrapMode: Text.Wrap
                 text: exportSheet.asSheet
-                      ? "Every frame of " + doc.clip + ", side by side: "
-                        + (doc.columns * doc.frameCount * exportSheet.factor) + "×"
-                        + (doc.rows * exportSheet.factor) + " pixels."
-                      : "The open frame at " + (doc.columns * exportSheet.factor) + "×"
-                        + (doc.rows * exportSheet.factor) + " pixels."
+                      ? T.t("sheet.export.sheetSize").arg(doc.clip)
+                            .arg(doc.columns * doc.frameCount * exportSheet.factor)
+                            .arg(doc.rows * exportSheet.factor)
+                      : T.t("sheet.export.frameSize")
+                            .arg(doc.columns * exportSheet.factor)
+                            .arg(doc.rows * exportSheet.factor)
             },
             Row {
                 spacing: 5
-                Label { text: "scale"; anchors.verticalCenter: parent.verticalCenter }
+                Label { text: T.t("sheet.export.scale"); anchors.verticalCenter: parent.verticalCenter }
                 Repeater {
                     model: [1, 2, 4, 8, 16]
                     Chip {
@@ -1884,14 +1886,14 @@ Window {
                 }
             },
             Chip {
-                label: "chequerboard behind transparency"
+                label: T.t("sheet.export.checker")
                 on: exportSheet.checker
                 onClicked: exportSheet.checker = !exportSheet.checker
             },
             Row {
                 spacing: 6
                 Chip {
-                    label: "choose a file…"
+                    label: T.t("sheet.export.choose")
                     on: true
                     onClicked: {
                         exportDialog.currentFile =
@@ -1900,7 +1902,7 @@ Window {
                         exportDialog.open()
                     }
                 }
-                Chip { label: "cancel"; onClicked: exportSheet.close() }
+                Chip { label: T.t("action.cancel"); onClicked: exportSheet.close() }
             }
         ]
     }

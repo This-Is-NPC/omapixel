@@ -8,6 +8,7 @@
 
 #include "DocumentModel.h"
 #include "InputLog.h"
+#include "Strings.h"
 #include "PixelGridItem.h"
 #include "Theme.h"
 
@@ -41,6 +42,12 @@ int main(int argc, char *argv[])
     // receives, with its deltas and modifiers. Input that never arrives and
     // input that arrives and is ignored look identical from the outside, and
     // guessing between them wastes more time than the switch costs.
+    // The window's words, from i18n/<language>.json. English is always loaded
+    // first, so a catalogue that only translates half of it shows English for
+    // the other half instead of gaps.
+    omapixel::Strings &strings = omapixel::Strings::shared();
+    strings.load(omapixel::Strings::preferredLanguage());
+
     omapixel::InputLog inputLog(qEnvironmentVariableIsSet("OMAPIXEL_DEBUG_INPUT"));
 
     omapixel::DocumentModel document;
@@ -63,6 +70,7 @@ int main(int argc, char *argv[])
     // exists once opened cannot otherwise be looked at without a display.
     engine.rootContext()->setContextProperty(
         QStringLiteral("shotSheet"), QString::fromUtf8(qgetenv("OMAPIXEL_SHOT_SHEET")));
+    engine.rootContext()->setContextProperty(QStringLiteral("T"), &strings);
     engine.rootContext()->setContextProperty(QStringLiteral("log"), &inputLog);
     engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
     engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);

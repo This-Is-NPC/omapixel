@@ -15,6 +15,9 @@
 #include <qpa/qwindowsysteminterface.h>
 #include <QProcess>
 #include <QDir>
+#include <QDirIterator>
+#include <QStandardPaths>
+#include <QRegularExpression>
 #include <QAbstractItemModel>
 #include <QElapsedTimer>
 #include <QSignalSpy>
@@ -30,6 +33,7 @@
 #include "Palette.h"
 #include "Render.h"
 #include "Commands.h"
+#include "Strings.h"
 #include "DocumentModel.h"
 #include "InputLog.h"
 #include "PixelGridItem.h"
@@ -1805,6 +1809,92 @@ private slots:
         // things that do not depend on how busy the machine is.
         QVERIFY2(last < first * 4 + 200,
                  "painting got dramatically slower as the palette grew");
+    }
+
+    // ------------------------------------------------------------ i18n
+
+    void aCatalogueFallsBackRatherThanFailing()
+    {
+        // A half-translated catalogue should show English where it is thin,
+        // and a typo in a key should be visible rather than a silent gap.
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        // Asked for rather than assumed: the config directory carries the
+        // application's name, and under the test runner that is not "omapixel".
+        qputenv("XDG_CONFIG_HOME", home.path().toUtf8());
+        const QString i18n =
+            QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)
+            + QStringLiteral("/i18n");
+        QDir().mkpath(i18n);
+
+        // Written plainly rather than through a lambda with QVERIFY inside it:
+        // the macro carries a `return` and a raw string full of commas, and the
+        // two together confuse the preprocessor before the compiler ever runs.
+        QFile base(i18n + QStringLiteral("/en.json"));
+        QVERIFY(base.open(QIODevice::WriteOnly));
+        base.write("{\"menu.file\": \"File\", \"menu.save\": \"Save\"}");
+        base.close();
+
+        QFile portuguese(i18n + QStringLiteral("/pt.json"));
+        QVERIFY(portuguese.open(QIODevice::WriteOnly));
+        portuguese.write("{\"menu.file\": \"Arquivo\"}");
+        portuguese.close();
+
+        Strings strings;
+        strings.load(QStringLiteral("pt"));
+        QCOMPARE(strings.language(), QStringLiteral("pt"));
+        QCOMPARE(strings.t(QStringLiteral("menu.file")), QStringLiteral("Arquivo"));
+        // Not translated yet: English, not a gap.
+        QCOMPARE(strings.t(QStringLiteral("menu.save")), QStringLiteral("Save"));
+        // Not a key at all: the key itself, which is visibly wrong.
+        QCOMPARE(strings.t(QStringLiteral("menu.wibble")), QStringLiteral("menu.wibble"));
+
+        // pt_BR with no catalogue of its own falls to pt, so a general
+        // translation serves a specific system until somebody writes one.
+        Strings brazilian;
+        brazilian.load(QStringLiteral("pt_BR"));
+        QCOMPARE(brazilian.language(), QStringLiteral("pt"));
+        QCOMPARE(brazilian.t(QStringLiteral("menu.file")), QStringLiteral("Arquivo"));
+
+        // A language nobody has written is English, not empty.
+        Strings none;
+        none.load(QStringLiteral("xx"));
+        QCOMPARE(none.language(), QStringLiteral("en"));
+        QCOMPARE(none.t(QStringLiteral("menu.file")), QStringLiteral("File"));
+    }
+
+    void theEnglishCatalogueCoversEveryKeyTheWindowAsksFor()
+    {
+        // The catalogue and the code drift apart the moment nothing checks
+        // them. This is the check: every T.t("...") in the QML, and every
+        // key the model says, has an English string.
+        QFile english(QStringLiteral(SOURCE_DIR "/i18n/en.json"));
+        QVERIFY2(english.open(QIODevice::ReadOnly), "i18n/en.json is missing");
+        const QJsonObject catalogue =
+            QJsonDocument::fromJson(english.readAll()).object();
+        QVERIFY(catalogue.size() > 100);
+
+        QStringList missing;
+        const QRegularExpression call(QStringLiteral("T\\.t\\(([^)]*)\\)"));
+        const QRegularExpression quoted(QStringLiteral("\"([^\"]+)\""));
+        QDirIterator qml(QStringLiteral(SOURCE_DIR "/src/gui/qml"),
+                         {QStringLiteral("*.qml")}, QDir::Files);
+        while (qml.hasNext()) {
+            QFile file(qml.next());
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            const QString body = QString::fromUtf8(file.readAll());
+            auto calls = call.globalMatch(body);
+            while (calls.hasNext()) {
+                auto keys = quoted.globalMatch(calls.next().captured(1));
+                while (keys.hasNext()) {
+                    const QString key = keys.next().captured(1);
+                    if (!catalogue.contains(key))
+                        missing << key;
+                }
+            }
+        }
+        QVERIFY2(missing.isEmpty(),
+                 qPrintable(QStringLiteral("no English for: ") + missing.join(", ")));
     }
 
     void theRoundingComesFromHyprland()

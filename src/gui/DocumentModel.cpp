@@ -2,6 +2,7 @@
 
 #include "Codec.h"
 #include "Ops.h"
+#include "Strings.h"
 #include "Render.h"
 
 #include <QFileInfo>
@@ -112,14 +113,14 @@ void DocumentModel::reseat()
 void DocumentModel::undo()
 {
     if (m_undo.isEmpty()) {
-        say(QStringLiteral("nothing to undo"));
+        say(Strings::shared().t(QStringLiteral("note.nothingToUndo")));
         return;
     }
     m_redo.append(m_document);
     m_document = m_undo.takeLast();
     reseat();
     m_dirty = true;
-    say(QStringLiteral("undone · %1 left").arg(m_undo.size()));
+    say(Strings::shared().t(QStringLiteral("note.undone")).arg(m_undo.size()));
     paletteMoved();
     emit changed();
     emit viewChanged();
@@ -130,14 +131,14 @@ void DocumentModel::undo()
 void DocumentModel::redo()
 {
     if (m_redo.isEmpty()) {
-        say(QStringLiteral("nothing to redo"));
+        say(Strings::shared().t(QStringLiteral("note.nothingToRedo")));
         return;
     }
     m_undo.append(m_document);
     m_document = m_redo.takeLast();
     reseat();
     m_dirty = true;
-    say(QStringLiteral("redone"));
+    say(Strings::shared().t(QStringLiteral("note.redone")));
     paletteMoved();
     emit changed();
     emit viewChanged();
@@ -277,7 +278,7 @@ void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex,
     if (to.isNull()) {
         const QString fresh = freeSlot();
         if (fresh.isEmpty()) {
-            say(QStringLiteral("the palette is full — remove a slot first"));
+            say(Strings::shared().t(QStringLiteral("note.paletteFull")));
             return;
         }
         to = fresh.at(0);
@@ -293,7 +294,7 @@ void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex,
                           : m_document.replaceSlotInFrame(m_clip, m_frame, from, to);
     if (moved == 0) {
         m_document = before;
-        say(QStringLiteral("nothing was drawn with %1").arg(from));
+        say(Strings::shared().t(QStringLiteral("note.nothingDrawnWith")).arg(from));
         return;
     }
     // Nothing refers to the old slot any more, so it is clutter.
@@ -304,11 +305,11 @@ void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex,
     m_dirty = true;
     m_clip = m_document.clip(m_clip) ? m_clip : m_document.clipNames().value(0);
     paletteMoved();
-    say(QStringLiteral("replaced %1 pixel(s) of %2%3")
+    say(Strings::shared().t(QStringLiteral("note.replaced"))
             .arg(moved)
             .arg(from)
-            .arg(everywhere ? QStringLiteral(", everywhere")
-                            : QStringLiteral(", in this frame")));
+            .arg(everywhere ? Strings::shared().t(QStringLiteral("note.everywhere"))
+                            : Strings::shared().t(QStringLiteral("note.thisFrame"))));
     emit changed();
     emit viewChanged();
     emit fileChanged();
@@ -434,7 +435,7 @@ void DocumentModel::addClip(const QString &name)
 {
     const Document before = m_document;
     if (!m_document.addClip(name)) {
-        say(QStringLiteral("there is already a clip called %1").arg(name));
+        say(Strings::shared().t(QStringLiteral("note.clipExists")).arg(name));
         return;
     }
     remember(before);
@@ -538,7 +539,7 @@ void DocumentModel::resize(int columns, int rows)
     remember(m_document);
     m_document.resize(columns, rows);
     m_dirty = true;
-    say(QStringLiteral("resized to %1×%2").arg(columns).arg(rows));
+    say(Strings::shared().t(QStringLiteral("note.resized")).arg(columns).arg(rows));
     emit changed();
     emit fileChanged();
 }
@@ -551,7 +552,7 @@ void DocumentModel::reset(int columns, int rows)
     m_frame = 0;
     m_path.clear();
     m_dirty = false;
-    say(QStringLiteral("new document · %1×%2").arg(columns).arg(rows));
+    say(Strings::shared().t(QStringLiteral("note.newDocument")).arg(columns).arg(rows));
     paletteMoved();
     emit changed();
     emit viewChanged();
@@ -620,7 +621,7 @@ bool DocumentModel::open(const QString &path)
     m_path = where;
     m_dirty = false;
     paletteMoved();
-    say(QStringLiteral("%1 · %2 clip(s)")
+    say(Strings::shared().t(QStringLiteral("note.opened"))
             .arg(QFileInfo(where).fileName())
             .arg(m_document.clips().size()));
     emit changed();
@@ -633,7 +634,7 @@ bool DocumentModel::save(const QString &path)
 {
     const QString where = path.isEmpty() ? m_path : path;
     if (where.isEmpty()) {
-        say(QStringLiteral("say where to save"));
+        say(Strings::shared().t(QStringLiteral("note.sayWhereToSave")));
         return false;
     }
     QString error;
@@ -643,7 +644,7 @@ bool DocumentModel::save(const QString &path)
     }
     m_path = where;
     m_dirty = false;
-    say(QStringLiteral("saved to %1").arg(where));
+    say(Strings::shared().t(QStringLiteral("note.savedTo")).arg(where));
     emit fileChanged();
     return true;
 }
@@ -655,7 +656,7 @@ bool DocumentModel::exportImage(const QString &path, int scale, bool sheet,
     if (where.startsWith(QLatin1String("file://")))
         where = QUrl(where).toLocalFile();
     if (where.isEmpty()) {
-        say(QStringLiteral("say where to export"));
+        say(Strings::shared().t(QStringLiteral("note.sayWhereToExport")));
         return false;
     }
 
@@ -665,10 +666,10 @@ bool DocumentModel::exportImage(const QString &path, int scale, bool sheet,
     options.checker = checker;
     const QImage image = render::toImage(m_document, m_clip, m_frame, options);
     if (image.isNull() || !image.save(where)) {
-        say(QStringLiteral("could not write %1").arg(where));
+        say(Strings::shared().t(QStringLiteral("note.couldNotWrite")).arg(where));
         return false;
     }
-    say(QStringLiteral("exported %1×%2 to %3")
+    say(Strings::shared().t(QStringLiteral("note.exported"))
             .arg(image.width())
             .arg(image.height())
             .arg(QFileInfo(where).fileName()));

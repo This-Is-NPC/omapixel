@@ -19,11 +19,14 @@
 #include "Commands.h"
 #include "Document.h"
 #include "Ops.h"
+#include "Strings.h"
 #include "Render.h"
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -140,6 +143,96 @@ int runBatch(Document &doc, const QString &path, const QCommandLineParser &parse
     return 0;
 }
 
+/// `i18n` -- what a language catalogue is still missing.
+///
+/// Here rather than in a script beside the catalogues, because this project is
+/// C++ and a helper in another language is a second toolchain to install, a
+/// second thing to keep working, and a second place to look.
+int checkCatalogues(const QString &wanted)
+{
+    const QString home = Strings::catalogueDir();
+    const auto read = [](const QString &path, QJsonObject *into) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+            return false;
+        *into = QJsonDocument::fromJson(file.readAll()).object();
+        return true;
+    };
+
+    QJsonObject english;
+    if (!read(home + QStringLiteral("/en.json"), &english)) {
+        err() << home << "/en.json: not there\n";
+        return 1;
+    }
+
+    if (wanted.isEmpty()) {
+        out() << "catalogues in " << home << ":\n";
+        const QFileInfoList files =
+            QDir(home).entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+        for (const QFileInfo &file : files) {
+            QJsonObject one;
+            if (!read(file.absoluteFilePath(), &one))
+                continue;
+            out() << QStringLiteral("  %1 %2 strings")
+                         .arg(file.completeBaseName(), -8)
+                         .arg(one.size());
+            if (file.completeBaseName() != QLatin1String("en"))
+                out() << "  (" << one.size() * 100 / english.size() << "% of English)";
+            out() << "\n";
+        }
+        out() << "\nto start one:  cp i18n/en.json i18n/pt.json"
+              << "  &&  omapixel i18n pt\n";
+        return 0;
+    }
+
+    QJsonObject them;
+    if (!read(home + QLatin1Char('/') + wanted + QStringLiteral(".json"), &them)) {
+        err() << "no i18n/" << wanted << ".json — copy i18n/en.json to start\n";
+        return 1;
+    }
+
+    QStringList missing;
+    QStringList untouched;
+    for (auto it = english.constBegin(); it != english.constEnd(); ++it) {
+        const QString theirs = them.value(it.key()).toString().trimmed();
+        if (theirs.isEmpty())
+            missing << it.key();
+        else if (theirs == it.value().toString())
+            untouched << it.key();
+    }
+    QStringList stale;
+    for (auto it = them.constBegin(); it != them.constEnd(); ++it) {
+        if (!english.contains(it.key()))
+            stale << it.key();
+    }
+    missing.sort();
+    stale.sort();
+
+    out() << wanted << ": " << (english.size() - missing.size()) << " of "
+          << english.size() << " translated\n";
+    if (!missing.isEmpty()) {
+        out() << "\n  " << missing.size() << " still to do:\n";
+        for (int i = 0; i < missing.size() && i < 40; ++i) {
+            out() << QStringLiteral("    %1 %2\n")
+                         .arg(missing.at(i), -38)
+                         .arg(english.value(missing.at(i)).toString());
+        }
+        if (missing.size() > 40)
+            out() << "    ... and " << missing.size() - 40 << " more\n";
+    }
+    if (!stale.isEmpty()) {
+        out() << "\n  " << stale.size()
+              << " the program no longer asks for, safe to delete:\n";
+        for (const QString &key : stale)
+            out() << "    " << key << "\n";
+    }
+    if (!untouched.isEmpty() && missing.isEmpty()) {
+        out() << "\n  " << untouched.size()
+              << " still read as the English, which may be deliberate\n";
+    }
+    return missing.isEmpty() && stale.isEmpty() ? 0 : 1;
+}
+
 } // namespace
 
 // --------------------------------------------------------------- the commands
@@ -152,6 +245,9 @@ int main(int argc, char *argv[])
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("omapixel"));
+    // The words, so the command line speaks whatever the window speaks. Both
+    // front ends over one core, catalogues included.
+    Strings::shared().load(Strings::preferredLanguage());
     QCoreApplication::setApplicationVersion(QStringLiteral("2.0"));
 
     QCommandLineParser parser;
@@ -174,6 +270,7 @@ int main(int argc, char *argv[])
         "  edit     clear | shift | flip | swap\n"
         "  palette  list | set | rm\n"
         "  batch    many commands over one document, read once and written once\n"
+        "  i18n     what a language catalogue is still missing\n"
         "  diff     what differs between two documents\n"
         "  import   pull one sprite set out of a catalog\n"
         "  export   put the clips back into one\n"
@@ -195,6 +292,9 @@ int main(int argc, char *argv[])
     const QString command = words.takeFirst();
 
     // -------------------------------------------------------------- new
+
+    if (command == QLatin1String("i18n"))
+        return checkCatalogues(words.value(0));
 
     if (command == QLatin1String("new")) {
         if (words.isEmpty()) {

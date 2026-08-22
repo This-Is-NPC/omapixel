@@ -9,7 +9,12 @@ CONFIG   -= app_bundle
 TEMPLATE  = lib
 TARGET    = omapixelcore
 
+# Where the language catalogues live in a checkout. Installed builds also
+# look beside the binary, and the user's own config directory wins over both.
+DEFINES += OMAPIXEL_I18N_DIR=\\\"$$PWD/../../i18n\\\"
+
 HEADERS += \
+    Strings.h \
     Grid.h \
     Palette.h \
     Document.h \
@@ -19,6 +24,7 @@ HEADERS += \
     Bridge.h
 
 SOURCES += \
+    Strings.cpp \
     Grid.cpp \
     Palette.cpp \
     Document.cpp \

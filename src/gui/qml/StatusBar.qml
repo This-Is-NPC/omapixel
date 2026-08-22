@@ -51,8 +51,9 @@ Rectangle {
 
             StatusText {
                 anchors.verticalCenter: parent.verticalCenter
-                text: win.awaitingSlot ? "press a letter"
-                                       : (win.slot === "." ? "empty" : win.slot)
+                text: win.awaitingSlot ? T.t("status.pressLetter")
+                                       : (win.slot === "." ? T.t("status.emptySlot")
+                                                           : win.slot)
                 alarm: win.awaitingSlot
             }
         }
@@ -67,9 +68,8 @@ Rectangle {
         }
         StatusText { text: Math.round(win.zoom) + "×" }
         StatusText {
-            text: doc.clip + " · " + doc.frameCount
-                  + (doc.frameCount === 1 ? " frame" : " frames")
-                  + " · " + doc.fps + " fps"
+            text: T.t(doc.frameCount === 1 ? "status.oneFrame" : "status.frames")
+                      .arg(doc.clip).arg(doc.frameCount).arg(doc.fps)
         }
     }
 
@@ -81,7 +81,8 @@ Rectangle {
 
         StatusText { text: doc.note; wide: true }
         StatusText {
-            text: doc.dirty ? "unsaved" : (doc.path === "" ? "new" : "saved")
+            text: doc.dirty ? T.t("status.unsaved")
+                            : (doc.path === "" ? T.t("status.new") : T.t("status.saved"))
             alarm: doc.dirty
         }
     }
