@@ -30,55 +30,54 @@ Palette Palette::standard()
 
 bool Palette::has(QChar letter) const
 {
-    for (const Slot &slot : m_entries) {
-        if (slot.letter == letter)
-            return true;
-    }
-    return false;
+    return m_index.contains(letter);
 }
 
 QColor Palette::colour(QChar letter) const
 {
-    for (const Slot &slot : m_entries) {
-        if (slot.letter == letter)
-            return slot.colour;
-    }
-    return QColor();
+    const auto at = m_index.constFind(letter);
+    return at == m_index.constEnd() ? QColor() : m_entries.at(at.value()).colour;
+}
+
+void Palette::reindex()
+{
+    m_index.clear();
+    m_index.reserve(m_entries.size());
+    for (int i = 0; i < m_entries.size(); ++i)
+        m_index.insert(m_entries.at(i).letter, i);
 }
 
 void Palette::set(QChar letter, const QColor &colour)
 {
-    for (Slot &slot : m_entries) {
-        if (slot.letter == letter) {
-            slot.colour = colour;
-            return;
-        }
+    const auto at = m_index.constFind(letter);
+    if (at != m_index.constEnd()) {
+        m_entries[at.value()].colour = colour;   // the order did not move
+        return;
     }
     m_entries.append({letter, colour});
+    m_index.insert(letter, m_entries.size() - 1);
 }
 
 bool Palette::remove(QChar letter)
 {
-    for (int i = 0; i < m_entries.size(); ++i) {
-        if (m_entries.at(i).letter == letter) {
-            m_entries.removeAt(i);
-            return true;
-        }
-    }
-    return false;
+    const auto at = m_index.constFind(letter);
+    if (at == m_index.constEnd())
+        return false;
+    m_entries.removeAt(at.value());
+    reindex();   // everything after it moved down
+    return true;
 }
 
 bool Palette::moveTo(QChar letter, int index)
 {
     if (index < 0 || index >= m_entries.size())
         return false;
-    for (int i = 0; i < m_entries.size(); ++i) {
-        if (m_entries.at(i).letter == letter) {
-            m_entries.move(i, index);
-            return true;
-        }
-    }
-    return false;
+    const auto at = m_index.constFind(letter);
+    if (at == m_index.constEnd())
+        return false;
+    m_entries.move(at.value(), index);
+    reindex();   // everything between the two positions shifted
+    return true;
 }
 
 QList<QChar> Palette::letters() const

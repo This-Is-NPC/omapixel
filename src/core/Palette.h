@@ -2,6 +2,7 @@
 
 #include <QChar>
 #include <QColor>
+#include <QHash>
 #include <QList>
 #include <QString>
 
@@ -45,7 +46,18 @@ public:
     QList<QChar> letters() const;
 
 private:
+    /// Rebuilds the letter index after the list's shape changes.
+    void reindex();
+
     QList<Slot> m_entries;
+    /// letter -> position in m_entries.
+    ///
+    /// The list is the truth, because its order is content. This is only a way
+    /// to find a letter without walking it: `colour()` is called once per pixel
+    /// by the renderer, so a linear scan made drawing cost the size of the
+    /// palette -- a document with three hundred slots rendered a hundred times
+    /// slower than one with three, for no reason a person could see.
+    QHash<QChar, int> m_index;
 };
 
 } // namespace omapixel
