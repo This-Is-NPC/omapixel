@@ -136,6 +136,10 @@ Full docs live in [`docs/`](docs/).
 - **[Adding a language](docs/i18n.md)**: every word comes from a JSON file.
 - **[How it is built](docs/design.md)**: one core, two front ends, and why it is shaped this way.
 
+## License
+
+omapixel is available under the [MIT License](LICENSE).
+
 ---
 
 <sub>Needs Qt 6 and a C++ compiler: `sudo pacman -S --needed qt6-base qt6-declarative gcc make`.</sub>
