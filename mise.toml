@@ -93,6 +93,179 @@ description = "Everything CI would run"
 depends = ["build", "test"]
 run = "echo 'build and tests are green'"
 
+# ---------------------------------------------------------------------- dist
+
+[tasks.dist]
+description = "Stage the release tree under dist/ and tar it — what a release ships"
+depends = ["build"]
+run = """
+# The tag drives the name in CI; a checkout gets whatever git can describe, so
+# running this by hand still produces something you can unpack and look at.
+version="${OMAPIXEL_VERSION:-$(git -C '{{config_root}}' describe --tags --always 2>/dev/null || echo 0.0.0)}"
+version="${version#v}"
+arch="$(uname -m)"
+out="{{config_root}}/dist"
+root="$out/omapixel-$version-$arch"
+
+rm -rf "$root"
+mkdir -p "$root/bin" \
+         "$root/share/omapixel/i18n" \
+         "$root/share/applications" \
+         "$root/share/icons/hicolor/scalable/apps" \
+         "$root/share/licenses/omapixel" \
+         "$root/share/doc/omapixel/docs"
+
+install -m755 "$BUILD_DIR/bin/omapixel"        "$root/bin/omapixel"
+install -m755 "$BUILD_DIR/bin/omapixel-studio" "$root/bin/omapixel-studio"
+# A prefix tree, not a pile of files: the binaries find their catalogues and
+# their default config at ../share/omapixel, so this unpacks anywhere and works
+# -- and it is the same layout the packages lay down under /usr.
+install -m644 "{{config_root}}"/i18n/*.json          "$root/share/omapixel/i18n/"
+install -m644 "{{config_root}}/config/config.toml"   "$root/share/omapixel/config.toml"
+install -m644 "{{config_root}}/packaging/omapixel-studio.desktop" "$root/share/applications/"
+install -m644 "{{config_root}}/packaging/icon/omapixel.svg" "$root/share/icons/hicolor/scalable/apps/"
+install -m644 "{{config_root}}/LICENSE"              "$root/share/licenses/omapixel/LICENSE"
+install -m644 "{{config_root}}/README.md"            "$root/share/doc/omapixel/README.md"
+install -m644 "{{config_root}}"/docs/*.md            "$root/share/doc/omapixel/docs/"
+
+tar -czf "$root.tar.gz" -C "$out" "omapixel-$version-$arch"
+echo "$root.tar.gz"
+"""
+
+# --------------------------------------------------------------------- notes
+
+[tasks.notes]
+description = "The release notes for a tag — OMAPIXEL_TAG=v0.1.0 mise run notes"
+run = '''
+# What a release says it changed, out of what the history already knows. The
+# alternative is a CHANGELOG.md kept by hand, which is the same information
+# written twice and wrong once.
+#
+# Two sources, in this order:
+#   1. The body of the tag annotation -- everything after its first line. That
+#      is where a release says something the commits cannot, and `git tag -a`
+#      with a one-line -m leaves it empty, so routine releases cost nothing.
+#   2. The commits since the previous tag, grouped by their conventional
+#      prefix. `feat(studio): x` becomes a line under Features.
+# mise appends a task's arguments to the end of the script rather than passing
+# them as $1, so the tag comes in the environment -- the same way `dist` takes
+# OMAPIXEL_VERSION. In a checkout sitting on a tag, neither is needed.
+tag="${OMAPIXEL_TAG:-}"
+if [ -z "$tag" ]; then
+  tag=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
+fi
+if [ -z "$tag" ]; then
+  echo "which tag? — OMAPIXEL_TAG=v0.1.0 mise run notes" >&2
+  exit 1
+fi
+if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null 2>&1; then
+  echo "no tag $tag" >&2
+  exit 1
+fi
+
+# GitHub sets the first; a checkout has a remote to ask.
+repo="${GITHUB_REPOSITORY:-}"
+if [ -z "$repo" ]; then
+  repo=$(git remote get-url origin 2>/dev/null \
+    | sed -e "s|^git@github.com:||" -e "s|^https://github.com/||" -e "s|\.git$||")
+fi
+
+# The first release has no previous tag to compare against, so it links to the
+# commit list instead. Without this the whole task fails on v0.1.0.
+prev=$(git describe --abbrev=0 --tags "$tag^" 2>/dev/null || true)
+if [ -n "$prev" ]; then
+  range="$prev..$tag"
+  compare="https://github.com/$repo/compare/$prev...$tag"
+else
+  range="$tag"
+  compare="https://github.com/$repo/commits/$tag"
+fi
+
+intro=$(git tag -l --format="%(contents:body)" "$tag")
+
+dir=$(mktemp -d)
+# One file per section, named so that sorting them is the running order.
+# tformat, not format: `format` leaves the last line without a newline and
+# `read` then drops it -- which silently loses the newest commit of a release.
+git log --no-merges --reverse --pretty=tformat:"%h %s" "$range" | while read -r line; do
+  hash=${line%% *}
+  subject=${line#* }
+
+  breaking=""
+  case "$subject" in
+    *": "*) head=${subject%%:*}; desc=${subject#*: } ;;
+    *)      head=""; desc="$subject" ;;
+  esac
+  case "$head" in
+    *!) breaking=yes; head=${head%!} ;;
+  esac
+  case "$head" in
+    *"("*")") type=${head%%(*}; scope=${head#*(}; scope=${scope%)} ;;
+    *)        type="$head"; scope="" ;;
+  esac
+
+  case "$type" in
+    feat) file=2-feat ;;
+    fix)  file=3-fix ;;
+    perf) file=4-perf ;;
+    docs) file=5-docs ;;
+    refactor|test|build|ci|chore|style) file=6-other ;;
+    # Not a conventional prefix at all: keep the subject whole rather than
+    # cutting it at a colon that meant something else.
+    *) file=6-other; desc="$subject"; scope=""; breaking="" ;;
+  esac
+  if [ -n "$breaking" ]; then file=1-breaking; fi
+
+  if [ -n "$scope" ]; then
+    echo "- **$scope**: $desc ($hash)" >> "$dir/$file"
+  else
+    echo "- $desc ($hash)" >> "$dir/$file"
+  fi
+done
+
+{
+  if [ -n "$intro" ]; then
+    printf "%s\n\n" "$intro"
+  fi
+
+  for file in 1-breaking 2-feat 3-fix 4-perf 5-docs 6-other; do
+    [ -f "$dir/$file" ] || continue
+    case "$file" in
+      1-breaking) echo "## Breaking changes" ;;
+      2-feat)     echo "## Features" ;;
+      3-fix)      echo "## Fixes" ;;
+      4-perf)     echo "## Performance" ;;
+      5-docs)     echo "## Documentation" ;;
+      6-other)    echo "## Other changes" ;;
+    esac
+    echo
+    cat "$dir/$file"
+    echo
+  done
+
+  cat <<EOF
+## Install
+
+On Omarchy:
+
+\`\`\`
+sudo pacman -S omapixel
+\`\`\`
+
+From a checkout, with Qt 6 and a compiler present:
+
+\`\`\`
+mise run build && mise run install
+\`\`\`
+EOF
+
+  echo
+  printf "**Full Changelog**: %s\n" "$compare"
+}
+
+rm -rf "$dir"
+'''
+
 # ----------------------------------------------------------------------- run
 
 [tasks.cli]

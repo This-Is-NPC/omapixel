@@ -7,3 +7,4 @@ qrc_*.cpp
 Makefile
 .qmake.stash
 version.h
+dist/
