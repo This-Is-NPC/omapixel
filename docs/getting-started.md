@@ -1,7 +1,7 @@
 # Getting started
 
 By the end of this page you will have drawn a sprite, animated it, watched it
-play, and written it out as a PNG — without leaving the terminal, and then again
+play, and written it out as a PNG, without leaving the terminal, and then again
 in the window.
 
 ## Install
@@ -20,7 +20,7 @@ mise run build    # builds the command line and the studio
 mise run test     # the unit tests, if you want to be sure
 ```
 
-`mise.toml` is the only entry point — there is no Makefile. If mise refuses the
+`mise.toml` is the only entry point; there is no Makefile. If mise refuses the
 file, run `mise trust` once.
 
 The two programs land in `build/`:
@@ -35,7 +35,7 @@ paths. The rest of this page writes `omapixel` for the first one.
 
 ## A first drawing
 
-Make an empty document. It is 32×24 by default; ask for something smaller:
+Make an empty document. It is 32×24 unless you ask for something else:
 
 ```bash
 omapixel new heart.json --size 16x16
@@ -59,7 +59,7 @@ C  #2B3048
 R  #F7768E
 ```
 
-A pixel is not a colour, it is a **letter** — the left column above. `R` is the
+A pixel is not a colour, it is a **letter**: the left column above. `R` is the
 pink. Draw with it:
 
 ```bash
@@ -88,7 +88,7 @@ A clip is a list of frames. Add a second one that copies the first:
 omapixel frame heart.json dup
 ```
 
-Now edit frame 1 without touching frame 0 — shift the whole drawing down a pixel
+Now edit frame 1 without touching frame 0. Shift the whole drawing down a pixel
 so the heart looks like it is beating:
 
 ```bash
@@ -102,7 +102,7 @@ omapixel clip heart.json fps --name idle --fps 4
 ```
 
 `info` tells you where you are. `drawn` counts the pixels that are not empty,
-added up across the clip's frames — the quickest way to notice a frame you
+added up across the clip's frames. It is the quickest way to notice a frame you
 cleared by accident:
 
 ```bash
@@ -138,17 +138,22 @@ omapixel render heart.json -o sheet.png --scale 8 --sheet --checker
 mise run studio heart.json
 ```
 
-The drawing is in the middle, the clips and palette on the left, size and file
-on the right, the frames along the bottom. Press <kbd>Space</kbd> to play the
-animation, <kbd>b</kbd> to draw, <kbd>e</kbd> to erase, <kbd>Ctrl</kbd>+<kbd>S</kbd>
-to save. [The studio](studio.md) has the rest.
+The drawing is in the middle. Tools and the ten colours you are drawing with run
+down the left; the palette, a true-size preview, the sprite's size and a
+reference image are panels on the right; the clip and its frames are along the
+bottom. Under the drawing, a bar shows the keys that are live right now.
 
-Nothing is special about a file made on the command line — the window opens the
+Press <kbd>Space</kbd> to play the animation, <kbd>b</kbd> to draw,
+<kbd>e</kbd> to erase, <kbd>Ctrl</kbd>+<kbd>S</kbd> to save.
+[The studio](studio.md) has the rest.
+
+Nothing is special about a file made on the command line. The window opens the
 same documents, saves the same format, and applies the same rules. Work in
 whichever suits the moment.
 
 ## Where to go next
 
-- [The command line](cli.md) — every command and flag
-- [The studio](studio.md) — the window in detail
-- [The format](format.md) — writing a document by hand, or generating one
+- [The command line](cli.md): every command and flag
+- [The studio](studio.md): the window in detail
+- [The format](format.md): writing a document by hand, or generating one
+- [Settings and keys](configuration.md): one TOML file, window, canvas, every keybinding

@@ -27,8 +27,8 @@ in-place flag; a command that changes a document saves it.
 | | |
 |---|---|
 | `0` | it worked |
-| `1` | it ran and the answer was no — the file would not load, the resize would crop, `check` found problems, `diff` found differences |
-| `2` | the command was wrong — a missing flag, an unknown sub-command |
+| `1` | it ran and the answer was no: the file would not load, the resize would crop, `check` found problems, `diff` found differences |
+| `2` | the command was wrong: a missing flag, an unknown sub-command |
 
 The split matters for scripting: `2` means fix your command, `1` means fix your
 art. `check` and `diff` deliberately return `1` on a finding so they work in a
@@ -67,7 +67,7 @@ omapixel info heart.json
 ```
 
 Size, the whole palette, and for every clip its name, fps, frame count and
-`drawn` — the number of non-empty pixels summed over its frames. Machine
+`drawn`, the number of non-empty pixels summed over its frames. Machine
 readable on purpose; pipe it into `jq`.
 
 ### `check` — what stops a document from being drawn
@@ -76,10 +76,8 @@ readable on purpose; pipe it into `jq`.
 omapixel check heart.json
 ```
 
-Prints one line per problem — a non-positive size, a duplicate palette slot, a
-colour that will not parse, a clip with no frames, a frame that is not the
-document's size, a letter used but never defined — then a count. Exit `1` if
-anything was found, so it drops into a build step as-is.
+Prints one line per model problem and exits `1` if anything is found. Structural
+format errors are refused earlier, while loading, with their JSON path.
 
 ### `show` — draw a frame in the terminal
 
@@ -111,7 +109,7 @@ omapixel render heart.json -o sheet.png --scale 8 --sheet --checker
 
 | | |
 |---|---|
-| `-o`, `--out` | where to write — required |
+| `-o`, `--out` | where to write, required |
 | `--scale <n>` | screen pixels per sprite pixel, default `1` |
 | `--sheet` | every frame of the clip side by side, instead of one frame |
 | `--checker` | checkerboard behind transparency instead of alpha |
@@ -125,14 +123,15 @@ display attached.
 omapixel diff mine.json theirs.json
 ```
 
-Per clip and frame, how many pixels differ, plus any clip present in only one of
-them. Exit `1` if anything differs.
+Compares the complete document: dimensions, palette values and order, clip names
+and order, FPS, frame counts, frame dimensions and pixels. Exit `1` if anything
+differs.
 
 ---
 
 ## Drawing
 
-All four take `--slot <letter>` — which colour to draw with. Leave it out and
+All four take `--slot <letter>`, which colour to draw with. Leave it out and
 they draw `.`, which erases.
 
 ### `paint` — one pixel
@@ -190,7 +189,7 @@ omapixel clip heart.json rm  run
 ```
 
 `add` defaults to 8 fps. A document keeps at least one clip, so removing the last
-one is refused — a document with no clips has nothing to draw and cannot be
+one is refused: a document with no clips has nothing to draw and cannot be
 reopened for editing.
 
 ### `frame` — add, dup, rm, move
@@ -216,7 +215,7 @@ omapixel palette heart.json rm  --slot P
 `set` also adds a slot that was not there. Removing a slot that pixels still use
 is allowed: those pixels keep their letter in the file and read as empty until
 the slot comes back, which is what makes a wrong `rm` recoverable. `check`
-reports it — *uses a slot with no colour: B* — so it does not go unnoticed.
+reports it as *uses a slot with no colour: B*, so it does not go unnoticed.
 
 ### `resize` — change the frame, keeping the drawing centred
 
@@ -225,7 +224,8 @@ omapixel resize heart.json --size 32x32
 omapixel resize heart.json --size 8x8 --anyway
 ```
 
-Every frame of every clip changes together — the size belongs to the document.
+Every frame of every clip changes together, because the size belongs to the
+document.
 Growing pads evenly; shrinking crops evenly. If it would cut through drawn
 pixels it refuses and tells you how many, and `--anyway` does it regardless.
 
@@ -244,7 +244,7 @@ omapixel batch heart.json --script draw.txt
 omapixel batch heart.json --script -          # read stdin
 ```
 
-Each line of the script is a command with its flags, **without the file** — the
+Each line of the script is a command with its flags, **without the file**. The
 file is the one `batch` opened:
 
 ```
@@ -258,8 +258,8 @@ frame dup --clip walk
 
 Only commands that work on the open document are allowed: `info`, `check`,
 `show`, `text`, `resize`, `clip`, `frame`, `palette`, `paint`, `line`, `rect`,
-`fill`, `edit`. Anything that names a second file — `render`, `diff`, `export`,
-`import`, `new` — stays outside, so a script cannot quietly write over something
+`fill`, `edit`. Anything that names a second file (`render`, `diff`, `export`,
+`import`, `new`) stays outside, so a script cannot quietly write over something
 the person running it never mentioned.
 
 **A batch is all or nothing.** If a line fails, it says which line and why, and
@@ -270,7 +270,8 @@ reason about, and running it again would not mean the same as running it once.
 application, parses the whole document, changes a few pixels and writes the file
 back. Converting a photograph to a 160×90 picture one command at a time took
 3621 processes and **4 minutes 26 seconds**; the identical result through
-`batch` — same document, `diff` says zero pixels differ — takes **0.1 seconds**.
+`batch`, on the same document with `diff` reporting zero pixels different, takes
+**0.1 seconds**.
 The drawing was never the slow part.
 
 ---
@@ -291,7 +292,7 @@ omapixel import catalog.json --name person --index 1 -o person.json
 |---|---|
 | `--name` | which set in the catalog |
 | `--index` | which variant, default `0` |
-| `-o` | the document to write — required |
+| `-o` | the document to write, required |
 
 Each sequence becomes a clip.
 
@@ -301,13 +302,37 @@ Each sequence becomes a clip.
 omapixel export person.json catalog.json --name person --index 1
 ```
 
-The catalog is edited in place. A clip the catalog does not already know is
+`--name` is required. The species and variant must already exist and have the
+expected JSON shape; validation happens before any write. The catalog is edited
+in place only after that validation. A clip the catalog does not already know is
 skipped with a warning rather than added: art under an invented name is art
-nothing ever draws. A document with problems is refused outright — run `check`
-first.
+nothing ever draws. A document with problems is refused outright, so run `check`
+first. If every clip is skipped, export fails and leaves the original untouched.
 
 A round trip that draws nothing gives the catalog back with the same content.
 Key order is not preserved; every frame is.
+
+---
+
+## Settings
+
+### `config` — the settings file
+
+```bash
+omapixel config           # where it is, and what in it differs from the defaults
+omapixel config check     # what is wrong with it, exit 1 if anything
+omapixel config write     # put the annotated default in place to start from
+omapixel --default-config # print that default to standard output
+```
+
+The file is `~/.config/omapixel/config.toml`, or `$OMAPIXEL_CONFIG_PATH` when
+that is set. Both the studio and the command line read it: the command line for
+the language, the studio for everything including every keybinding. With no file
+at all, both run on the defaults.
+
+`check` exits non-zero when it finds a bad value, a setting nothing reads, a
+binding that names no key, or two actions sharing one key. See
+[Settings and keys](configuration.md).
 
 ---
 

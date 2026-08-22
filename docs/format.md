@@ -26,18 +26,23 @@ so there is nothing binary in it and nothing encoded.
 
 ## A pixel is a letter, not a colour
 
-Each character of a frame row is a **palette slot** — a key into the colour
+Each character of a frame row is a **palette slot**, a key into the colour
 table above it. `.` is transparent and never appears in the palette.
 
-This is the only real choice the format makes, and everything else follows from
+The idea is not new. XPM, the X PixMap format, has stored images as characters
+into a colour table since 1989, `None` for transparency where this uses `.`.
+What is here is that idea with clips, frames and a per-clip frame rate on top,
+and a program on either side of it.
+
+It is the only real choice the format makes, and everything else follows from
 it. Recolouring a character is editing one line of the colour table, not
 repainting a thousand frames. Art with the colour baked into each pixel cannot do
 that, which is why changing a figure's shirt in a PNG means drawing another
 figure.
 
-A letter the palette does not define is **not an error**. It is skipped at paint
-time and the pixel stays empty, so a hand-written file with a typo still opens
-and can be fixed. `omapixel check` reports it.
+A letter the palette does not define is an error. The loader names the exact row
+and column and refuses the document rather than opening a normalized copy that
+could lose the original value when saved.
 
 ## `size`
 
@@ -46,34 +51,16 @@ to each clip: a document is a set of drawings of the same thing, and a clip of
 another size in the middle of it is another document. Whoever wants a 16px icon
 and a 128px backdrop wants two files, and will be happier with two.
 
-A frame is read at the size of the rows you actually wrote: the longest row wide,
-as many rows tall. Short rows within a frame are padded with `.`, so you never
-have to count to sixteen on the last one.
-
-If a frame ends up a different size from `size`, that is not a crash — it opens,
-and `check` says so:
-
-```
-idle[0]: 12x3, expected 8x4
-```
-
-Rendering uses the document's size, so the extra is cropped and the missing
-reads as empty. To repair the frames themselves, resize the document to the size
-it already claims:
-
-```bash
-omapixel resize mine.json --size 8x4 --anyway
-```
-
-Every frame is rebuilt at that size, centred. `--anyway` is needed only if the
-repair would cut through drawn pixels.
+Every frame must contain exactly `h` rows and every row exactly `w` characters.
+The loader reports the JSON path of a short, long or wrongly typed row. It does
+not pad or crop hand-written input silently.
 
 ## `palette`
 
 An **array**, not an object, and that is the one thing worth explaining. The
 obvious shape is an object keyed by slot, and the first version used exactly
 that. Qt's `QJsonObject` sorts its keys, so a round trip silently reordered the
-palette — and the palette's order is the order the swatch strip draws in, which
+palette, and the palette's order is the order the swatch strip draws in, which
 is content rather than presentation. An array keeps the order without a
 hand-written parser.
 
@@ -83,15 +70,15 @@ they stay legible in a wall of grid rows.
 
 **One character per pixel is the only ceiling on how many colours a document may
 have**, and it is a higher one than it sounds: letters and digits first, then the
-rest of printable ASCII, then Latin-1 and Latin Extended-A — over four hundred
-slots before anything runs out. `.` can never be one, because it is emptiness;
-`"` and `\` are excluded on purpose, since a row of pixels full of escapes is a
-row nobody can read; and the studio does not hand out digits, because it keeps
+rest of printable ASCII, then Latin-1 and Latin Extended-A, which is over four
+hundred slots before anything runs out. `.` can never be one, because it is emptiness;
+`"` and `\` are legal but awkward because JSON escapes them; the studio does not
+hand them out. It also does not hand out digits, because it keeps
 `0`–`9` for its own colour keys. A file that already uses a digit as a slot still
-opens and draws — the format allows any character, and only the studio's choice
+opens and draws: the format allows any character, and only the studio's choice
 of *new* slots is narrowed.
 
-The seventeen slots a new document starts with, in order — a dark-to-light ramp
+The seventeen slots a new document starts with, in order. A dark-to-light ramp
 of neutrals, then skin, then accents:
 
 ```
@@ -111,12 +98,12 @@ Also an array, for the same reason: the order is the order they are listed in.
 | `frames` | an array of frames, each an array of row strings |
 
 A clip always has at least one frame, and a document always has at least one
-clip. Both are enforced when the file is read, so a document that lost them by
-hand comes back with an `idle` clip rather than refusing to open.
+clip. A file that omits either is refused; the loader never invents replacement
+content.
 
 ## Writing one by hand
 
-Nothing stops you generating documents from a script — the format exists partly
+Nothing stops you generating documents from a script; the format exists partly
 for that. A minimal valid file:
 
 ```json
@@ -133,13 +120,13 @@ Then check it before trusting it:
 omapixel check mine.json && omapixel show mine.json
 ```
 
-`check` reports a non-positive size, a duplicate slot, a colour that will not
-parse, a clip with no frames, a frame that is not the document's size, and any
-letter used but not defined.
+Loading reports non-integer or out-of-range sizes and FPS, duplicate slots or
+clips, invalid colours, missing frames, wrong row dimensions, unknown slots and
+unknown fields. Diagnostics include paths such as `$.clips[1].frames[0][3]`.
 
 ## Compatibility
 
 Documents written by earlier versions, with `palette` and `clips` as **objects**
 keyed by slot and by name, still open. They are rewritten as arrays the first
 time they are saved, and the palette order becomes whatever the sort had already
-made it — worth checking the swatch strip once after converting an old file.
+made it. Worth checking the swatch strip once after converting an old file.
