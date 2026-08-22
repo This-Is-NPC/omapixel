@@ -1,0 +1,7 @@
+module qml
+Chip 1.0 Chip.qml
+Field 1.0 Field.qml
+Label 1.0 Label.qml
+Rail 1.0 Rail.qml
+Surface 1.0 Surface.qml
+Timeline 1.0 Timeline.qml

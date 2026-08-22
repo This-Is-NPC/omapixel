@@ -1,0 +1,478 @@
+import QtQuick
+import omapixel
+
+// The drawing surface: the open frame, large, with what you draw on it and what
+// you measure it against.
+//
+// Three layers in the same rectangle, and the order is the whole idea:
+//
+//   reference   the target, behind or on top, at adjustable opacity
+//   onion       the previous frame, faded, to see the MOVEMENT
+//   frame       what you are drawing
+//
+// Judging art against your memory of the target is how you get it wrong; having
+// the target in the same rectangle is how you fix it.
+Item {
+    id: surface
+
+    // `clip`, because the drawing is often bigger than the space for it. A
+    // 160x90 document at 12x is 1920 wide; without this it painted straight
+    // over both rails and the studio looked like it had lost its controls.
+    clip: true
+
+    property int hoverColumn: -1
+    property int hoverRow: -1
+
+    // Where the drawing sits inside the viewport. Kept as an offset from the
+    // centre rather than an absolute position, so a drawing smaller than the
+    // viewport stays centred without any special case.
+    property real panX: 0
+    property real panY: 0
+
+    readonly property real fitZoom: Math.max(
+        1, Math.min(Math.floor((width - 24) / Math.max(1, doc.columns)),
+                    Math.floor((height - 24) / Math.max(1, doc.rows))))
+
+    /// Puts the whole drawing on screen. What you want on opening a file, and
+    /// what you want after losing yourself at 40x.
+    function fit() {
+        win.zoom = Math.max(1, Math.min(40, surface.fitZoom))
+        panX = 0
+        panY = 0
+    }
+
+    /// Zooms about a point in viewport coordinates, so the pixel under the
+    /// cursor stays under the cursor. Zooming about the centre instead means
+    /// every zoom is followed by a hunt for what you were looking at.
+    function zoomAt(px, py, next) {
+        next = Math.max(1, Math.min(40, next))
+        if (next === win.zoom)
+            return
+        touched = true
+        var ratio = next / win.zoom
+        // The offset from the viewport centre to the anchor, before and after.
+        var ax = px - width / 2 - panX
+        var ay = py - height / 2 - panY
+        panX -= ax * (ratio - 1)
+        panY -= ay * (ratio - 1)
+        win.zoom = next
+        clampPan()
+    }
+
+    readonly property real contentWidth: doc.columns * win.zoom
+    readonly property real contentHeight: doc.rows * win.zoom
+    readonly property bool scrollsX: contentWidth > width
+    readonly property bool scrollsY: contentHeight > height
+
+    // What part of the drawing is on screen, in columns and rows. Published so
+    // the overview in the rail can draw the viewport and jump to a point
+    // without knowing anything about pans and zooms.
+    readonly property real viewColumn: ((contentWidth - width) / 2 - panX) / win.zoom
+    readonly property real viewRow: ((contentHeight - height) / 2 - panY) / win.zoom
+    readonly property real viewColumns: width / win.zoom
+    readonly property real viewRows: height / win.zoom
+
+    /// Keeps the drawing reachable. Once it is larger than the viewport it may
+    /// not be dragged past its own edges -- scrolling into empty space and
+    /// losing the drawing entirely is the thing that makes a zoomed view feel
+    /// broken. While it still fits, a little slack is harmless.
+    function clampPan() {
+        var slackX = scrollsX ? (contentWidth - width) / 2 : 24
+        var slackY = scrollsY ? (contentHeight - height) / 2 : 24
+        panX = Math.max(-slackX, Math.min(slackX, panX))
+        panY = Math.max(-slackY, Math.min(slackY, panY))
+    }
+
+    /// Moves the view by a wheel's worth of delta.
+    function scrollBy(dx, dy) {
+        if (dx === 0 && dy === 0)
+            return
+        touched = true
+        panX += dx * 0.7
+        panY += dy * 0.7
+        clampPan()
+    }
+
+    /// Puts a point of the DRAWING, in columns and rows, at the middle of the
+    /// viewport. This is what "go to that bit over there" means, and what the
+    /// scrollbars and the overview both end up calling.
+    function centreOn(column, row) {
+        panX = (doc.columns / 2 - column) * win.zoom
+        panY = (doc.rows / 2 - row) * win.zoom
+        touched = true
+        clampPan()
+    }
+
+    // A document opens before the window has laid itself out, and the pane
+    // passes through several sizes on the way to its real one. Fitting once, at
+    // the first size that looked plausible, fit a 160x90 picture to a pane
+    // 100px wide and left it at 1x. So: keep fitting to the pane until somebody
+    // zooms or pans, and never again after that. Following the window is what
+    // you want right up to the moment you have chosen a view of your own.
+    property bool touched: false
+
+    function settle() {
+        if (!touched && width > 80 && height > 80)
+            fit()
+        else
+            clampPan()
+    }
+
+    onWidthChanged: settle()
+    onHeightChanged: settle()
+    Component.onCompleted: {
+        settle()
+        log.say("surface ready — the QML side of the log is live")
+    }
+
+    Connections {
+        target: doc
+        // A different document is a different size; whatever pan suited the old
+        // one is meaningless, and starting scrolled off the edge looks broken.
+        function onFileChanged() { surface.touched = false; surface.settle() }
+        function onChanged() { surface.settle() }
+    }
+
+    // Panning. The middle button always does it; the left one does it too while
+    // the hand tool is chosen, because a middle button is not something every
+    // mouse or trackpad has, and dragging the picture around is the first thing
+    // anybody tries. Buttons this area does not accept fall through to drawing.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: win.tool === "hand" ? (Qt.LeftButton | Qt.MiddleButton)
+                                             : Qt.MiddleButton
+        z: 5
+        property real fromX: 0
+        property real fromY: 0
+        cursorShape: pressed ? Qt.ClosedHandCursor
+                             : (win.tool === "hand" ? Qt.OpenHandCursor : Qt.ArrowCursor)
+        // MouseArea has a wheel signal of its own. If one of them is eating the
+        // event before the handler sees it, this is where it shows.
+        // The wheel is handled HERE, in a MouseArea, and not in a WheelHandler.
+        //
+        // WheelHandler is the modern spelling and it is the one that does not
+        // work: on this Qt and Wayland it never receives a wheel event at all.
+        // Measured, not guessed -- with logging on both sides of the QML
+        // boundary, 456 wheel events reached the window, both MouseAreas saw
+        // every one of them, and the handler ran zero times. A minimal Item
+        // whose only child is a WheelHandler behaves the same way. MouseArea
+        // gets them, so MouseArea is what this uses.
+        onWheel: function (w) {
+            log.say("wheel angle " + w.angleDelta.x + "," + w.angleDelta.y
+                    + "  pixel " + w.pixelDelta.x + "," + w.pixelDelta.y
+                    + "  modifiers " + w.modifiers
+                    + " | zoom " + win.zoom + "  panY " + Math.round(surface.panY)
+                    + "  scrollsY " + surface.scrollsY)
+            w.accepted = true
+
+            if (w.modifiers & (Qt.ControlModifier | Qt.AltModifier)) {
+                // Whichever axis carries the turn. Alt and the wheel arrives as
+                // a HORIZONTAL delta -- libinput remaps it -- so reading only
+                // `y` meant alt-wheel zoomed out and never in.
+                var turn = w.angleDelta.y || w.angleDelta.x
+                        || w.pixelDelta.y || w.pixelDelta.x
+                if (turn !== 0)
+                    surface.zoomStep(w.x, w.y, turn > 0)
+                return
+            }
+
+            var dx = w.angleDelta.x
+            var dy = w.angleDelta.y
+            // Pixels first when they are there: that is already the distance
+            // asked for. A trackpad otherwise reports fractions of a degree --
+            // deltas of two and four where a wheel notch is 120 -- so its
+            // events need a much larger factor to cover the same ground.
+            if (w.pixelDelta.x !== 0 || w.pixelDelta.y !== 0)
+                surface.scrollBy(w.pixelDelta.x * 3, w.pixelDelta.y * 3)
+            else if (w.phase !== 0)
+                surface.scrollBy(dx * 6, dy * 6)      // trackpad, high resolution
+            else
+                surface.scrollBy(dx * 0.6, dy * 0.6)  // one notch of a wheel
+        }
+        onPressed: function (mouse) { fromX = mouse.x; fromY = mouse.y }
+        onPositionChanged: function (mouse) {
+            if (!pressed)
+                return
+            surface.touched = true
+            surface.panX += mouse.x - fromX
+            surface.panY += mouse.y - fromY
+            fromX = mouse.x
+            fromY = mouse.y
+            surface.clampPan()
+        }
+    }
+
+    // Three handlers, each filtering on an exact modifier set, rather than one
+    // handler branching on `event.modifiers`. Two reasons, both learned the
+    // hard way:
+    //
+    //   `acceptedModifiers` matches the WHOLE set, not any member of it. An
+    //   earlier `Qt.ShiftModifier | Qt.ControlModifier` meant "both at once"
+    //   and so never fired for either.
+    //
+    //   And branching inside on `event.modifiers` depends on that property
+    //   being exposed on the event; where it is not, it reads as undefined,
+    //   `undefined & Qt.ControlModifier` is 0, and every wheel event silently
+    //   takes the unmodified branch. Filtering by declaration cannot fail
+    //   quietly like that: a handler that does not match simply does not run.
+
+    /// One wheel notch of zoom, about the cursor.
+    function zoomStep(px, py, up) {
+        // Bigger steps once the pixels are large, so 12x to 40x is a flick
+        // rather than a grind.
+        var by = win.zoom >= 16 ? 4 : (win.zoom >= 8 ? 2 : 1)
+        zoomAt(px, py, win.zoom + (up ? by : -by))
+    }
+
+    PinchHandler {
+        // Two fingers on a trackpad, with no modifier at all -- the one path
+        // here that no keyboard state can spoil.
+        target: null
+        property real fromZoom: 1
+        onActiveChanged: if (active) fromZoom = win.zoom
+        onActiveScaleChanged: {
+            if (!active)
+                return
+            surface.zoomAt(centroid.position.x, centroid.position.y,
+                           Math.round(fromZoom * activeScale))
+        }
+    }
+
+    // Scrollbars. These went missing twice while the wheel was being chased --
+    // both times because a block above them was replaced by position rather
+    // than by name, and they sat between it and the stage.
+    component Bar : Rectangle {
+        property bool vertical: false
+        property real fraction: 0      // where along the content the view sits
+        property real portion: 1       // how much of it is on screen
+        signal moved(real fraction)
+
+        color: "transparent"
+        visible: portion < 1
+
+        Rectangle {
+            anchors.fill: parent
+            radius: theme.rounding
+            color: theme.fill(theme.foreground, 0.06)
+        }
+
+        Rectangle {
+            id: handle
+            radius: theme.rounding
+            color: drag.pressed || hover.hovered ? theme.fill(theme.accent, 0.55)
+                                                 : theme.fill(theme.foreground, 0.28)
+            Behavior on color { ColorAnimation { duration: 90 } }
+
+            readonly property real span: parent.vertical ? parent.height : parent.width
+            readonly property real len: Math.max(24, span * parent.portion)
+            readonly property real pos: (span - len) * parent.fraction
+
+            x: parent.vertical ? 0 : pos
+            y: parent.vertical ? pos : 0
+            width: parent.vertical ? parent.width : len
+            height: parent.vertical ? len : parent.height
+        }
+
+        HoverHandler { id: hover }
+
+        MouseArea {
+            id: drag
+            anchors.fill: parent
+            property real grabbed: 0
+
+            function fractionAt(along, centred) {
+                var span = parent.vertical ? height : width
+                var offset = centred ? handle.len / 2 : grabbed
+                var free = span - handle.len
+                return free <= 0 ? 0 : Math.max(0, Math.min(1, (along - offset) / free))
+            }
+
+            onPressed: function (mouse) {
+                var along = parent.vertical ? mouse.y : mouse.x
+                if (along >= handle.pos && along <= handle.pos + handle.len) {
+                    grabbed = along - handle.pos           // dragging the handle
+                } else {
+                    parent.moved(fractionAt(along, true))  // clicking the track jumps
+                    grabbed = handle.len / 2
+                }
+            }
+            onPositionChanged: function (mouse) {
+                if (pressed)
+                    parent.moved(fractionAt(parent.vertical ? mouse.y : mouse.x, false))
+            }
+        }
+    }
+
+    Bar {
+        id: barX
+        z: 6
+        height: 10
+        anchors { left: parent.left; right: parent.right; bottom: parent.bottom
+                  leftMargin: 6; rightMargin: 16; bottomMargin: 6 }
+        portion: surface.scrollsX ? surface.width / surface.contentWidth : 1
+        fraction: surface.scrollsX
+                  ? 0.5 - surface.panX / (surface.contentWidth - surface.width) : 0
+        onMoved: function (f) {
+            surface.touched = true
+            surface.panX = (0.5 - f) * (surface.contentWidth - surface.width)
+            surface.clampPan()
+        }
+    }
+
+    Bar {
+        id: barY
+        z: 6
+        vertical: true
+        width: 10
+        anchors { top: parent.top; bottom: parent.bottom; right: parent.right
+                  topMargin: 6; bottomMargin: 16; rightMargin: 6 }
+        portion: surface.scrollsY ? surface.height / surface.contentHeight : 1
+        fraction: surface.scrollsY
+                  ? 0.5 - surface.panY / (surface.contentHeight - surface.height) : 0
+        onMoved: function (f) {
+            surface.touched = true
+            surface.panY = (0.5 - f) * (surface.contentHeight - surface.height)
+            surface.clampPan()
+        }
+    }
+
+    Item {
+        id: stage
+        x: (surface.width - width) / 2 + surface.panX
+        y: (surface.height - height) / 2 + surface.panY
+        width: doc.columns * win.zoom
+        height: doc.rows * win.zoom
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -1
+            color: "transparent"
+            border.width: 1
+            border.color: theme.fill(theme.foreground, 0.18)
+        }
+
+        // The checkerboard is its own layer rather than a background painted
+        // inside the frame. Painted together it is opaque and covers the
+        // reference -- which is precisely the layer that needs to be underneath.
+        PixelGridItem {
+            anchors.fill: parent
+            model: doc
+            clip: doc.clip
+            frame: doc.frame
+            cell: win.zoom
+            checker: true
+            checkerDark: theme.checkerDark
+            checkerLight: theme.checkerLight
+            z: -2
+            opacity: 0
+            Component.onCompleted: opacity = 1
+        }
+
+        Image {
+            anchors.fill: parent
+            source: win.referencePath === "" ? "" : "file://" + win.referencePath
+            fillMode: Image.PreserveAspectFit
+            smooth: false
+            opacity: win.referenceAlpha
+            visible: opacity > 0 && win.referencePath !== ""
+            z: win.referenceOnTop ? 2 : -1
+        }
+
+        // The previous frame, underneath. Frame beside frame shows two poses;
+        // one on top of the other shows the path between them.
+        PixelGridItem {
+            anchors.fill: parent
+            model: doc
+            clip: doc.clip
+            frame: (doc.frame + doc.frameCount - 1) % Math.max(1, doc.frameCount)
+            cell: win.zoom
+            opacity: 0.3
+            visible: win.onion && doc.frameCount > 1
+            z: 0
+        }
+
+        PixelGridItem {
+            id: sheet
+            anchors.fill: parent
+            model: doc
+            clip: doc.clip
+            frame: doc.frame
+            cell: win.zoom
+            // Below 4x the mesh has more lines than the drawing has pixels: it
+            // stops measuring the grid and starts hiding it.
+            mesh: win.mesh && win.zoom >= 4
+            meshColour: theme.fill(theme.foreground, 0.10)
+            z: 1
+        }
+
+        MouseArea {
+            id: pointer
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            z: 3
+
+            property int lastColumn: -1
+            property int lastRow: -1
+
+            function apply(mx, my, erase) {
+                var col = Math.floor(mx / win.zoom)
+                var row = Math.floor(my / win.zoom)
+                if (col < 0 || row < 0 || col >= doc.columns || row >= doc.rows)
+                    return
+                if (win.tool === "picker") {
+                    var found = doc.slotAt(col, row)
+                    if (found !== ".") { win.slot = found; win.tool = "pencil" }
+                    return
+                }
+                var slot = (erase || win.tool === "eraser") ? "." : win.slot
+                if (win.tool === "bucket" && !erase) {
+                    doc.fill(col, row, slot)
+                    return
+                }
+                // Dragging paints the PATH and not the samples. At a fast drag
+                // the mouse skips cells, and painting only where the events land
+                // leaves a dotted line.
+                if (lastColumn >= 0)
+                    doc.line(lastColumn, lastRow, col, row, slot)
+                else
+                    doc.paint(col, row, slot)
+                lastColumn = col
+                lastRow = row
+            }
+
+            // The whole drag is one undo step. The model takes its snapshot at
+            // the first pixel that actually changes, so a click that missed
+            // does not leave an entry behind.
+            onPressed: function (mouse) {
+                lastColumn = -1
+                doc.beginStroke()
+                apply(mouse.x, mouse.y, mouse.button === Qt.RightButton)
+            }
+            onReleased: { doc.endStroke(); lastColumn = -1; lastRow = -1 }
+            onCanceled: { doc.endStroke(); lastColumn = -1; lastRow = -1 }
+            onPositionChanged: function (mouse) {
+                surface.hoverColumn = Math.floor(mouse.x / win.zoom)
+                surface.hoverRow = Math.floor(mouse.y / win.zoom)
+                if (pressed && win.tool !== "bucket" && win.tool !== "picker")
+                    apply(mouse.x, mouse.y, pressedButtons & Qt.RightButton)
+            }
+            onExited: { surface.hoverColumn = -1; surface.hoverRow = -1 }
+        }
+
+        // The outline of the pixel under the cursor. On a 32-column grid at 12×
+        // that is the difference between hitting the column and guessing.
+        Rectangle {
+            visible: surface.hoverColumn >= 0 && surface.hoverRow >= 0
+            x: surface.hoverColumn * win.zoom
+            y: surface.hoverRow * win.zoom
+            width: win.zoom
+            height: win.zoom
+            color: "transparent"
+            border.width: 1
+            border.color: theme.foreground
+            opacity: 0.7
+            z: 4
+        }
+    }
+}

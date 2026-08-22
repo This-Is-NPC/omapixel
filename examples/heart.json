@@ -1,0 +1,120 @@
+{
+    "clips": [
+        {
+            "fps": 4,
+            "frames": [
+                [
+                    "................",
+                    "................",
+                    "................",
+                    "................",
+                    "..RRRRR..RRRRR..",
+                    "..RRRRR..RRRRR..",
+                    "..RRRRR..RRRRR..",
+                    "..RRRRRRRRRRRR..",
+                    "..RRRRRRRRRRRR..",
+                    "....RRRRRRRR....",
+                    "....RRRRRRRR....",
+                    ".....RRRRRR.....",
+                    "......RRRR......",
+                    ".......RR.......",
+                    "................",
+                    "................"
+                ],
+                [
+                    "................",
+                    "................",
+                    "................",
+                    "................",
+                    "................",
+                    "..RRRRR..RRRRR..",
+                    "..RRRRR..RRRRR..",
+                    "..RRRRR..RRRRR..",
+                    "..RRRRRRRRRRRR..",
+                    "..RRRRRRRRRRRR..",
+                    "....RRRRRRRR....",
+                    "....RRRRRRRR....",
+                    ".....RRRRRR.....",
+                    "......RRRR......",
+                    ".......RR.......",
+                    "................"
+                ]
+            ],
+            "name": "idle"
+        }
+    ],
+    "palette": [
+        {
+            "colour": "#1A1B26",
+            "slot": "I"
+        },
+        {
+            "colour": "#2B3048",
+            "slot": "C"
+        },
+        {
+            "colour": "#3A3E55",
+            "slot": "A"
+        },
+        {
+            "colour": "#454C6E",
+            "slot": "K"
+        },
+        {
+            "colour": "#565F89",
+            "slot": "D"
+        },
+        {
+            "colour": "#A9B1D6",
+            "slot": "F"
+        },
+        {
+            "colour": "#E4E8F5",
+            "slot": "L"
+        },
+        {
+            "colour": "#4A3227",
+            "slot": "E"
+        },
+        {
+            "colour": "#6B4A3A",
+            "slot": "H"
+        },
+        {
+            "colour": "#8A6349",
+            "slot": "N"
+        },
+        {
+            "colour": "#D3A995",
+            "slot": "T"
+        },
+        {
+            "colour": "#F0CDBF",
+            "slot": "S"
+        },
+        {
+            "colour": "#F7768E",
+            "slot": "R"
+        },
+        {
+            "colour": "#E0AF68",
+            "slot": "Y"
+        },
+        {
+            "colour": "#9ECE6A",
+            "slot": "G"
+        },
+        {
+            "colour": "#7AA2F7",
+            "slot": "B"
+        },
+        {
+            "colour": "#BB9AF7",
+            "slot": "P"
+        }
+    ],
+    "size": {
+        "h": 16,
+        "w": 16
+    }
+}

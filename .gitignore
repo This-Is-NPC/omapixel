@@ -1,0 +1,8 @@
+build/
+build-tests/
+*.o
+*.a
+moc_*.cpp
+qrc_*.cpp
+Makefile
+.qmake.stash

@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/Main.qml</file>
+        <file>qml/Surface.qml</file>
+        <file>qml/Timeline.qml</file>
+        <file>qml/Chip.qml</file>
+        <file>qml/Field.qml</file>
+        <file>qml/Label.qml</file>
+        <file>qml/Rail.qml</file>
+        <file>qml/qmldir</file>
+    </qresource>
+</RCC>

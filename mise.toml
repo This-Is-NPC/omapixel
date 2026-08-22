@@ -1,0 +1,106 @@
+# omapixel — a pixel art and animation studio.
+#
+# One entry point for everything: `mise run` lists it. There is no Makefile and
+# no scripts under bin/, because two ways to build a project is one way too
+# many -- the second is always the one that rots.
+#
+# Qt is a system dependency, not a mise tool. mise manages toolchains it can
+# fetch; a C++/Qt build wants the distribution's Qt so the binary links against
+# the same libraries the desktop already runs. `mise run deps` checks for it and
+# tells you the one command that fixes it.
+
+[tools]
+# Nothing to fetch. The build needs a C++ compiler, make and Qt 6, all of which
+# come from the system -- see `mise run deps`. This block stays as the place to
+# put a tool the day one is genuinely needed.
+
+[env]
+BUILD_DIR = "{{config_root}}/build"
+
+# ---------------------------------------------------------------------- deps
+
+[tasks.deps]
+description = "Check the system dependencies, and say how to install what is missing"
+run = """
+missing=""
+for tool in qmake6 g++ make; do
+  command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+done
+# The Qt modules the .pro files ask for. Present as headers rather than as
+# binaries, so `command -v` cannot see them.
+for header in QtCore/QCoreApplication QtGui/QImage QtTest/QtTest QtQuick/QQuickWindow; do
+  ls /usr/include/qt6/$header >/dev/null 2>&1 || missing="$missing $header"
+done
+
+if [ -z "$missing" ]; then
+  echo "all present — qt $(qmake6 -query QT_VERSION), $(g++ --version | head -1)"
+  exit 0
+fi
+
+echo "missing:$missing" >&2
+echo >&2
+echo "on Arch / Omarchy:" >&2
+echo "  sudo pacman -S --needed qt6-base qt6-declarative gcc make" >&2
+exit 1
+"""
+
+# --------------------------------------------------------------------- build
+
+[tasks.build]
+description = "Build the CLI and the studio"
+depends = ["deps"]
+run = """
+mkdir -p "$BUILD_DIR"
+cd "$BUILD_DIR"
+qmake6 "{{config_root}}/omapixel.pro"
+make -j"$(nproc 2>/dev/null || echo 1)"
+echo
+echo "cli    $BUILD_DIR/cli/omapixel"
+echo "studio $BUILD_DIR/gui/omapixel-studio"
+"""
+
+[tasks.clean]
+description = "Throw the build away"
+run = "rm -rf '{{config_root}}/build' '{{config_root}}/build-tests'"
+
+# --------------------------------------------------------------------- tests
+
+[tasks.test]
+description = "Build and run the unit tests"
+depends = ["deps"]
+run = """
+mkdir -p "{{config_root}}/build-tests"
+cd "{{config_root}}/build-tests"
+qmake6 "{{config_root}}/tests/tests.pro"
+make -j"$(nproc 2>/dev/null || echo 1)"
+# offscreen: the tests touch QImage and never open a window, and CI has no
+# display. Without this Qt aborts on a missing platform plugin.
+QT_QPA_PLATFORM=offscreen ./tst_omapixel
+"""
+
+[tasks.check]
+description = "Everything CI would run"
+depends = ["build", "test"]
+run = "echo 'build and tests are green'"
+
+# ----------------------------------------------------------------------- run
+
+[tasks.cli]
+description = "Run the CLI — mise run cli -- check drawing.json"
+depends = ["build"]
+run = '"$BUILD_DIR/cli/omapixel" "$@"'
+
+[tasks.studio]
+description = "Open the studio — mise run studio -- drawing.json"
+depends = ["build"]
+run = '"$BUILD_DIR/gui/omapixel-studio" "$@"'
+
+[tasks.install]
+description = "Install both binaries into ~/.local/bin"
+depends = ["build"]
+run = """
+mkdir -p "$HOME/.local/bin"
+install -m755 "$BUILD_DIR/cli/omapixel" "$HOME/.local/bin/omapixel"
+install -m755 "$BUILD_DIR/gui/omapixel-studio" "$HOME/.local/bin/omapixel-studio"
+echo "installed to $HOME/.local/bin"
+"""

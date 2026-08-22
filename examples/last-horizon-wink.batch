@@ -1,0 +1,4375 @@
+# paleta
+palette rm --slot I
+palette rm --slot C
+palette rm --slot A
+palette rm --slot K
+palette rm --slot D
+palette rm --slot F
+palette rm --slot L
+palette rm --slot E
+palette rm --slot H
+palette rm --slot N
+palette rm --slot T
+palette rm --slot S
+palette rm --slot R
+palette rm --slot Y
+palette rm --slot G
+palette rm --slot B
+palette rm --slot P
+palette set --slot A --colour "#09090A"
+palette set --slot B --colour "#141112"
+palette set --slot C --colour "#291916"
+palette set --slot D --colour "#352622"
+palette set --slot E --colour "#342E2B"
+palette set --slot F --colour "#522E23"
+palette set --slot G --colour "#4F342B"
+palette set --slot H --colour "#1D475E"
+palette set --slot I --colour "#4B4038"
+palette set --slot J --colour "#37484E"
+palette set --slot K --colour "#67463A"
+palette set --slot L --colour "#455156"
+palette set --slot M --colour "#8A452F"
+palette set --slot N --colour "#6F564E"
+palette set --slot O --colour "#576463"
+palette set --slot P --colour "#54708A"
+palette set --slot Q --colour "#936D61"
+palette set --slot R --colour "#617A85"
+palette set --slot S --colour "#6F817A"
+palette set --slot T --colour "#6D8791"
+palette set --slot U --colour "#A9857A"
+palette set --slot V --colour "#6D9DA8"
+palette set --slot W --colour "#C28E7A"
+palette set --slot X --colour "#B2948E"
+palette set --slot Y --colour "#969DA5"
+palette set --slot Z --colour "#B0A3A2"
+palette set --slot a --colour "#98AAB2"
+palette set --slot b --colour "#C7A9A2"
+palette set --slot c --colour "#A0BBC7"
+palette set --slot d --colour "#ADC9D2"
+palette set --slot e --colour "#C2D6E6"
+palette set --slot f --colour "#D4D7D8"
+palette set --slot g --colour "#E0EAEB"
+# fundo
+edit clear --slot A
+# desenho
+paint --at 67,4 --slot B
+line --from 73,4 --to 74,4 --slot B
+paint --at 85,4 --slot B
+line --from 87,4 --to 89,4 --slot B
+line --from 91,4 --to 92,4 --slot B
+line --from 105,4 --to 108,4 --slot B
+line --from 63,5 --to 64,5 --slot B
+line --from 66,5 --to 67,5 --slot B
+line --from 72,5 --to 78,5 --slot B
+line --from 83,5 --to 94,5 --slot B
+paint --at 101,5 --slot B
+line --from 103,5 --to 108,5 --slot B
+line --from 116,5 --to 117,5 --slot B
+paint --at 121,5 --slot B
+line --from 134,5 --to 137,5 --slot B
+line --from 63,6 --to 64,6 --slot B
+line --from 71,6 --to 87,6 --slot B
+paint --at 88,6 --slot C
+line --from 89,6 --to 94,6 --slot B
+line --from 98,6 --to 109,6 --slot B
+line --from 114,6 --to 117,6 --slot B
+line --from 120,6 --to 122,6 --slot B
+line --from 132,6 --to 138,6 --slot B
+paint --at 54,7 --slot B
+line --from 64,7 --to 65,7 --slot B
+line --from 71,7 --to 86,7 --slot B
+paint --at 87,7 --slot D
+paint --at 88,7 --slot E
+line --from 89,7 --to 90,7 --slot C
+line --from 91,7 --to 94,7 --slot B
+line --from 97,7 --to 109,7 --slot B
+line --from 114,7 --to 116,7 --slot B
+line --from 120,7 --to 124,7 --slot B
+line --from 132,7 --to 138,7 --slot B
+line --from 53,8 --to 54,8 --slot B
+line --from 71,8 --to 84,8 --slot B
+paint --at 85,8 --slot D
+paint --at 86,8 --slot C
+paint --at 87,8 --slot L
+line --from 88,8 --to 89,8 --slot G
+paint --at 90,8 --slot C
+line --from 91,8 --to 110,8 --slot B
+line --from 112,8 --to 116,8 --slot B
+line --from 119,8 --to 124,8 --slot B
+paint --at 134,8 --slot B
+line --from 136,8 --to 139,8 --slot B
+line --from 53,9 --to 54,9 --slot B
+line --from 73,9 --to 83,9 --slot B
+paint --at 84,9 --slot D
+paint --at 85,9 --slot E
+paint --at 86,9 --slot G
+paint --at 87,9 --slot Q
+paint --at 88,9 --slot N
+paint --at 89,9 --slot I
+paint --at 90,9 --slot C
+line --from 91,9 --to 109,9 --slot B
+line --from 111,9 --to 116,9 --slot B
+line --from 119,9 --to 124,9 --slot B
+paint --at 126,9 --slot B
+line --from 136,9 --to 139,9 --slot B
+line --from 52,10 --to 55,10 --slot B
+line --from 71,10 --to 83,10 --slot B
+paint --at 84,10 --slot G
+paint --at 85,10 --slot E
+line --from 86,10 --to 87,10 --slot Q
+paint --at 88,10 --slot N
+paint --at 89,10 --slot L
+paint --at 90,10 --slot E
+line --from 91,10 --to 116,10 --slot B
+line --from 118,10 --to 126,10 --slot B
+line --from 136,10 --to 139,10 --slot B
+paint --at 50,11 --slot B
+line --from 52,11 --to 54,11 --slot B
+line --from 62,11 --to 63,11 --slot B
+line --from 70,11 --to 75,11 --slot B
+line --from 77,11 --to 80,11 --slot B
+paint --at 82,11 --slot B
+paint --at 83,11 --slot N
+paint --at 84,11 --slot L
+paint --at 85,11 --slot N
+paint --at 86,11 --slot U
+paint --at 87,11 --slot Q
+paint --at 88,11 --slot N
+paint --at 89,11 --slot Q
+paint --at 90,11 --slot E
+line --from 91,11 --to 99,11 --slot B
+line --from 100,11 --to 101,11 --slot C
+line --from 102,11 --to 116,11 --slot B
+line --from 118,11 --to 126,11 --slot B
+line --from 135,11 --to 139,11 --slot B
+line --from 49,12 --to 54,12 --slot B
+line --from 62,12 --to 64,12 --slot B
+line --from 67,12 --to 74,12 --slot B
+paint --at 76,12 --slot B
+line --from 78,12 --to 80,12 --slot B
+paint --at 82,12 --slot N
+paint --at 83,12 --slot Q
+paint --at 84,12 --slot N
+line --from 85,12 --to 86,12 --slot X
+line --from 87,12 --to 88,12 --slot Q
+paint --at 89,12 --slot N
+paint --at 90,12 --slot G
+line --from 91,12 --to 93,12 --slot D
+line --from 94,12 --to 100,12 --slot B
+paint --at 101,12 --slot C
+line --from 102,12 --to 114,12 --slot B
+paint --at 115,12 --slot I
+line --from 116,12 --to 117,12 --slot B
+paint --at 118,12 --slot C
+line --from 119,12 --to 127,12 --slot B
+line --from 135,12 --to 139,12 --slot B
+paint --at 49,13 --slot B
+line --from 51,13 --to 55,13 --slot B
+paint --at 59,13 --slot B
+paint --at 63,13 --slot B
+line --from 66,13 --to 79,13 --slot B
+paint --at 81,13 --slot N
+paint --at 82,13 --slot U
+paint --at 83,13 --slot Q
+line --from 84,13 --to 86,13 --slot X
+paint --at 87,13 --slot U
+line --from 88,13 --to 90,13 --slot N
+line --from 91,13 --to 92,13 --slot E
+paint --at 93,13 --slot C
+paint --at 94,13 --slot B
+paint --at 95,13 --slot E
+line --from 96,13 --to 97,13 --slot B
+line --from 98,13 --to 99,13 --slot C
+paint --at 100,13 --slot B
+line --from 101,13 --to 104,13 --slot C
+line --from 105,13 --to 113,13 --slot B
+paint --at 114,13 --slot L
+paint --at 115,13 --slot O
+line --from 117,13 --to 118,13 --slot B
+line --from 119,13 --to 120,13 --slot C
+line --from 121,13 --to 128,13 --slot B
+paint --at 135,13 --slot B
+line --from 137,13 --to 140,13 --slot B
+line --from 51,14 --to 55,14 --slot B
+line --from 58,14 --to 59,14 --slot B
+paint --at 63,14 --slot B
+line --from 65,14 --to 73,14 --slot B
+paint --at 75,14 --slot B
+paint --at 76,14 --slot E
+paint --at 77,14 --slot G
+line --from 78,14 --to 79,14 --slot B
+paint --at 80,14 --slot N
+paint --at 81,14 --slot U
+paint --at 82,14 --slot Q
+line --from 83,14 --to 86,14 --slot X
+paint --at 87,14 --slot U
+line --from 88,14 --to 89,14 --slot Q
+paint --at 90,14 --slot N
+paint --at 91,14 --slot G
+paint --at 92,14 --slot D
+paint --at 93,14 --slot B
+paint --at 94,14 --slot N
+paint --at 95,14 --slot E
+paint --at 96,14 --slot B
+paint --at 97,14 --slot L
+paint --at 98,14 --slot E
+paint --at 99,14 --slot B
+paint --at 100,14 --slot C
+paint --at 101,14 --slot B
+paint --at 102,14 --slot C
+paint --at 103,14 --slot N
+paint --at 104,14 --slot E
+line --from 105,14 --to 107,14 --slot B
+paint --at 108,14 --slot C
+paint --at 109,14 --slot E
+paint --at 110,14 --slot B
+paint --at 111,14 --slot E
+paint --at 112,14 --slot O
+paint --at 113,14 --slot G
+paint --at 114,14 --slot X
+paint --at 115,14 --slot E
+paint --at 116,14 --slot D
+paint --at 117,14 --slot E
+line --from 118,14 --to 119,14 --slot I
+line --from 120,14 --to 128,14 --slot B
+line --from 134,14 --to 135,14 --slot B
+line --from 137,14 --to 140,14 --slot B
+line --from 51,15 --to 55,15 --slot B
+line --from 57,15 --to 60,15 --slot B
+line --from 62,15 --to 72,15 --slot B
+paint --at 74,15 --slot C
+paint --at 75,15 --slot L
+line --from 76,15 --to 77,15 --slot N
+paint --at 78,15 --slot D
+paint --at 79,15 --slot Q
+line --from 80,15 --to 81,15 --slot U
+paint --at 82,15 --slot Q
+paint --at 83,15 --slot U
+line --from 84,15 --to 88,15 --slot X
+line --from 89,15 --to 90,15 --slot Q
+paint --at 91,15 --slot N
+paint --at 92,15 --slot E
+paint --at 93,15 --slot N
+paint --at 94,15 --slot U
+paint --at 95,15 --slot E
+line --from 96,15 --to 97,15 --slot N
+paint --at 98,15 --slot E
+paint --at 99,15 --slot I
+paint --at 100,15 --slot D
+paint --at 101,15 --slot E
+paint --at 102,15 --slot L
+paint --at 103,15 --slot N
+line --from 104,15 --to 106,15 --slot B
+paint --at 107,15 --slot C
+paint --at 108,15 --slot E
+paint --at 109,15 --slot C
+paint --at 110,15 --slot B
+paint --at 111,15 --slot O
+paint --at 112,15 --slot X
+paint --at 113,15 --slot O
+paint --at 114,15 --slot Q
+paint --at 115,15 --slot O
+line --from 116,15 --to 117,15 --slot X
+paint --at 118,15 --slot S
+line --from 119,15 --to 120,15 --slot C
+paint --at 121,15 --slot E
+paint --at 122,15 --slot C
+line --from 123,15 --to 141,15 --slot B
+line --from 42,16 --to 43,16 --slot B
+line --from 50,16 --to 54,16 --slot B
+line --from 56,16 --to 65,16 --slot B
+line --from 67,16 --to 70,16 --slot B
+line --from 71,16 --to 72,16 --slot C
+paint --at 73,16 --slot B
+paint --at 74,16 --slot N
+paint --at 75,16 --slot Q
+line --from 76,16 --to 77,16 --slot N
+paint --at 78,16 --slot Q
+paint --at 79,16 --slot U
+paint --at 80,16 --slot Q
+paint --at 81,16 --slot U
+paint --at 82,16 --slot W
+paint --at 83,16 --slot Q
+line --from 84,16 --to 88,16 --slot X
+line --from 89,16 --to 92,16 --slot Q
+line --from 93,16 --to 94,16 --slot X
+paint --at 95,16 --slot Q
+paint --at 96,16 --slot X
+paint --at 97,16 --slot U
+paint --at 98,16 --slot X
+paint --at 99,16 --slot Q
+paint --at 100,16 --slot N
+paint --at 101,16 --slot Q
+paint --at 102,16 --slot X
+paint --at 103,16 --slot N
+line --from 104,16 --to 105,16 --slot I
+paint --at 106,16 --slot B
+line --from 107,16 --to 108,16 --slot E
+paint --at 109,16 --slot I
+paint --at 110,16 --slot O
+paint --at 111,16 --slot Z
+paint --at 112,16 --slot X
+paint --at 113,16 --slot Z
+line --from 114,16 --to 116,16 --slot X
+paint --at 117,16 --slot Z
+paint --at 118,16 --slot X
+paint --at 119,16 --slot L
+paint --at 120,16 --slot E
+paint --at 121,16 --slot L
+line --from 122,16 --to 123,16 --slot B
+paint --at 124,16 --slot C
+line --from 125,16 --to 141,16 --slot B
+paint --at 35,17 --slot B
+paint --at 42,17 --slot B
+line --from 49,17 --to 53,17 --slot B
+line --from 56,17 --to 57,17 --slot B
+line --from 58,17 --to 59,17 --slot C
+line --from 60,17 --to 61,17 --slot B
+paint --at 62,17 --slot C
+line --from 63,17 --to 64,17 --slot B
+line --from 65,17 --to 69,17 --slot C
+paint --at 70,17 --slot D
+paint --at 71,17 --slot E
+paint --at 72,17 --slot G
+paint --at 73,17 --slot L
+paint --at 74,17 --slot Q
+line --from 75,17 --to 76,17 --slot N
+line --from 77,17 --to 80,17 --slot Q
+line --from 81,17 --to 84,17 --slot U
+line --from 85,17 --to 103,17 --slot X
+paint --at 104,17 --slot U
+paint --at 105,17 --slot O
+paint --at 106,17 --slot E
+line --from 107,17 --to 108,17 --slot O
+line --from 109,17 --to 118,17 --slot Z
+line --from 119,17 --to 120,17 --slot O
+line --from 121,17 --to 122,17 --slot I
+paint --at 123,17 --slot N
+paint --at 124,17 --slot L
+paint --at 125,17 --slot E
+line --from 126,17 --to 128,17 --slot B
+paint --at 130,17 --slot B
+line --from 132,17 --to 136,17 --slot B
+line --from 138,17 --to 141,17 --slot B
+paint --at 35,18 --slot B
+paint --at 42,18 --slot B
+line --from 49,18 --to 53,18 --slot B
+line --from 55,18 --to 57,18 --slot B
+paint --at 58,18 --slot D
+paint --at 59,18 --slot C
+line --from 60,18 --to 61,18 --slot D
+line --from 62,18 --to 64,18 --slot E
+line --from 65,18 --to 66,18 --slot G
+line --from 67,18 --to 68,18 --slot E
+paint --at 69,18 --slot G
+paint --at 70,18 --slot I
+paint --at 71,18 --slot K
+line --from 72,18 --to 74,18 --slot N
+line --from 75,18 --to 81,18 --slot Q
+paint --at 82,18 --slot U
+line --from 83,18 --to 97,18 --slot X
+paint --at 98,18 --slot Z
+paint --at 99,18 --slot X
+line --from 100,18 --to 101,18 --slot Z
+line --from 102,18 --to 106,18 --slot X
+paint --at 107,18 --slot Z
+line --from 108,18 --to 110,18 --slot X
+line --from 111,18 --to 119,18 --slot Z
+line --from 120,18 --to 121,18 --slot O
+line --from 122,18 --to 123,18 --slot Z
+line --from 124,18 --to 125,18 --slot X
+paint --at 126,18 --slot L
+paint --at 127,18 --slot N
+line --from 128,18 --to 130,18 --slot L
+paint --at 131,18 --slot E
+line --from 132,18 --to 134,18 --slot B
+line --from 139,18 --to 140,18 --slot B
+paint --at 31,19 --slot B
+line --from 40,19 --to 43,19 --slot B
+paint --at 45,19 --slot B
+line --from 48,19 --to 54,19 --slot B
+paint --at 56,19 --slot B
+line --from 57,19 --to 58,19 --slot D
+line --from 59,19 --to 60,19 --slot E
+line --from 61,19 --to 62,19 --slot G
+paint --at 63,19 --slot I
+line --from 64,19 --to 66,19 --slot G
+line --from 67,19 --to 72,19 --slot N
+line --from 73,19 --to 76,19 --slot Q
+paint --at 77,19 --slot U
+line --from 78,19 --to 80,19 --slot Q
+paint --at 81,19 --slot U
+line --from 82,19 --to 98,19 --slot X
+line --from 99,19 --to 102,19 --slot Z
+line --from 103,19 --to 107,19 --slot X
+paint --at 108,19 --slot N
+paint --at 109,19 --slot X
+line --from 110,19 --to 119,19 --slot Z
+line --from 120,19 --to 122,19 --slot X
+paint --at 123,19 --slot Q
+line --from 124,19 --to 126,19 --slot N
+line --from 127,19 --to 129,19 --slot Q
+line --from 130,19 --to 131,19 --slot N
+paint --at 132,19 --slot D
+paint --at 134,19 --slot B
+paint --at 140,19 --slot B
+line --from 31,20 --to 32,20 --slot B
+line --from 38,20 --to 43,20 --slot B
+line --from 47,20 --to 54,20 --slot B
+paint --at 56,20 --slot D
+line --from 57,20 --to 59,20 --slot E
+line --from 60,20 --to 61,20 --slot G
+line --from 62,20 --to 66,20 --slot I
+paint --at 67,20 --slot N
+line --from 68,20 --to 69,20 --slot Q
+line --from 70,20 --to 71,20 --slot N
+line --from 72,20 --to 75,20 --slot Q
+line --from 76,20 --to 78,20 --slot U
+paint --at 79,20 --slot Q
+line --from 80,20 --to 81,20 --slot U
+line --from 82,20 --to 86,20 --slot X
+line --from 87,20 --to 88,20 --slot U
+paint --at 89,20 --slot X
+paint --at 90,20 --slot Z
+line --from 91,20 --to 98,20 --slot X
+line --from 99,20 --to 101,20 --slot Z
+paint --at 102,20 --slot X
+paint --at 103,20 --slot Z
+line --from 104,20 --to 106,20 --slot X
+line --from 107,20 --to 108,20 --slot N
+line --from 109,20 --to 110,20 --slot X
+paint --at 111,20 --slot Q
+line --from 112,20 --to 115,20 --slot N
+line --from 116,20 --to 117,20 --slot Q
+paint --at 118,20 --slot N
+paint --at 119,20 --slot Q
+paint --at 120,20 --slot X
+paint --at 121,20 --slot Q
+line --from 122,20 --to 123,20 --slot N
+line --from 124,20 --to 128,20 --slot G
+paint --at 129,20 --slot I
+line --from 130,20 --to 131,20 --slot N
+paint --at 132,20 --slot L
+paint --at 133,20 --slot E
+paint --at 135,20 --slot B
+paint --at 141,20 --slot B
+line --from 30,21 --to 33,21 --slot B
+line --from 37,21 --to 39,21 --slot B
+line --from 46,21 --to 52,21 --slot B
+paint --at 55,21 --slot C
+paint --at 56,21 --slot G
+line --from 57,21 --to 58,21 --slot E
+line --from 59,21 --to 61,21 --slot G
+paint --at 62,21 --slot I
+paint --at 63,21 --slot G
+paint --at 64,21 --slot K
+line --from 65,21 --to 66,21 --slot N
+line --from 67,21 --to 74,21 --slot Q
+paint --at 75,21 --slot U
+line --from 76,21 --to 78,21 --slot X
+line --from 79,21 --to 80,21 --slot U
+line --from 81,21 --to 84,21 --slot X
+line --from 85,21 --to 86,21 --slot U
+line --from 87,21 --to 88,21 --slot Q
+paint --at 89,21 --slot X
+line --from 90,21 --to 92,21 --slot Z
+line --from 93,21 --to 99,21 --slot X
+line --from 100,21 --to 104,21 --slot Z
+paint --at 105,21 --slot X
+paint --at 106,21 --slot Q
+paint --at 107,21 --slot G
+paint --at 108,21 --slot L
+paint --at 109,21 --slot N
+paint --at 110,21 --slot G
+paint --at 111,21 --slot D
+line --from 112,21 --to 114,21 --slot C
+paint --at 115,21 --slot B
+paint --at 116,21 --slot C
+line --from 117,21 --to 120,21 --slot D
+paint --at 121,21 --slot G
+paint --at 122,21 --slot F
+line --from 123,21 --to 126,21 --slot D
+line --from 127,21 --to 129,21 --slot C
+paint --at 130,21 --slot D
+line --from 131,21 --to 132,21 --slot G
+paint --at 133,21 --slot N
+paint --at 134,21 --slot D
+line --from 135,21 --to 136,21 --slot B
+line --from 141,21 --to 142,21 --slot B
+line --from 30,22 --to 33,22 --slot B
+line --from 37,22 --to 38,22 --slot B
+line --from 44,22 --to 49,22 --slot B
+line --from 51,22 --to 52,22 --slot B
+paint --at 54,22 --slot B
+paint --at 55,22 --slot C
+paint --at 56,22 --slot E
+line --from 57,22 --to 62,22 --slot G
+paint --at 63,22 --slot I
+paint --at 64,22 --slot K
+line --from 65,22 --to 67,22 --slot N
+line --from 68,22 --to 71,22 --slot Q
+line --from 72,22 --to 75,22 --slot U
+line --from 76,22 --to 83,22 --slot X
+line --from 84,22 --to 85,22 --slot U
+line --from 86,22 --to 88,22 --slot Q
+paint --at 89,22 --slot U
+paint --at 90,22 --slot X
+line --from 91,22 --to 92,22 --slot Z
+paint --at 93,22 --slot X
+paint --at 94,22 --slot Z
+line --from 95,22 --to 100,22 --slot X
+line --from 101,22 --to 102,22 --slot Z
+line --from 103,22 --to 104,22 --slot X
+paint --at 105,22 --slot Q
+paint --at 106,22 --slot G
+paint --at 107,22 --slot I
+paint --at 108,22 --slot G
+paint --at 109,22 --slot D
+line --from 110,22 --to 111,22 --slot C
+paint --at 112,22 --slot D
+paint --at 113,22 --slot G
+line --from 114,22 --to 115,22 --slot D
+line --from 116,22 --to 122,22 --slot C
+paint --at 123,22 --slot D
+paint --at 124,22 --slot I
+line --from 125,22 --to 126,22 --slot G
+line --from 127,22 --to 130,22 --slot D
+paint --at 131,22 --slot C
+paint --at 132,22 --slot D
+line --from 133,22 --to 134,22 --slot G
+paint --at 135,22 --slot B
+line --from 141,22 --to 142,22 --slot B
+line --from 31,23 --to 32,23 --slot B
+paint --at 42,23 --slot B
+line --from 44,23 --to 48,23 --slot B
+line --from 51,23 --to 53,23 --slot B
+line --from 54,23 --to 55,23 --slot C
+paint --at 56,23 --slot D
+paint --at 57,23 --slot E
+line --from 58,23 --to 64,23 --slot G
+paint --at 65,23 --slot I
+paint --at 66,23 --slot K
+line --from 67,23 --to 68,23 --slot N
+line --from 69,23 --to 71,23 --slot Q
+paint --at 72,23 --slot U
+line --from 73,23 --to 74,23 --slot X
+paint --at 75,23 --slot U
+paint --at 76,23 --slot X
+paint --at 77,23 --slot Z
+line --from 78,23 --to 80,23 --slot X
+line --from 81,23 --to 82,23 --slot U
+line --from 83,23 --to 84,23 --slot X
+paint --at 85,23 --slot U
+line --from 86,23 --to 87,23 --slot Q
+line --from 88,23 --to 94,23 --slot X
+paint --at 95,23 --slot Z
+line --from 96,23 --to 103,23 --slot X
+paint --at 104,23 --slot U
+line --from 105,23 --to 106,23 --slot N
+paint --at 107,23 --slot I
+line --from 108,23 --to 110,23 --slot C
+paint --at 111,23 --slot D
+paint --at 112,23 --slot G
+paint --at 113,23 --slot D
+line --from 114,23 --to 117,23 --slot C
+paint --at 118,23 --slot D
+paint --at 119,23 --slot C
+line --from 120,23 --to 121,23 --slot D
+paint --at 122,23 --slot G
+paint --at 123,23 --slot N
+paint --at 124,23 --slot Q
+line --from 125,23 --to 126,23 --slot X
+paint --at 127,23 --slot U
+paint --at 128,23 --slot Q
+paint --at 129,23 --slot N
+paint --at 130,23 --slot F
+line --from 131,23 --to 134,23 --slot D
+paint --at 135,23 --slot C
+line --from 136,23 --to 137,23 --slot B
+line --from 142,23 --to 143,23 --slot B
+paint --at 22,24 --slot B
+line --from 41,24 --to 43,24 --slot B
+line --from 51,24 --to 52,24 --slot B
+line --from 55,24 --to 57,24 --slot B
+line --from 58,24 --to 60,24 --slot C
+paint --at 61,24 --slot D
+paint --at 62,24 --slot C
+line --from 63,24 --to 65,24 --slot D
+line --from 66,24 --to 67,24 --slot G
+paint --at 68,24 --slot I
+paint --at 69,24 --slot N
+line --from 70,24 --to 73,24 --slot Q
+line --from 74,24 --to 76,24 --slot X
+paint --at 77,24 --slot Z
+line --from 78,24 --to 80,24 --slot X
+paint --at 81,24 --slot U
+line --from 82,24 --to 85,24 --slot X
+paint --at 86,24 --slot U
+line --from 87,24 --to 101,24 --slot X
+line --from 102,24 --to 103,24 --slot U
+paint --at 104,24 --slot Q
+paint --at 105,24 --slot G
+paint --at 106,24 --slot N
+paint --at 107,24 --slot D
+line --from 108,24 --to 110,24 --slot C
+paint --at 111,24 --slot D
+line --from 112,24 --to 116,24 --slot C
+paint --at 117,24 --slot D
+paint --at 118,24 --slot I
+line --from 119,24 --to 120,24 --slot N
+line --from 121,24 --to 122,24 --slot Q
+line --from 123,24 --to 129,24 --slot X
+paint --at 130,24 --slot Q
+paint --at 131,24 --slot N
+paint --at 132,24 --slot I
+line --from 133,24 --to 135,24 --slot D
+paint --at 136,24 --slot C
+line --from 143,24 --to 144,24 --slot B
+paint --at 22,25 --slot B
+line --from 34,25 --to 35,25 --slot B
+line --from 41,25 --to 42,25 --slot B
+line --from 54,25 --to 64,25 --slot B
+paint --at 65,25 --slot E
+paint --at 66,25 --slot G
+paint --at 67,25 --slot K
+line --from 68,25 --to 69,25 --slot N
+line --from 70,25 --to 73,25 --slot Q
+paint --at 74,25 --slot U
+line --from 75,25 --to 76,25 --slot Z
+line --from 77,25 --to 79,25 --slot X
+paint --at 80,25 --slot U
+line --from 81,25 --to 82,25 --slot Q
+line --from 83,25 --to 85,25 --slot U
+line --from 86,25 --to 88,25 --slot X
+line --from 89,25 --to 90,25 --slot U
+line --from 91,25 --to 101,25 --slot X
+paint --at 102,25 --slot Q
+paint --at 103,25 --slot U
+paint --at 104,25 --slot N
+paint --at 105,25 --slot G
+paint --at 106,25 --slot D
+paint --at 107,25 --slot C
+line --from 108,25 --to 109,25 --slot D
+paint --at 110,25 --slot C
+paint --at 111,25 --slot D
+line --from 112,25 --to 114,25 --slot C
+paint --at 115,25 --slot D
+paint --at 116,25 --slot G
+paint --at 117,25 --slot Q
+line --from 118,25 --to 132,25 --slot X
+paint --at 133,25 --slot N
+paint --at 134,25 --slot G
+paint --at 135,25 --slot D
+paint --at 136,25 --slot C
+paint --at 137,25 --slot B
+line --from 144,25 --to 145,25 --slot B
+line --from 22,26 --to 24,26 --slot B
+line --from 33,26 --to 35,26 --slot B
+line --from 40,26 --to 41,26 --slot B
+paint --at 48,26 --slot B
+line --from 52,26 --to 61,26 --slot B
+line --from 62,26 --to 63,26 --slot C
+paint --at 64,26 --slot D
+paint --at 65,26 --slot G
+paint --at 66,26 --slot I
+paint --at 67,26 --slot G
+line --from 68,26 --to 70,26 --slot K
+paint --at 71,26 --slot N
+paint --at 72,26 --slot K
+paint --at 73,26 --slot N
+paint --at 74,26 --slot X
+paint --at 75,26 --slot f
+paint --at 76,26 --slot Z
+paint --at 77,26 --slot U
+line --from 78,26 --to 79,26 --slot X
+line --from 80,26 --to 81,26 --slot U
+paint --at 82,26 --slot Q
+line --from 83,26 --to 84,26 --slot U
+paint --at 85,26 --slot Q
+paint --at 86,26 --slot U
+line --from 87,26 --to 97,26 --slot X
+paint --at 98,26 --slot U
+line --from 99,26 --to 101,26 --slot X
+paint --at 102,26 --slot U
+paint --at 103,26 --slot Q
+line --from 104,26 --to 105,26 --slot G
+paint --at 106,26 --slot C
+line --from 107,26 --to 109,26 --slot D
+paint --at 110,26 --slot G
+paint --at 111,26 --slot D
+paint --at 112,26 --slot C
+paint --at 113,26 --slot D
+paint --at 114,26 --slot G
+paint --at 115,26 --slot N
+paint --at 116,26 --slot Q
+paint --at 117,26 --slot U
+paint --at 118,26 --slot Q
+paint --at 119,26 --slot U
+line --from 120,26 --to 133,26 --slot X
+paint --at 134,26 --slot Q
+paint --at 135,26 --slot G
+paint --at 136,26 --slot D
+paint --at 137,26 --slot C
+paint --at 145,26 --slot B
+line --from 21,27 --to 22,27 --slot B
+paint --at 38,27 --slot B
+line --from 45,27 --to 51,27 --slot B
+line --from 52,27 --to 57,27 --slot C
+line --from 58,27 --to 62,27 --slot B
+line --from 63,27 --to 64,27 --slot C
+paint --at 65,27 --slot D
+paint --at 66,27 --slot K
+paint --at 67,27 --slot G
+paint --at 68,27 --slot D
+line --from 69,27 --to 70,27 --slot G
+line --from 71,27 --to 72,27 --slot K
+paint --at 73,27 --slot Q
+paint --at 74,27 --slot f
+paint --at 75,27 --slot b
+line --from 76,27 --to 79,27 --slot Q
+line --from 80,27 --to 81,27 --slot U
+line --from 82,27 --to 85,27 --slot Q
+line --from 86,27 --to 88,27 --slot X
+paint --at 89,27 --slot b
+line --from 90,27 --to 100,27 --slot X
+line --from 101,27 --to 102,27 --slot U
+paint --at 103,27 --slot N
+paint --at 104,27 --slot D
+paint --at 105,27 --slot G
+paint --at 106,27 --slot F
+paint --at 107,27 --slot G
+paint --at 108,27 --slot D
+paint --at 109,27 --slot G
+paint --at 110,27 --slot F
+paint --at 111,27 --slot D
+paint --at 112,27 --slot C
+paint --at 113,27 --slot G
+line --from 114,27 --to 119,27 --slot Q
+paint --at 120,27 --slot U
+line --from 121,27 --to 123,27 --slot X
+paint --at 124,27 --slot U
+line --from 125,27 --to 135,27 --slot X
+paint --at 136,27 --slot N
+paint --at 137,27 --slot D
+paint --at 138,27 --slot B
+line --from 22,28 --to 23,28 --slot B
+line --from 45,28 --to 47,28 --slot B
+paint --at 48,28 --slot C
+line --from 49,28 --to 53,28 --slot D
+line --from 54,28 --to 63,28 --slot C
+paint --at 64,28 --slot E
+line --from 65,28 --to 66,28 --slot N
+paint --at 67,28 --slot G
+paint --at 68,28 --slot D
+paint --at 69,28 --slot C
+paint --at 70,28 --slot D
+paint --at 71,28 --slot G
+paint --at 72,28 --slot N
+paint --at 73,28 --slot X
+paint --at 74,28 --slot b
+paint --at 75,28 --slot Q
+paint --at 76,28 --slot K
+paint --at 77,28 --slot N
+line --from 78,28 --to 85,28 --slot Q
+paint --at 86,28 --slot U
+line --from 87,28 --to 100,28 --slot X
+paint --at 101,28 --slot U
+paint --at 102,28 --slot Q
+paint --at 103,28 --slot K
+paint --at 104,28 --slot D
+line --from 105,28 --to 106,28 --slot G
+paint --at 107,28 --slot I
+paint --at 108,28 --slot K
+paint --at 109,28 --slot G
+paint --at 110,28 --slot C
+paint --at 111,28 --slot D
+paint --at 112,28 --slot K
+line --from 113,28 --to 120,28 --slot Q
+line --from 121,28 --to 123,28 --slot X
+paint --at 124,28 --slot U
+line --from 125,28 --to 134,28 --slot X
+paint --at 135,28 --slot Z
+paint --at 136,28 --slot X
+paint --at 137,28 --slot K
+paint --at 138,28 --slot D
+paint --at 139,28 --slot B
+line --from 20,29 --to 24,29 --slot B
+line --from 43,29 --to 46,29 --slot B
+line --from 47,29 --to 49,29 --slot C
+line --from 50,29 --to 51,29 --slot D
+line --from 52,29 --to 53,29 --slot E
+line --from 54,29 --to 55,29 --slot D
+paint --at 56,29 --slot E
+line --from 57,29 --to 60,29 --slot D
+line --from 61,29 --to 62,29 --slot C
+paint --at 63,29 --slot D
+paint --at 64,29 --slot L
+paint --at 65,29 --slot I
+paint --at 66,29 --slot E
+line --from 67,29 --to 71,29 --slot D
+paint --at 72,29 --slot G
+paint --at 73,29 --slot X
+paint --at 74,29 --slot Z
+paint --at 75,29 --slot N
+paint --at 76,29 --slot G
+paint --at 77,29 --slot N
+paint --at 78,29 --slot Q
+line --from 79,29 --to 80,29 --slot N
+line --from 81,29 --to 86,29 --slot Q
+paint --at 87,29 --slot U
+paint --at 88,29 --slot X
+paint --at 89,29 --slot Z
+line --from 90,29 --to 100,29 --slot X
+paint --at 101,29 --slot U
+paint --at 102,29 --slot N
+paint --at 103,29 --slot G
+line --from 104,29 --to 105,29 --slot D
+paint --at 106,29 --slot G
+paint --at 107,29 --slot N
+paint --at 108,29 --slot K
+paint --at 109,29 --slot F
+paint --at 110,29 --slot G
+line --from 111,29 --to 119,29 --slot Q
+paint --at 120,29 --slot U
+line --from 121,29 --to 125,29 --slot Q
+line --from 126,29 --to 127,29 --slot U
+line --from 128,29 --to 135,29 --slot X
+paint --at 136,29 --slot Z
+paint --at 137,29 --slot X
+paint --at 138,29 --slot K
+paint --at 139,29 --slot C
+line --from 19,30 --to 26,30 --slot B
+line --from 40,30 --to 44,30 --slot B
+line --from 45,30 --to 47,30 --slot C
+line --from 48,30 --to 50,30 --slot D
+line --from 51,30 --to 58,30 --slot G
+line --from 59,30 --to 60,30 --slot E
+line --from 61,30 --to 65,30 --slot D
+paint --at 66,30 --slot C
+paint --at 67,30 --slot D
+paint --at 68,30 --slot C
+line --from 69,30 --to 72,30 --slot D
+line --from 73,30 --to 74,30 --slot N
+paint --at 75,30 --slot G
+paint --at 76,30 --slot F
+line --from 77,30 --to 80,30 --slot N
+line --from 81,30 --to 86,30 --slot Q
+line --from 87,30 --to 88,30 --slot X
+line --from 89,30 --to 93,30 --slot Z
+paint --at 94,30 --slot X
+line --from 95,30 --to 96,30 --slot Z
+line --from 97,30 --to 100,30 --slot X
+paint --at 101,30 --slot Q
+paint --at 102,30 --slot N
+paint --at 103,30 --slot K
+paint --at 104,30 --slot G
+line --from 105,30 --to 106,30 --slot N
+paint --at 107,30 --slot Q
+paint --at 108,30 --slot K
+paint --at 109,30 --slot N
+line --from 110,30 --to 127,30 --slot Q
+paint --at 128,30 --slot U
+line --from 129,30 --to 135,30 --slot X
+line --from 136,30 --to 137,30 --slot Z
+paint --at 138,30 --slot Q
+paint --at 139,30 --slot D
+line --from 19,31 --to 21,31 --slot B
+line --from 23,31 --to 26,31 --slot B
+line --from 38,31 --to 40,31 --slot B
+line --from 41,31 --to 44,31 --slot C
+line --from 45,31 --to 46,31 --slot D
+line --from 47,31 --to 51,31 --slot G
+line --from 52,31 --to 53,31 --slot F
+paint --at 54,31 --slot G
+paint --at 55,31 --slot F
+line --from 56,31 --to 59,31 --slot G
+paint --at 60,31 --slot E
+paint --at 61,31 --slot G
+line --from 62,31 --to 63,31 --slot E
+paint --at 64,31 --slot D
+paint --at 65,31 --slot E
+line --from 66,31 --to 70,31 --slot D
+paint --at 71,31 --slot C
+paint --at 72,31 --slot D
+line --from 73,31 --to 74,31 --slot F
+paint --at 75,31 --slot G
+paint --at 76,31 --slot F
+line --from 77,31 --to 78,31 --slot N
+paint --at 79,31 --slot K
+paint --at 80,31 --slot N
+line --from 81,31 --to 85,31 --slot Q
+paint --at 86,31 --slot U
+line --from 87,31 --to 88,31 --slot X
+line --from 89,31 --to 96,31 --slot Z
+line --from 97,31 --to 99,31 --slot X
+paint --at 100,31 --slot U
+line --from 101,31 --to 102,31 --slot N
+line --from 103,31 --to 115,31 --slot Q
+line --from 116,31 --to 124,31 --slot N
+line --from 125,31 --to 128,31 --slot Q
+paint --at 129,31 --slot U
+line --from 130,31 --to 135,31 --slot X
+line --from 136,31 --to 137,31 --slot Z
+paint --at 138,31 --slot X
+paint --at 139,31 --slot N
+line --from 18,32 --to 20,32 --slot B
+line --from 37,32 --to 38,32 --slot B
+line --from 39,32 --to 43,32 --slot C
+paint --at 44,32 --slot E
+line --from 45,32 --to 54,32 --slot G
+line --from 55,32 --to 57,32 --slot F
+paint --at 58,32 --slot E
+paint --at 59,32 --slot G
+line --from 60,32 --to 66,32 --slot E
+line --from 67,32 --to 72,32 --slot D
+line --from 73,32 --to 74,32 --slot F
+paint --at 75,32 --slot G
+paint --at 76,32 --slot D
+line --from 77,32 --to 79,32 --slot K
+line --from 80,32 --to 82,32 --slot N
+line --from 83,32 --to 85,32 --slot Q
+paint --at 86,32 --slot U
+paint --at 87,32 --slot X
+line --from 88,32 --to 90,32 --slot Z
+paint --at 91,32 --slot b
+line --from 92,32 --to 97,32 --slot Z
+line --from 98,32 --to 99,32 --slot X
+paint --at 100,32 --slot U
+line --from 101,32 --to 113,32 --slot Q
+paint --at 114,32 --slot N
+paint --at 115,32 --slot K
+line --from 116,32 --to 117,32 --slot G
+paint --at 118,32 --slot F
+line --from 119,32 --to 123,32 --slot G
+line --from 124,32 --to 125,32 --slot K
+paint --at 126,32 --slot Q
+paint --at 127,32 --slot N
+line --from 128,32 --to 129,32 --slot Q
+paint --at 130,32 --slot U
+line --from 131,32 --to 135,32 --slot X
+line --from 136,32 --to 138,32 --slot Z
+paint --at 139,32 --slot U
+paint --at 140,32 --slot C
+line --from 18,33 --to 20,33 --slot B
+line --from 36,33 --to 37,33 --slot B
+line --from 38,33 --to 41,33 --slot C
+line --from 42,33 --to 43,33 --slot D
+paint --at 44,33 --slot G
+paint --at 45,33 --slot E
+paint --at 46,33 --slot D
+line --from 47,33 --to 56,33 --slot G
+paint --at 57,33 --slot F
+paint --at 58,33 --slot E
+paint --at 59,33 --slot G
+line --from 60,33 --to 66,33 --slot E
+line --from 67,33 --to 76,33 --slot D
+paint --at 77,33 --slot G
+line --from 78,33 --to 80,33 --slot K
+line --from 81,33 --to 82,33 --slot N
+line --from 83,33 --to 85,33 --slot Q
+paint --at 86,33 --slot U
+paint --at 87,33 --slot X
+line --from 88,33 --to 89,33 --slot Z
+line --from 90,33 --to 94,33 --slot b
+line --from 95,33 --to 97,33 --slot Z
+line --from 98,33 --to 100,33 --slot X
+line --from 101,33 --to 112,33 --slot Q
+paint --at 113,33 --slot K
+paint --at 114,33 --slot G
+paint --at 115,33 --slot F
+paint --at 116,33 --slot D
+line --from 117,33 --to 122,33 --slot C
+line --from 123,33 --to 125,33 --slot D
+line --from 126,33 --to 127,33 --slot G
+line --from 128,33 --to 130,33 --slot Q
+line --from 131,33 --to 132,33 --slot U
+line --from 133,33 --to 134,33 --slot X
+line --from 135,33 --to 137,33 --slot Z
+line --from 138,33 --to 139,33 --slot X
+paint --at 140,33 --slot G
+line --from 18,34 --to 19,34 --slot B
+line --from 35,34 --to 37,34 --slot B
+line --from 38,34 --to 40,34 --slot C
+line --from 41,34 --to 42,34 --slot D
+paint --at 43,34 --slot G
+paint --at 44,34 --slot E
+line --from 45,34 --to 46,34 --slot D
+line --from 47,34 --to 48,34 --slot G
+paint --at 49,34 --slot I
+line --from 50,34 --to 57,34 --slot G
+paint --at 58,34 --slot E
+paint --at 59,34 --slot G
+line --from 60,34 --to 61,34 --slot E
+paint --at 62,34 --slot G
+line --from 63,34 --to 67,34 --slot E
+line --from 68,34 --to 76,34 --slot D
+line --from 77,34 --to 78,34 --slot G
+line --from 79,34 --to 80,34 --slot K
+paint --at 81,34 --slot N
+line --from 82,34 --to 83,34 --slot Q
+paint --at 84,34 --slot N
+paint --at 85,34 --slot Q
+line --from 86,34 --to 87,34 --slot X
+paint --at 88,34 --slot Z
+line --from 89,34 --to 92,34 --slot b
+line --from 93,34 --to 97,34 --slot Z
+line --from 98,34 --to 100,34 --slot X
+line --from 101,34 --to 111,34 --slot Q
+paint --at 112,34 --slot K
+paint --at 113,34 --slot F
+line --from 114,34 --to 116,34 --slot C
+paint --at 117,34 --slot B
+line --from 118,34 --to 119,34 --slot C
+paint --at 120,34 --slot B
+line --from 121,34 --to 126,34 --slot C
+paint --at 127,34 --slot D
+paint --at 128,34 --slot G
+paint --at 129,34 --slot K
+line --from 130,34 --to 132,34 --slot Q
+paint --at 133,34 --slot U
+line --from 134,34 --to 136,34 --slot X
+paint --at 137,34 --slot Z
+line --from 138,34 --to 139,34 --slot X
+paint --at 140,34 --slot N
+line --from 16,35 --to 21,35 --slot B
+line --from 33,35 --to 36,35 --slot B
+line --from 37,35 --to 39,35 --slot C
+paint --at 40,35 --slot D
+paint --at 41,35 --slot E
+paint --at 42,35 --slot G
+line --from 43,35 --to 46,35 --slot D
+paint --at 47,35 --slot G
+paint --at 48,35 --slot I
+line --from 49,35 --to 50,35 --slot G
+line --from 51,35 --to 55,35 --slot D
+paint --at 56,35 --slot G
+paint --at 57,35 --slot D
+line --from 58,35 --to 59,35 --slot G
+paint --at 60,35 --slot E
+line --from 61,35 --to 62,35 --slot G
+line --from 63,35 --to 68,35 --slot E
+line --from 69,35 --to 73,35 --slot D
+paint --at 74,35 --slot C
+line --from 75,35 --to 76,35 --slot D
+line --from 77,35 --to 78,35 --slot G
+line --from 79,35 --to 81,35 --slot K
+line --from 82,35 --to 84,35 --slot N
+paint --at 85,35 --slot Q
+paint --at 86,35 --slot U
+paint --at 87,35 --slot X
+paint --at 88,35 --slot Z
+line --from 89,35 --to 91,35 --slot b
+paint --at 92,35 --slot Z
+line --from 93,35 --to 94,35 --slot b
+line --from 95,35 --to 99,35 --slot Z
+paint --at 100,35 --slot X
+paint --at 101,35 --slot U
+line --from 102,35 --to 109,35 --slot Q
+paint --at 110,35 --slot K
+paint --at 111,35 --slot G
+paint --at 112,35 --slot C
+line --from 113,35 --to 114,35 --slot B
+line --from 115,35 --to 116,35 --slot C
+line --from 117,35 --to 124,35 --slot B
+line --from 125,35 --to 126,35 --slot C
+paint --at 127,35 --slot D
+paint --at 128,35 --slot C
+paint --at 129,35 --slot D
+paint --at 130,35 --slot K
+paint --at 131,35 --slot N
+line --from 132,35 --to 134,35 --slot Q
+line --from 135,35 --to 136,35 --slot X
+paint --at 137,35 --slot Z
+line --from 138,35 --to 139,35 --slot X
+paint --at 140,35 --slot Q
+line --from 16,36 --to 20,36 --slot B
+line --from 32,36 --to 36,36 --slot B
+line --from 37,36 --to 41,36 --slot C
+line --from 42,36 --to 43,36 --slot D
+paint --at 44,36 --slot F
+paint --at 45,36 --slot G
+line --from 46,36 --to 47,36 --slot D
+paint --at 48,36 --slot G
+line --from 49,36 --to 50,36 --slot C
+line --from 51,36 --to 55,36 --slot B
+line --from 56,36 --to 59,36 --slot C
+line --from 60,36 --to 62,36 --slot D
+line --from 63,36 --to 69,36 --slot E
+line --from 70,36 --to 73,36 --slot D
+line --from 74,36 --to 76,36 --slot C
+line --from 77,36 --to 78,36 --slot D
+paint --at 79,36 --slot G
+line --from 80,36 --to 81,36 --slot K
+line --from 82,36 --to 83,36 --slot N
+line --from 84,36 --to 85,36 --slot Q
+paint --at 86,36 --slot X
+line --from 87,36 --to 88,36 --slot Z
+line --from 89,36 --to 90,36 --slot b
+line --from 91,36 --to 93,36 --slot Z
+paint --at 94,36 --slot b
+line --from 95,36 --to 99,36 --slot Z
+line --from 100,36 --to 101,36 --slot X
+paint --at 102,36 --slot U
+line --from 103,36 --to 108,36 --slot Q
+paint --at 109,36 --slot K
+paint --at 110,36 --slot F
+paint --at 111,36 --slot C
+paint --at 112,36 --slot B
+line --from 113,36 --to 115,36 --slot C
+line --from 116,36 --to 117,36 --slot B
+line --from 118,36 --to 124,36 --slot C
+line --from 125,36 --to 126,36 --slot B
+line --from 127,36 --to 129,36 --slot C
+paint --at 130,36 --slot D
+line --from 131,36 --to 133,36 --slot K
+paint --at 134,36 --slot Q
+line --from 135,36 --to 136,36 --slot U
+paint --at 137,36 --slot X
+line --from 138,36 --to 139,36 --slot Z
+paint --at 140,36 --slot Q
+line --from 17,37 --to 20,37 --slot B
+line --from 32,37 --to 36,37 --slot B
+line --from 37,37 --to 41,37 --slot C
+paint --at 42,37 --slot D
+paint --at 43,37 --slot F
+line --from 44,37 --to 46,37 --slot G
+line --from 47,37 --to 51,37 --slot B
+line --from 52,37 --to 55,37 --slot C
+paint --at 56,37 --slot B
+paint --at 57,37 --slot C
+line --from 58,37 --to 61,37 --slot B
+paint --at 62,37 --slot C
+line --from 63,37 --to 64,37 --slot D
+line --from 65,37 --to 70,37 --slot E
+line --from 71,37 --to 72,37 --slot D
+line --from 73,37 --to 76,37 --slot C
+line --from 77,37 --to 78,37 --slot D
+paint --at 79,37 --slot F
+line --from 80,37 --to 81,37 --slot G
+paint --at 82,37 --slot K
+paint --at 83,37 --slot N
+line --from 84,37 --to 85,37 --slot Q
+line --from 86,37 --to 87,37 --slot X
+line --from 88,37 --to 93,37 --slot Z
+line --from 94,37 --to 95,37 --slot b
+line --from 96,37 --to 99,37 --slot Z
+line --from 100,37 --to 101,37 --slot X
+paint --at 102,37 --slot U
+line --from 103,37 --to 107,37 --slot Q
+paint --at 108,37 --slot K
+paint --at 109,37 --slot D
+paint --at 110,37 --slot B
+line --from 111,37 --to 116,37 --slot C
+paint --at 117,37 --slot D
+line --from 118,37 --to 120,37 --slot E
+paint --at 121,37 --slot D
+paint --at 122,37 --slot I
+paint --at 123,37 --slot L
+paint --at 124,37 --slot G
+paint --at 125,37 --slot D
+paint --at 126,37 --slot C
+line --from 127,37 --to 128,37 --slot B
+line --from 129,37 --to 130,37 --slot C
+paint --at 131,37 --slot F
+paint --at 132,37 --slot G
+paint --at 133,37 --slot K
+line --from 134,37 --to 136,37 --slot Q
+paint --at 137,37 --slot U
+paint --at 138,37 --slot X
+paint --at 139,37 --slot Z
+paint --at 140,37 --slot U
+paint --at 141,37 --slot B
+paint --at 150,37 --slot B
+line --from 17,38 --to 19,38 --slot B
+line --from 32,38 --to 36,38 --slot B
+line --from 37,38 --to 39,38 --slot C
+paint --at 40,38 --slot G
+line --from 41,38 --to 43,38 --slot D
+paint --at 44,38 --slot C
+line --from 45,38 --to 46,38 --slot D
+paint --at 47,38 --slot C
+line --from 48,38 --to 49,38 --slot B
+paint --at 50,38 --slot C
+line --from 51,38 --to 54,38 --slot B
+paint --at 55,38 --slot C
+paint --at 56,38 --slot B
+paint --at 57,38 --slot C
+line --from 58,38 --to 59,38 --slot D
+paint --at 60,38 --slot C
+line --from 61,38 --to 63,38 --slot B
+paint --at 64,38 --slot C
+paint --at 65,38 --slot D
+paint --at 66,38 --slot E
+paint --at 67,38 --slot G
+line --from 68,38 --to 70,38 --slot E
+line --from 71,38 --to 72,38 --slot D
+line --from 73,38 --to 77,38 --slot C
+line --from 78,38 --to 79,38 --slot D
+paint --at 80,38 --slot F
+paint --at 81,38 --slot G
+paint --at 82,38 --slot K
+paint --at 83,38 --slot N
+line --from 84,38 --to 85,38 --slot Q
+line --from 86,38 --to 87,38 --slot X
+line --from 88,38 --to 91,38 --slot Z
+line --from 92,38 --to 95,38 --slot b
+line --from 96,38 --to 99,38 --slot Z
+line --from 100,38 --to 101,38 --slot X
+line --from 102,38 --to 104,38 --slot U
+line --from 105,38 --to 106,38 --slot Q
+paint --at 107,38 --slot K
+paint --at 108,38 --slot D
+paint --at 109,38 --slot B
+line --from 110,38 --to 114,38 --slot C
+line --from 115,38 --to 118,38 --slot E
+line --from 119,38 --to 121,38 --slot J
+paint --at 122,38 --slot E
+paint --at 123,38 --slot R
+paint --at 124,38 --slot a
+paint --at 125,38 --slot O
+paint --at 126,38 --slot G
+paint --at 127,38 --slot F
+paint --at 128,38 --slot C
+paint --at 129,38 --slot B
+line --from 130,38 --to 131,38 --slot C
+line --from 132,38 --to 133,38 --slot F
+paint --at 134,38 --slot K
+paint --at 135,38 --slot N
+line --from 136,38 --to 137,38 --slot Q
+paint --at 138,38 --slot U
+paint --at 139,38 --slot X
+paint --at 140,38 --slot U
+paint --at 141,38 --slot B
+line --from 18,39 --to 19,39 --slot B
+line --from 32,39 --to 37,39 --slot B
+paint --at 38,39 --slot C
+line --from 39,39 --to 40,39 --slot D
+paint --at 41,39 --slot I
+paint --at 42,39 --slot D
+line --from 43,39 --to 44,39 --slot B
+line --from 45,39 --to 46,39 --slot C
+line --from 47,39 --to 50,39 --slot B
+line --from 51,39 --to 53,39 --slot C
+line --from 54,39 --to 56,39 --slot D
+paint --at 57,39 --slot C
+line --from 58,39 --to 59,39 --slot B
+paint --at 60,39 --slot C
+line --from 61,39 --to 62,39 --slot D
+paint --at 63,39 --slot C
+paint --at 64,39 --slot B
+paint --at 65,39 --slot C
+paint --at 66,39 --slot D
+line --from 67,39 --to 70,39 --slot E
+line --from 71,39 --to 72,39 --slot D
+line --from 73,39 --to 78,39 --slot C
+line --from 79,39 --to 81,39 --slot D
+paint --at 82,39 --slot G
+paint --at 83,39 --slot N
+line --from 84,39 --to 85,39 --slot Q
+line --from 86,39 --to 89,39 --slot X
+line --from 90,39 --to 91,39 --slot Z
+line --from 92,39 --to 95,39 --slot b
+line --from 96,39 --to 98,39 --slot Z
+line --from 99,39 --to 103,39 --slot X
+paint --at 104,39 --slot U
+paint --at 105,39 --slot Q
+paint --at 106,39 --slot N
+paint --at 107,39 --slot G
+paint --at 108,39 --slot B
+line --from 109,39 --to 111,39 --slot C
+paint --at 112,39 --slot B
+paint --at 113,39 --slot D
+line --from 114,39 --to 117,39 --slot E
+paint --at 118,39 --slot O
+paint --at 119,39 --slot T
+paint --at 120,39 --slot P
+paint --at 121,39 --slot L
+paint --at 122,39 --slot J
+paint --at 123,39 --slot E
+paint --at 124,39 --slot a
+paint --at 125,39 --slot c
+paint --at 126,39 --slot Y
+paint --at 127,39 --slot N
+paint --at 128,39 --slot G
+paint --at 129,39 --slot D
+paint --at 130,39 --slot B
+line --from 131,39 --to 132,39 --slot C
+paint --at 133,39 --slot D
+paint --at 134,39 --slot G
+paint --at 135,39 --slot M
+line --from 136,39 --to 138,39 --slot Q
+paint --at 139,39 --slot U
+paint --at 140,39 --slot Q
+paint --at 141,39 --slot B
+line --from 31,40 --to 34,40 --slot B
+line --from 35,40 --to 38,40 --slot C
+paint --at 39,40 --slot G
+paint --at 40,40 --slot D
+paint --at 41,40 --slot B
+line --from 42,40 --to 43,40 --slot D
+line --from 44,40 --to 45,40 --slot C
+line --from 46,40 --to 47,40 --slot B
+paint --at 48,40 --slot C
+paint --at 49,40 --slot D
+line --from 50,40 --to 56,40 --slot E
+line --from 57,40 --to 58,40 --slot O
+paint --at 59,40 --slot E
+line --from 60,40 --to 62,40 --slot C
+paint --at 63,40 --slot D
+paint --at 64,40 --slot C
+paint --at 65,40 --slot B
+paint --at 66,40 --slot C
+line --from 67,40 --to 72,40 --slot D
+line --from 73,40 --to 79,40 --slot C
+line --from 80,40 --to 81,40 --slot D
+paint --at 82,40 --slot F
+paint --at 83,40 --slot K
+line --from 84,40 --to 86,40 --slot Q
+line --from 87,40 --to 89,40 --slot X
+line --from 90,40 --to 91,40 --slot Z
+line --from 92,40 --to 96,40 --slot b
+line --from 97,40 --to 99,40 --slot Z
+line --from 100,40 --to 103,40 --slot X
+paint --at 104,40 --slot U
+paint --at 105,40 --slot Q
+paint --at 106,40 --slot K
+line --from 107,40 --to 108,40 --slot C
+paint --at 109,40 --slot D
+paint --at 110,40 --slot C
+paint --at 111,40 --slot D
+paint --at 112,40 --slot E
+paint --at 113,40 --slot J
+paint --at 114,40 --slot L
+line --from 115,40 --to 116,40 --slot E
+paint --at 117,40 --slot D
+paint --at 118,40 --slot O
+paint --at 119,40 --slot g
+paint --at 120,40 --slot e
+paint --at 121,40 --slot Y
+paint --at 122,40 --slot O
+paint --at 123,40 --slot E
+paint --at 124,40 --slot O
+line --from 125,40 --to 127,40 --slot c
+paint --at 128,40 --slot O
+paint --at 129,40 --slot G
+line --from 130,40 --to 132,40 --slot C
+paint --at 133,40 --slot F
+line --from 134,40 --to 135,40 --slot K
+paint --at 136,40 --slot N
+paint --at 137,40 --slot Q
+line --from 138,40 --to 139,40 --slot U
+paint --at 140,40 --slot Q
+paint --at 141,40 --slot B
+line --from 29,41 --to 34,41 --slot B
+line --from 35,41 --to 36,41 --slot C
+paint --at 37,41 --slot D
+paint --at 38,41 --slot C
+paint --at 39,41 --slot D
+paint --at 40,41 --slot E
+paint --at 41,41 --slot C
+paint --at 42,41 --slot B
+line --from 43,41 --to 44,41 --slot C
+paint --at 45,41 --slot B
+paint --at 46,41 --slot C
+paint --at 47,41 --slot D
+paint --at 48,41 --slot E
+paint --at 49,41 --slot J
+line --from 50,41 --to 56,41 --slot E
+paint --at 57,41 --slot J
+paint --at 58,41 --slot Y
+paint --at 59,41 --slot a
+paint --at 60,41 --slot O
+paint --at 61,41 --slot E
+line --from 62,41 --to 63,41 --slot C
+line --from 64,41 --to 65,41 --slot D
+paint --at 66,41 --slot B
+paint --at 67,41 --slot C
+line --from 68,41 --to 72,41 --slot D
+line --from 73,41 --to 79,41 --slot C
+paint --at 80,41 --slot D
+paint --at 81,41 --slot C
+paint --at 82,41 --slot D
+paint --at 83,41 --slot G
+paint --at 84,41 --slot N
+line --from 85,41 --to 87,41 --slot Q
+paint --at 88,41 --slot U
+line --from 89,41 --to 91,41 --slot Z
+line --from 92,41 --to 96,41 --slot b
+line --from 97,41 --to 98,41 --slot Z
+line --from 99,41 --to 101,41 --slot X
+paint --at 102,41 --slot Z
+paint --at 103,41 --slot X
+line --from 104,41 --to 105,41 --slot Q
+paint --at 106,41 --slot D
+paint --at 107,41 --slot C
+paint --at 108,41 --slot D
+paint --at 109,41 --slot C
+paint --at 110,41 --slot D
+paint --at 111,41 --slot L
+paint --at 112,41 --slot E
+paint --at 113,41 --slot J
+line --from 114,41 --to 115,41 --slot L
+paint --at 116,41 --slot E
+line --from 117,41 --to 118,41 --slot B
+paint --at 119,41 --slot R
+paint --at 120,41 --slot a
+paint --at 121,41 --slot c
+paint --at 122,41 --slot T
+line --from 123,41 --to 124,41 --slot L
+line --from 125,41 --to 126,41 --slot c
+paint --at 127,41 --slot a
+paint --at 128,41 --slot c
+paint --at 129,41 --slot O
+paint --at 130,41 --slot G
+line --from 131,41 --to 133,41 --slot C
+paint --at 134,41 --slot D
+paint --at 135,41 --slot K
+paint --at 136,41 --slot N
+paint --at 137,41 --slot Q
+line --from 138,41 --to 139,41 --slot U
+paint --at 140,41 --slot Q
+paint --at 141,41 --slot B
+line --from 28,42 --to 34,42 --slot B
+paint --at 35,42 --slot C
+paint --at 36,42 --slot D
+line --from 37,42 --to 38,42 --slot G
+paint --at 39,42 --slot B
+paint --at 40,42 --slot D
+paint --at 41,42 --slot E
+paint --at 42,42 --slot D
+line --from 43,42 --to 44,42 --slot B
+line --from 45,42 --to 46,42 --slot C
+paint --at 47,42 --slot E
+paint --at 48,42 --slot L
+line --from 49,42 --to 53,42 --slot E
+line --from 54,42 --to 55,42 --slot J
+paint --at 56,42 --slot O
+paint --at 57,42 --slot R
+paint --at 58,42 --slot J
+paint --at 59,42 --slot Y
+paint --at 60,42 --slot c
+paint --at 61,42 --slot a
+paint --at 62,42 --slot L
+line --from 63,42 --to 64,42 --slot C
+line --from 65,42 --to 66,42 --slot D
+paint --at 67,42 --slot B
+paint --at 68,42 --slot C
+line --from 69,42 --to 72,42 --slot D
+line --from 73,42 --to 75,42 --slot C
+paint --at 76,42 --slot B
+line --from 77,42 --to 81,42 --slot C
+line --from 82,42 --to 83,42 --slot D
+paint --at 84,42 --slot K
+paint --at 85,42 --slot N
+line --from 86,42 --to 87,42 --slot Q
+line --from 88,42 --to 89,42 --slot X
+line --from 90,42 --to 91,42 --slot Z
+line --from 92,42 --to 95,42 --slot b
+line --from 96,42 --to 97,42 --slot Z
+line --from 98,42 --to 100,42 --slot X
+line --from 101,42 --to 102,42 --slot Z
+paint --at 103,42 --slot X
+paint --at 104,42 --slot Q
+paint --at 105,42 --slot N
+paint --at 106,42 --slot C
+paint --at 107,42 --slot F
+line --from 108,42 --to 109,42 --slot D
+paint --at 110,42 --slot L
+paint --at 111,42 --slot O
+paint --at 112,42 --slot J
+line --from 113,42 --to 114,42 --slot L
+paint --at 115,42 --slot O
+paint --at 116,42 --slot E
+line --from 117,42 --to 118,42 --slot B
+paint --at 119,42 --slot J
+paint --at 120,42 --slot V
+paint --at 121,42 --slot a
+paint --at 122,42 --slot T
+paint --at 123,42 --slot O
+paint --at 124,42 --slot J
+paint --at 125,42 --slot a
+paint --at 126,42 --slot c
+line --from 127,42 --to 129,42 --slot a
+paint --at 130,42 --slot N
+paint --at 131,42 --slot G
+line --from 132,42 --to 134,42 --slot C
+paint --at 135,42 --slot K
+paint --at 136,42 --slot N
+line --from 137,42 --to 138,42 --slot Q
+paint --at 139,42 --slot U
+paint --at 140,42 --slot Q
+line --from 27,43 --to 33,43 --slot B
+line --from 34,43 --to 36,43 --slot C
+paint --at 37,43 --slot D
+paint --at 38,43 --slot G
+paint --at 39,43 --slot D
+line --from 40,43 --to 42,43 --slot B
+line --from 43,43 --to 44,43 --slot C
+paint --at 45,43 --slot B
+paint --at 46,43 --slot C
+paint --at 47,43 --slot O
+paint --at 48,43 --slot J
+paint --at 49,43 --slot E
+paint --at 50,43 --slot J
+paint --at 51,43 --slot E
+paint --at 52,43 --slot J
+paint --at 53,43 --slot L
+paint --at 54,43 --slot J
+paint --at 55,43 --slot Y
+paint --at 56,43 --slot a
+paint --at 57,43 --slot P
+paint --at 58,43 --slot J
+paint --at 59,43 --slot O
+line --from 60,43 --to 62,43 --slot a
+paint --at 63,43 --slot L
+line --from 64,43 --to 65,43 --slot C
+paint --at 66,43 --slot D
+paint --at 67,43 --slot C
+paint --at 68,43 --slot B
+paint --at 69,43 --slot C
+line --from 70,43 --to 71,43 --slot D
+line --from 72,43 --to 75,43 --slot C
+line --from 76,43 --to 77,43 --slot B
+line --from 78,43 --to 81,43 --slot C
+line --from 82,43 --to 83,43 --slot D
+paint --at 84,43 --slot G
+line --from 85,43 --to 86,43 --slot N
+line --from 87,43 --to 88,43 --slot Q
+paint --at 89,43 --slot X
+line --from 90,43 --to 92,43 --slot Z
+line --from 93,43 --to 96,43 --slot b
+line --from 97,43 --to 100,43 --slot X
+paint --at 101,43 --slot Z
+line --from 102,43 --to 103,43 --slot X
+paint --at 104,43 --slot U
+paint --at 105,43 --slot K
+paint --at 106,43 --slot D
+line --from 107,43 --to 108,43 --slot F
+paint --at 109,43 --slot L
+line --from 110,43 --to 111,43 --slot O
+paint --at 112,43 --slot J
+line --from 113,43 --to 115,43 --slot O
+paint --at 116,43 --slot L
+paint --at 117,43 --slot B
+paint --at 118,43 --slot C
+paint --at 119,43 --slot R
+line --from 120,43 --to 121,43 --slot Y
+paint --at 122,43 --slot T
+paint --at 123,43 --slot O
+paint --at 124,43 --slot J
+paint --at 125,43 --slot a
+paint --at 126,43 --slot d
+paint --at 127,43 --slot c
+paint --at 128,43 --slot a
+paint --at 129,43 --slot c
+paint --at 130,43 --slot O
+paint --at 131,43 --slot G
+paint --at 132,43 --slot D
+paint --at 133,43 --slot C
+paint --at 134,43 --slot D
+paint --at 135,43 --slot F
+paint --at 136,43 --slot K
+line --from 137,43 --to 138,43 --slot Q
+paint --at 139,43 --slot U
+paint --at 140,43 --slot N
+line --from 18,44 --to 19,44 --slot B
+line --from 27,44 --to 33,44 --slot B
+paint --at 34,44 --slot C
+line --from 35,44 --to 36,44 --slot D
+paint --at 37,44 --slot C
+paint --at 38,44 --slot B
+paint --at 39,44 --slot C
+line --from 40,44 --to 41,44 --slot B
+line --from 42,44 --to 43,44 --slot C
+line --from 44,44 --to 45,44 --slot B
+paint --at 46,44 --slot O
+paint --at 47,44 --slot T
+line --from 48,44 --to 49,44 --slot E
+paint --at 50,44 --slot J
+paint --at 51,44 --slot L
+paint --at 52,44 --slot O
+paint --at 53,44 --slot L
+paint --at 54,44 --slot O
+paint --at 55,44 --slot Y
+paint --at 56,44 --slot d
+paint --at 57,44 --slot V
+paint --at 58,44 --slot T
+paint --at 59,44 --slot O
+line --from 60,44 --to 63,44 --slot a
+paint --at 64,44 --slot L
+line --from 65,44 --to 66,44 --slot C
+paint --at 67,44 --slot E
+paint --at 68,44 --slot C
+paint --at 69,44 --slot B
+paint --at 70,44 --slot C
+paint --at 71,44 --slot D
+paint --at 72,44 --slot C
+line --from 73,44 --to 74,44 --slot B
+paint --at 75,44 --slot C
+line --from 76,44 --to 77,44 --slot B
+line --from 78,44 --to 82,44 --slot C
+paint --at 83,44 --slot D
+paint --at 84,44 --slot F
+paint --at 85,44 --slot G
+paint --at 86,44 --slot K
+paint --at 87,44 --slot Q
+paint --at 88,44 --slot U
+paint --at 89,44 --slot X
+line --from 90,44 --to 91,44 --slot Z
+paint --at 92,44 --slot b
+line --from 93,44 --to 94,44 --slot Z
+paint --at 95,44 --slot b
+line --from 96,44 --to 102,44 --slot X
+paint --at 103,44 --slot Z
+paint --at 104,44 --slot Q
+line --from 105,44 --to 107,44 --slot F
+paint --at 108,44 --slot N
+line --from 109,44 --to 110,44 --slot O
+paint --at 111,44 --slot T
+line --from 112,44 --to 113,44 --slot L
+paint --at 114,44 --slot P
+line --from 115,44 --to 116,44 --slot O
+line --from 117,44 --to 118,44 --slot L
+line --from 119,44 --to 120,44 --slot a
+paint --at 121,44 --slot V
+line --from 122,44 --to 124,44 --slot O
+line --from 125,44 --to 126,44 --slot c
+line --from 127,44 --to 128,44 --slot a
+paint --at 129,44 --slot c
+paint --at 130,44 --slot Y
+paint --at 131,44 --slot K
+paint --at 132,44 --slot G
+paint --at 133,44 --slot D
+paint --at 134,44 --slot C
+paint --at 135,44 --slot F
+paint --at 136,44 --slot K
+line --from 137,44 --to 138,44 --slot Q
+paint --at 139,44 --slot U
+paint --at 140,44 --slot N
+paint --at 15,45 --slot B
+paint --at 25,45 --slot B
+line --from 28,45 --to 30,45 --slot B
+paint --at 31,45 --slot C
+paint --at 32,45 --slot B
+paint --at 33,45 --slot C
+paint --at 34,45 --slot E
+paint --at 35,45 --slot G
+paint --at 36,45 --slot D
+line --from 37,45 --to 38,45 --slot C
+line --from 39,45 --to 40,45 --slot B
+line --from 41,45 --to 42,45 --slot C
+paint --at 43,45 --slot B
+paint --at 44,45 --slot C
+paint --at 45,45 --slot E
+paint --at 46,45 --slot c
+paint --at 47,45 --slot P
+paint --at 48,45 --slot J
+paint --at 49,45 --slot O
+paint --at 50,45 --slot P
+paint --at 51,45 --slot V
+paint --at 52,45 --slot T
+paint --at 53,45 --slot H
+paint --at 54,45 --slot O
+paint --at 55,45 --slot L
+paint --at 56,45 --slot d
+line --from 57,45 --to 58,45 --slot e
+paint --at 59,45 --slot V
+paint --at 60,45 --slot d
+paint --at 61,45 --slot c
+line --from 62,45 --to 64,45 --slot a
+paint --at 65,45 --slot L
+line --from 66,45 --to 67,45 --slot C
+paint --at 68,45 --slot D
+line --from 69,45 --to 70,45 --slot B
+line --from 71,45 --to 72,45 --slot C
+line --from 73,45 --to 78,45 --slot B
+line --from 79,45 --to 83,45 --slot C
+paint --at 84,45 --slot D
+paint --at 85,45 --slot G
+paint --at 86,45 --slot K
+line --from 87,45 --to 88,45 --slot Q
+paint --at 89,45 --slot X
+line --from 90,45 --to 91,45 --slot Z
+line --from 92,45 --to 95,45 --slot b
+line --from 96,45 --to 100,45 --slot X
+paint --at 101,45 --slot Z
+line --from 102,45 --to 103,45 --slot X
+paint --at 104,45 --slot Q
+paint --at 105,45 --slot K
+paint --at 106,45 --slot N
+paint --at 107,45 --slot G
+line --from 108,45 --to 109,45 --slot O
+paint --at 110,45 --slot T
+paint --at 111,45 --slot Y
+paint --at 112,45 --slot O
+paint --at 113,45 --slot J
+line --from 114,45 --to 116,45 --slot O
+paint --at 117,45 --slot I
+paint --at 118,45 --slot K
+paint --at 119,45 --slot S
+line --from 120,45 --to 122,45 --slot O
+paint --at 123,45 --slot J
+paint --at 124,45 --slot T
+line --from 125,45 --to 127,45 --slot c
+paint --at 128,45 --slot a
+paint --at 129,45 --slot c
+paint --at 130,45 --slot Y
+paint --at 131,45 --slot N
+paint --at 132,45 --slot G
+line --from 133,45 --to 135,45 --slot D
+paint --at 136,45 --slot G
+paint --at 137,45 --slot N
+line --from 138,45 --to 139,45 --slot Q
+paint --at 140,45 --slot N
+paint --at 146,45 --slot B
+paint --at 150,45 --slot B
+line --from 14,46 --to 18,46 --slot B
+line --from 28,46 --to 32,46 --slot B
+paint --at 33,46 --slot C
+paint --at 34,46 --slot D
+line --from 35,46 --to 36,46 --slot G
+paint --at 37,46 --slot E
+paint --at 38,46 --slot C
+line --from 39,46 --to 40,46 --slot B
+paint --at 41,46 --slot C
+paint --at 42,46 --slot B
+line --from 43,46 --to 44,46 --slot C
+paint --at 45,46 --slot O
+paint --at 46,46 --slot d
+paint --at 47,46 --slot V
+paint --at 48,46 --slot P
+paint --at 49,46 --slot V
+paint --at 50,46 --slot c
+line --from 51,46 --to 52,46 --slot e
+paint --at 53,46 --slot P
+paint --at 54,46 --slot H
+paint --at 55,46 --slot P
+line --from 56,46 --to 58,46 --slot g
+paint --at 59,46 --slot e
+line --from 60,46 --to 61,46 --slot g
+paint --at 62,46 --slot d
+paint --at 63,46 --slot a
+paint --at 64,46 --slot c
+paint --at 65,46 --slot a
+paint --at 66,46 --slot E
+line --from 67,46 --to 68,46 --slot C
+paint --at 69,46 --slot D
+line --from 70,46 --to 71,46 --slot B
+line --from 72,46 --to 73,46 --slot C
+line --from 74,46 --to 78,46 --slot B
+line --from 79,46 --to 83,46 --slot C
+paint --at 84,46 --slot D
+paint --at 85,46 --slot F
+paint --at 86,46 --slot K
+paint --at 87,46 --slot N
+paint --at 88,46 --slot Q
+line --from 89,46 --to 90,46 --slot X
+line --from 91,46 --to 92,46 --slot Z
+line --from 93,46 --to 94,46 --slot b
+line --from 95,46 --to 102,46 --slot X
+paint --at 103,46 --slot Z
+line --from 104,46 --to 106,46 --slot Q
+paint --at 107,46 --slot K
+paint --at 108,46 --slot O
+paint --at 109,46 --slot R
+line --from 110,46 --to 111,46 --slot Y
+paint --at 112,46 --slot T
+line --from 113,46 --to 114,46 --slot L
+line --from 115,46 --to 116,46 --slot O
+line --from 117,46 --to 118,46 --slot L
+line --from 119,46 --to 122,46 --slot O
+paint --at 123,46 --slot J
+paint --at 124,46 --slot a
+line --from 125,46 --to 127,46 --slot c
+paint --at 128,46 --slot a
+paint --at 129,46 --slot c
+paint --at 130,46 --slot a
+paint --at 131,46 --slot N
+paint --at 132,46 --slot K
+line --from 133,46 --to 135,46 --slot D
+paint --at 136,46 --slot G
+paint --at 137,46 --slot K
+paint --at 138,46 --slot N
+paint --at 139,46 --slot Q
+paint --at 140,46 --slot N
+paint --at 146,46 --slot B
+line --from 149,46 --to 150,46 --slot B
+line --from 15,47 --to 18,47 --slot B
+line --from 28,47 --to 31,47 --slot B
+line --from 32,47 --to 34,47 --slot C
+line --from 35,47 --to 36,47 --slot B
+paint --at 37,47 --slot C
+line --from 38,47 --to 39,47 --slot B
+paint --at 40,47 --slot C
+line --from 41,47 --to 42,47 --slot B
+paint --at 43,47 --slot C
+paint --at 44,47 --slot E
+paint --at 45,47 --slot a
+line --from 46,47 --to 47,47 --slot c
+paint --at 48,47 --slot V
+paint --at 49,47 --slot d
+line --from 50,47 --to 52,47 --slot g
+paint --at 53,47 --slot f
+paint --at 54,47 --slot d
+line --from 55,47 --to 58,47 --slot g
+paint --at 59,47 --slot e
+line --from 60,47 --to 62,47 --slot g
+paint --at 63,47 --slot d
+line --from 64,47 --to 65,47 --slot a
+paint --at 66,47 --slot O
+line --from 67,47 --to 68,47 --slot C
+line --from 69,47 --to 70,47 --slot D
+paint --at 71,47 --slot B
+line --from 72,47 --to 73,47 --slot C
+line --from 74,47 --to 78,47 --slot B
+line --from 79,47 --to 83,47 --slot C
+paint --at 84,47 --slot D
+paint --at 85,47 --slot F
+paint --at 86,47 --slot G
+paint --at 87,47 --slot N
+paint --at 88,47 --slot Q
+paint --at 89,47 --slot X
+line --from 90,47 --to 94,47 --slot Z
+line --from 95,47 --to 100,47 --slot X
+paint --at 101,47 --slot Z
+paint --at 102,47 --slot X
+paint --at 103,47 --slot Z
+paint --at 104,47 --slot X
+paint --at 105,47 --slot U
+paint --at 106,47 --slot Q
+paint --at 107,47 --slot N
+paint --at 108,47 --slot O
+paint --at 109,47 --slot R
+line --from 110,47 --to 112,47 --slot Y
+paint --at 113,47 --slot R
+paint --at 114,47 --slot L
+paint --at 115,47 --slot O
+paint --at 116,47 --slot T
+line --from 117,47 --to 122,47 --slot O
+paint --at 123,47 --slot Y
+line --from 124,47 --to 128,47 --slot c
+line --from 129,47 --to 130,47 --slot a
+paint --at 131,47 --slot X
+paint --at 132,47 --slot Q
+paint --at 133,47 --slot F
+paint --at 134,47 --slot D
+paint --at 135,47 --slot F
+paint --at 136,47 --slot K
+line --from 137,47 --to 138,47 --slot Q
+paint --at 139,47 --slot U
+paint --at 140,47 --slot N
+line --from 146,47 --to 147,47 --slot B
+paint --at 17,48 --slot B
+line --from 28,48 --to 31,48 --slot B
+paint --at 32,48 --slot C
+paint --at 33,48 --slot G
+paint --at 34,48 --slot E
+paint --at 35,48 --slot C
+line --from 36,48 --to 39,48 --slot B
+paint --at 40,48 --slot C
+paint --at 41,48 --slot B
+line --from 42,48 --to 43,48 --slot C
+paint --at 44,48 --slot O
+paint --at 45,48 --slot a
+line --from 46,48 --to 48,48 --slot c
+line --from 49,48 --to 54,48 --slot g
+paint --at 55,48 --slot f
+line --from 56,48 --to 58,48 --slot g
+paint --at 59,48 --slot f
+line --from 60,48 --to 62,48 --slot g
+paint --at 63,48 --slot f
+paint --at 64,48 --slot a
+paint --at 65,48 --slot Y
+paint --at 66,48 --slot T
+paint --at 67,48 --slot L
+paint --at 68,48 --slot B
+paint --at 69,48 --slot C
+paint --at 70,48 --slot D
+paint --at 71,48 --slot C
+paint --at 72,48 --slot B
+line --from 73,48 --to 74,48 --slot C
+line --from 75,48 --to 78,48 --slot B
+line --from 79,48 --to 83,48 --slot C
+line --from 84,48 --to 85,48 --slot D
+paint --at 86,48 --slot G
+line --from 87,48 --to 88,48 --slot N
+paint --at 89,48 --slot U
+paint --at 90,48 --slot X
+line --from 91,48 --to 95,48 --slot Z
+line --from 96,48 --to 97,48 --slot X
+paint --at 98,48 --slot Z
+line --from 99,48 --to 100,48 --slot X
+line --from 101,48 --to 104,48 --slot Z
+paint --at 105,48 --slot U
+paint --at 106,48 --slot N
+paint --at 107,48 --slot K
+paint --at 108,48 --slot N
+paint --at 109,48 --slot O
+line --from 110,48 --to 113,48 --slot Y
+paint --at 114,48 --slot T
+line --from 115,48 --to 117,48 --slot O
+paint --at 118,48 --slot T
+paint --at 119,48 --slot O
+line --from 120,48 --to 121,48 --slot P
+paint --at 122,48 --slot Y
+line --from 123,48 --to 125,48 --slot c
+line --from 126,48 --to 127,48 --slot a
+paint --at 128,48 --slot Z
+line --from 129,48 --to 130,48 --slot X
+paint --at 131,48 --slot Q
+paint --at 132,48 --slot K
+paint --at 133,48 --slot F
+paint --at 134,48 --slot K
+paint --at 135,48 --slot M
+line --from 136,48 --to 138,48 --slot Q
+paint --at 139,48 --slot U
+paint --at 140,48 --slot N
+line --from 146,48 --to 147,48 --slot B
+line --from 28,49 --to 32,49 --slot B
+paint --at 33,49 --slot C
+paint --at 34,49 --slot E
+line --from 35,49 --to 37,49 --slot C
+paint --at 38,49 --slot B
+line --from 39,49 --to 40,49 --slot C
+line --from 41,49 --to 42,49 --slot B
+paint --at 43,49 --slot D
+paint --at 44,49 --slot O
+paint --at 45,49 --slot Y
+paint --at 46,49 --slot c
+paint --at 47,49 --slot d
+paint --at 48,49 --slot c
+paint --at 49,49 --slot d
+paint --at 50,49 --slot e
+line --from 51,49 --to 54,49 --slot g
+paint --at 55,49 --slot f
+line --from 56,49 --to 57,49 --slot g
+paint --at 58,49 --slot d
+line --from 59,49 --to 62,49 --slot g
+paint --at 63,49 --slot f
+paint --at 64,49 --slot a
+paint --at 65,49 --slot Y
+paint --at 66,49 --slot T
+paint --at 67,49 --slot L
+paint --at 68,49 --slot N
+line --from 69,49 --to 74,49 --slot C
+line --from 75,49 --to 76,49 --slot B
+line --from 77,49 --to 83,49 --slot C
+paint --at 84,49 --slot D
+paint --at 85,49 --slot F
+paint --at 86,49 --slot G
+paint --at 87,49 --slot K
+paint --at 88,49 --slot Q
+line --from 89,49 --to 92,49 --slot X
+line --from 93,49 --to 94,49 --slot Z
+line --from 95,49 --to 96,49 --slot X
+paint --at 97,49 --slot b
+paint --at 98,49 --slot Z
+paint --at 99,49 --slot b
+paint --at 100,49 --slot X
+line --from 101,49 --to 104,49 --slot Z
+paint --at 105,49 --slot X
+paint --at 106,49 --slot Q
+paint --at 107,49 --slot N
+paint --at 108,49 --slot Q
+line --from 109,49 --to 111,49 --slot X
+line --from 112,49 --to 119,49 --slot Q
+paint --at 120,49 --slot X
+line --from 121,49 --to 123,49 --slot Z
+line --from 124,49 --to 126,49 --slot X
+line --from 127,49 --to 129,49 --slot Q
+paint --at 130,49 --slot N
+paint --at 131,49 --slot G
+paint --at 132,49 --slot K
+paint --at 133,49 --slot G
+paint --at 134,49 --slot K
+line --from 135,49 --to 138,49 --slot Q
+paint --at 139,49 --slot U
+paint --at 140,49 --slot N
+paint --at 147,49 --slot B
+line --from 28,50 --to 33,50 --slot B
+line --from 34,50 --to 36,50 --slot C
+line --from 37,50 --to 38,50 --slot B
+paint --at 39,50 --slot C
+line --from 40,50 --to 41,50 --slot B
+paint --at 42,50 --slot C
+paint --at 43,50 --slot D
+paint --at 44,50 --slot G
+paint --at 45,50 --slot Y
+line --from 46,50 --to 48,50 --slot d
+paint --at 49,50 --slot a
+paint --at 50,50 --slot d
+line --from 51,50 --to 55,50 --slot g
+paint --at 56,50 --slot e
+line --from 57,50 --to 58,50 --slot d
+line --from 59,50 --to 62,50 --slot g
+paint --at 63,50 --slot f
+paint --at 64,50 --slot d
+paint --at 65,50 --slot a
+paint --at 66,50 --slot Y
+paint --at 67,50 --slot L
+paint --at 68,50 --slot G
+paint --at 69,50 --slot D
+paint --at 70,50 --slot B
+line --from 71,50 --to 74,50 --slot C
+line --from 75,50 --to 76,50 --slot B
+paint --at 77,50 --slot C
+paint --at 78,50 --slot D
+line --from 79,50 --to 83,50 --slot C
+line --from 84,50 --to 85,50 --slot D
+paint --at 86,50 --slot G
+paint --at 87,50 --slot K
+paint --at 88,50 --slot N
+paint --at 89,50 --slot Q
+line --from 90,50 --to 93,50 --slot X
+paint --at 94,50 --slot Z
+line --from 95,50 --to 98,50 --slot X
+line --from 99,50 --to 100,50 --slot Z
+paint --at 101,50 --slot b
+line --from 102,50 --to 106,50 --slot Z
+line --from 107,50 --to 109,50 --slot X
+paint --at 110,50 --slot U
+line --from 111,50 --to 115,50 --slot Q
+line --from 116,50 --to 118,50 --slot M
+paint --at 119,50 --slot N
+line --from 120,50 --to 121,50 --slot Q
+line --from 122,50 --to 129,50 --slot N
+line --from 130,50 --to 132,50 --slot Q
+paint --at 133,50 --slot N
+line --from 134,50 --to 135,50 --slot Q
+line --from 136,50 --to 137,50 --slot U
+paint --at 138,50 --slot Q
+paint --at 139,50 --slot U
+paint --at 140,50 --slot N
+paint --at 25,51 --slot B
+line --from 28,51 --to 37,51 --slot B
+paint --at 38,51 --slot E
+paint --at 39,51 --slot D
+line --from 40,51 --to 41,51 --slot C
+paint --at 42,51 --slot D
+paint --at 43,51 --slot N
+paint --at 44,51 --slot O
+paint --at 45,51 --slot Y
+line --from 46,51 --to 47,51 --slot a
+paint --at 48,51 --slot Z
+line --from 49,51 --to 51,51 --slot c
+line --from 52,51 --to 54,51 --slot d
+line --from 55,51 --to 56,51 --slot c
+paint --at 57,51 --slot d
+paint --at 58,51 --slot g
+paint --at 59,51 --slot f
+paint --at 60,51 --slot e
+paint --at 61,51 --slot d
+line --from 62,51 --to 63,51 --slot Z
+paint --at 64,51 --slot X
+paint --at 65,51 --slot S
+paint --at 66,51 --slot Q
+paint --at 67,51 --slot N
+line --from 68,51 --to 69,51 --slot G
+line --from 70,51 --to 72,51 --slot D
+line --from 73,51 --to 74,51 --slot C
+paint --at 75,51 --slot B
+paint --at 76,51 --slot C
+line --from 77,51 --to 78,51 --slot D
+line --from 79,51 --to 83,51 --slot C
+paint --at 84,51 --slot D
+paint --at 85,51 --slot F
+line --from 86,51 --to 87,51 --slot G
+paint --at 88,51 --slot K
+paint --at 89,51 --slot N
+paint --at 90,51 --slot Q
+line --from 91,51 --to 95,51 --slot X
+paint --at 96,51 --slot Z
+line --from 97,51 --to 98,51 --slot X
+line --from 99,51 --to 100,51 --slot b
+paint --at 101,51 --slot X
+paint --at 102,51 --slot b
+line --from 103,51 --to 105,51 --slot Z
+line --from 106,51 --to 107,51 --slot X
+line --from 108,51 --to 118,51 --slot Q
+line --from 119,51 --to 122,51 --slot M
+paint --at 123,51 --slot N
+paint --at 124,51 --slot K
+line --from 125,51 --to 126,51 --slot N
+line --from 127,51 --to 133,51 --slot Q
+line --from 134,51 --to 136,51 --slot X
+line --from 137,51 --to 139,51 --slot U
+paint --at 140,51 --slot N
+line --from 24,52 --to 25,52 --slot B
+line --from 27,52 --to 36,52 --slot B
+paint --at 37,52 --slot L
+paint --at 38,52 --slot D
+paint --at 39,52 --slot C
+paint --at 40,52 --slot Q
+paint --at 41,52 --slot X
+paint --at 42,52 --slot b
+line --from 43,52 --to 45,52 --slot f
+line --from 46,52 --to 47,52 --slot Z
+line --from 48,52 --to 49,52 --slot Y
+paint --at 50,52 --slot Z
+paint --at 51,52 --slot a
+line --from 52,52 --to 54,52 --slot c
+paint --at 55,52 --slot d
+paint --at 56,52 --slot f
+paint --at 57,52 --slot d
+paint --at 58,52 --slot Z
+paint --at 59,52 --slot X
+line --from 60,52 --to 61,52 --slot Q
+line --from 62,52 --to 71,52 --slot N
+paint --at 72,52 --slot G
+paint --at 73,52 --slot B
+line --from 74,52 --to 76,52 --slot C
+line --from 77,52 --to 79,52 --slot D
+line --from 80,52 --to 83,52 --slot C
+paint --at 84,52 --slot D
+paint --at 85,52 --slot F
+line --from 86,52 --to 88,52 --slot G
+paint --at 89,52 --slot N
+line --from 90,52 --to 91,52 --slot Q
+line --from 92,52 --to 101,52 --slot X
+line --from 102,52 --to 106,52 --slot Z
+line --from 107,52 --to 109,52 --slot X
+line --from 110,52 --to 129,52 --slot Q
+line --from 130,52 --to 131,52 --slot U
+line --from 132,52 --to 134,52 --slot X
+paint --at 135,52 --slot Z
+paint --at 136,52 --slot X
+line --from 137,52 --to 138,52 --slot U
+paint --at 139,52 --slot X
+paint --at 140,52 --slot N
+paint --at 21,53 --slot B
+line --from 24,53 --to 34,53 --slot B
+line --from 36,53 --to 37,53 --slot E
+paint --at 39,53 --slot F
+paint --at 40,53 --slot b
+line --from 41,53 --to 42,53 --slot f
+line --from 43,53 --to 46,53 --slot g
+paint --at 47,53 --slot d
+paint --at 48,53 --slot Z
+paint --at 49,53 --slot X
+paint --at 50,53 --slot N
+line --from 51,53 --to 55,53 --slot Q
+line --from 56,53 --to 59,53 --slot N
+line --from 60,53 --to 63,53 --slot K
+line --from 64,53 --to 65,53 --slot N
+line --from 66,53 --to 68,53 --slot K
+paint --at 69,53 --slot G
+line --from 70,53 --to 71,53 --slot K
+paint --at 72,53 --slot D
+paint --at 73,53 --slot B
+paint --at 74,53 --slot C
+line --from 75,53 --to 79,53 --slot D
+line --from 80,53 --to 83,53 --slot C
+line --from 84,53 --to 85,53 --slot D
+paint --at 86,53 --slot F
+line --from 87,53 --to 88,53 --slot G
+paint --at 89,53 --slot N
+line --from 90,53 --to 91,53 --slot Q
+paint --at 92,53 --slot U
+line --from 93,53 --to 97,53 --slot X
+paint --at 98,53 --slot Z
+line --from 99,53 --to 102,53 --slot X
+paint --at 103,53 --slot b
+line --from 104,53 --to 106,53 --slot Z
+line --from 107,53 --to 108,53 --slot X
+paint --at 109,53 --slot Z
+paint --at 110,53 --slot X
+paint --at 111,53 --slot Q
+paint --at 112,53 --slot M
+line --from 113,53 --to 127,53 --slot Q
+paint --at 128,53 --slot X
+paint --at 129,53 --slot b
+line --from 130,53 --to 137,53 --slot X
+paint --at 138,53 --slot U
+paint --at 139,53 --slot X
+paint --at 140,53 --slot Q
+line --from 20,54 --to 35,54 --slot B
+paint --at 36,54 --slot D
+line --from 37,54 --to 38,54 --slot B
+paint --at 39,54 --slot D
+paint --at 40,54 --slot b
+line --from 41,54 --to 44,54 --slot f
+paint --at 45,54 --slot b
+paint --at 46,54 --slot U
+paint --at 47,54 --slot K
+paint --at 48,54 --slot F
+line --from 49,54 --to 51,54 --slot D
+line --from 52,54 --to 54,54 --slot C
+paint --at 55,54 --slot D
+paint --at 56,54 --slot F
+line --from 57,54 --to 60,54 --slot G
+line --from 61,54 --to 64,54 --slot K
+line --from 65,54 --to 69,54 --slot G
+paint --at 70,54 --slot K
+paint --at 71,54 --slot G
+paint --at 72,54 --slot D
+paint --at 73,54 --slot B
+paint --at 74,54 --slot C
+line --from 75,54 --to 79,54 --slot D
+line --from 80,54 --to 84,54 --slot C
+line --from 85,54 --to 86,54 --slot D
+paint --at 87,54 --slot F
+paint --at 88,54 --slot G
+paint --at 89,54 --slot K
+paint --at 90,54 --slot N
+line --from 91,54 --to 92,54 --slot Q
+paint --at 93,54 --slot U
+line --from 94,54 --to 97,54 --slot X
+paint --at 98,54 --slot Z
+line --from 99,54 --to 102,54 --slot X
+line --from 103,54 --to 104,54 --slot b
+line --from 105,54 --to 108,54 --slot Z
+paint --at 109,54 --slot X
+paint --at 110,54 --slot Z
+paint --at 111,54 --slot X
+line --from 112,54 --to 126,54 --slot Q
+paint --at 127,54 --slot X
+line --from 128,54 --to 130,54 --slot b
+line --from 131,54 --to 137,54 --slot X
+paint --at 138,54 --slot U
+paint --at 139,54 --slot X
+paint --at 140,54 --slot U
+paint --at 141,54 --slot B
+line --from 17,55 --to 34,55 --slot B
+paint --at 35,55 --slot C
+line --from 36,55 --to 38,55 --slot B
+paint --at 39,55 --slot C
+paint --at 40,55 --slot K
+paint --at 41,55 --slot b
+line --from 42,55 --to 43,55 --slot f
+paint --at 44,55 --slot b
+paint --at 45,55 --slot M
+paint --at 46,55 --slot F
+line --from 47,55 --to 53,55 --slot C
+line --from 54,55 --to 56,55 --slot D
+paint --at 57,55 --slot F
+line --from 58,55 --to 59,55 --slot G
+line --from 60,55 --to 67,55 --slot K
+line --from 68,55 --to 71,55 --slot N
+paint --at 72,55 --slot E
+paint --at 73,55 --slot B
+paint --at 74,55 --slot C
+line --from 75,55 --to 80,55 --slot D
+line --from 81,55 --to 85,55 --slot C
+line --from 86,55 --to 87,55 --slot D
+line --from 88,55 --to 89,55 --slot G
+paint --at 90,55 --slot N
+line --from 91,55 --to 93,55 --slot Q
+paint --at 94,55 --slot U
+line --from 95,55 --to 102,55 --slot X
+line --from 103,55 --to 105,55 --slot b
+paint --at 106,55 --slot Z
+paint --at 107,55 --slot b
+paint --at 108,55 --slot Z
+line --from 109,55 --to 110,55 --slot X
+paint --at 111,55 --slot Z
+line --from 112,55 --to 113,55 --slot X
+line --from 114,55 --to 126,55 --slot Q
+paint --at 127,55 --slot b
+line --from 128,55 --to 130,55 --slot f
+line --from 131,55 --to 137,55 --slot X
+line --from 138,55 --to 139,55 --slot U
+paint --at 140,55 --slot X
+paint --at 141,55 --slot D
+line --from 17,56 --to 33,56 --slot B
+line --from 34,56 --to 35,56 --slot C
+paint --at 36,56 --slot F
+paint --at 37,56 --slot Q
+paint --at 38,56 --slot N
+line --from 39,56 --to 40,56 --slot C
+paint --at 41,56 --slot F
+line --from 42,56 --to 43,56 --slot M
+paint --at 44,56 --slot F
+line --from 45,56 --to 51,56 --slot C
+line --from 52,56 --to 55,56 --slot D
+paint --at 56,56 --slot F
+paint --at 57,56 --slot G
+line --from 58,56 --to 61,56 --slot K
+line --from 62,56 --to 65,56 --slot G
+paint --at 66,56 --slot K
+line --from 67,56 --to 70,56 --slot N
+paint --at 71,56 --slot I
+paint --at 72,56 --slot D
+paint --at 73,56 --slot C
+line --from 74,56 --to 79,56 --slot D
+line --from 80,56 --to 86,56 --slot C
+paint --at 87,56 --slot D
+line --from 88,56 --to 89,56 --slot G
+paint --at 90,56 --slot K
+line --from 91,56 --to 93,56 --slot Q
+line --from 94,56 --to 95,56 --slot U
+line --from 96,56 --to 97,56 --slot X
+paint --at 98,56 --slot U
+paint --at 99,56 --slot X
+line --from 100,56 --to 101,56 --slot U
+paint --at 102,56 --slot X
+line --from 103,56 --to 106,56 --slot b
+paint --at 107,56 --slot Z
+line --from 108,56 --to 109,56 --slot b
+line --from 110,56 --to 112,56 --slot X
+paint --at 113,56 --slot Z
+line --from 114,56 --to 115,56 --slot X
+line --from 116,56 --to 122,56 --slot Q
+line --from 123,56 --to 126,56 --slot U
+paint --at 127,56 --slot b
+line --from 128,56 --to 129,56 --slot f
+paint --at 130,56 --slot g
+paint --at 131,56 --slot b
+line --from 132,56 --to 136,56 --slot X
+line --from 137,56 --to 139,56 --slot U
+paint --at 140,56 --slot X
+paint --at 141,56 --slot I
+line --from 20,57 --to 31,57 --slot B
+line --from 32,57 --to 34,57 --slot C
+paint --at 35,57 --slot F
+paint --at 36,57 --slot Z
+line --from 37,57 --to 38,57 --slot f
+paint --at 39,57 --slot Q
+line --from 40,57 --to 50,57 --slot C
+line --from 51,57 --to 54,57 --slot D
+line --from 55,57 --to 57,57 --slot G
+line --from 58,57 --to 59,57 --slot K
+line --from 60,57 --to 63,57 --slot G
+paint --at 64,57 --slot K
+line --from 65,57 --to 69,57 --slot N
+paint --at 70,57 --slot I
+paint --at 71,57 --slot E
+paint --at 72,57 --slot C
+line --from 73,57 --to 79,57 --slot D
+line --from 80,57 --to 86,57 --slot C
+paint --at 87,57 --slot D
+paint --at 88,57 --slot F
+paint --at 89,57 --slot G
+paint --at 90,57 --slot K
+paint --at 91,57 --slot N
+line --from 92,57 --to 94,57 --slot Q
+paint --at 95,57 --slot U
+line --from 96,57 --to 100,57 --slot X
+line --from 101,57 --to 106,57 --slot b
+paint --at 107,57 --slot Z
+line --from 108,57 --to 110,57 --slot b
+line --from 111,57 --to 113,57 --slot X
+line --from 114,57 --to 115,57 --slot Z
+line --from 116,57 --to 117,57 --slot X
+line --from 118,57 --to 121,57 --slot Q
+paint --at 122,57 --slot U
+line --from 123,57 --to 126,57 --slot X
+paint --at 127,57 --slot b
+paint --at 128,57 --slot f
+line --from 129,57 --to 131,57 --slot g
+paint --at 132,57 --slot b
+line --from 133,57 --to 140,57 --slot X
+paint --at 141,57 --slot N
+line --from 20,58 --to 30,58 --slot B
+line --from 31,58 --to 33,58 --slot C
+paint --at 34,58 --slot F
+paint --at 35,58 --slot Z
+line --from 36,58 --to 38,58 --slot f
+paint --at 39,58 --slot Z
+paint --at 40,58 --slot G
+line --from 41,58 --to 50,58 --slot C
+line --from 51,58 --to 54,58 --slot D
+line --from 55,58 --to 61,58 --slot G
+line --from 62,58 --to 63,58 --slot K
+line --from 64,58 --to 69,58 --slot N
+paint --at 70,58 --slot E
+line --from 71,58 --to 79,58 --slot D
+line --from 80,58 --to 85,58 --slot C
+line --from 86,58 --to 87,58 --slot D
+paint --at 88,58 --slot F
+line --from 89,58 --to 90,58 --slot G
+paint --at 91,58 --slot K
+line --from 92,58 --to 94,58 --slot Q
+line --from 95,58 --to 96,58 --slot U
+line --from 97,58 --to 98,58 --slot X
+paint --at 99,58 --slot Z
+line --from 100,58 --to 106,58 --slot b
+line --from 107,58 --to 108,58 --slot Z
+line --from 109,58 --to 110,58 --slot b
+line --from 111,58 --to 112,58 --slot Z
+paint --at 113,58 --slot X
+line --from 114,58 --to 117,58 --slot Z
+line --from 118,58 --to 125,58 --slot X
+paint --at 126,58 --slot U
+paint --at 127,58 --slot X
+paint --at 128,58 --slot f
+line --from 129,58 --to 132,58 --slot g
+paint --at 133,58 --slot f
+paint --at 134,58 --slot Z
+line --from 135,58 --to 137,58 --slot X
+line --from 138,58 --to 139,58 --slot U
+paint --at 140,58 --slot X
+paint --at 141,58 --slot U
+paint --at 142,58 --slot B
+line --from 147,58 --to 150,58 --slot B
+line --from 20,59 --to 29,59 --slot B
+line --from 30,59 --to 32,59 --slot C
+paint --at 33,59 --slot F
+paint --at 34,59 --slot b
+paint --at 35,59 --slot g
+line --from 36,59 --to 37,59 --slot f
+paint --at 38,59 --slot b
+paint --at 39,59 --slot U
+paint --at 40,59 --slot D
+line --from 41,59 --to 51,59 --slot C
+line --from 52,59 --to 53,59 --slot D
+line --from 54,59 --to 60,59 --slot G
+paint --at 61,59 --slot K
+line --from 62,59 --to 64,59 --slot N
+line --from 65,59 --to 66,59 --slot Q
+line --from 67,59 --to 68,59 --slot N
+paint --at 69,59 --slot G
+line --from 70,59 --to 78,59 --slot D
+line --from 79,59 --to 85,59 --slot C
+line --from 86,59 --to 87,59 --slot D
+line --from 88,59 --to 89,59 --slot F
+paint --at 90,59 --slot G
+paint --at 91,59 --slot N
+line --from 92,59 --to 94,59 --slot Q
+line --from 95,59 --to 96,59 --slot U
+line --from 97,59 --to 99,59 --slot X
+line --from 100,59 --to 111,59 --slot b
+line --from 112,59 --to 113,59 --slot Z
+line --from 114,59 --to 116,59 --slot X
+line --from 117,59 --to 118,59 --slot Z
+line --from 119,59 --to 122,59 --slot X
+line --from 123,59 --to 125,59 --slot U
+line --from 126,59 --to 127,59 --slot Q
+paint --at 128,59 --slot b
+paint --at 129,59 --slot f
+line --from 130,59 --to 134,59 --slot g
+paint --at 135,59 --slot b
+paint --at 136,59 --slot X
+paint --at 137,59 --slot U
+line --from 138,59 --to 141,59 --slot X
+paint --at 142,59 --slot E
+line --from 147,59 --to 150,59 --slot B
+paint --at 13,60 --slot B
+line --from 20,60 --to 27,60 --slot B
+paint --at 29,60 --slot I
+paint --at 30,60 --slot Q
+paint --at 31,60 --slot F
+paint --at 32,60 --slot K
+paint --at 33,60 --slot b
+paint --at 34,60 --slot g
+line --from 35,60 --to 37,60 --slot f
+paint --at 38,60 --slot X
+paint --at 39,60 --slot F
+line --from 40,60 --to 50,60 --slot C
+line --from 51,60 --to 55,60 --slot D
+line --from 56,60 --to 58,60 --slot G
+paint --at 59,60 --slot K
+line --from 60,60 --to 63,60 --slot N
+line --from 64,60 --to 66,60 --slot Q
+line --from 67,60 --to 68,60 --slot N
+paint --at 69,60 --slot G
+line --from 70,60 --to 71,60 --slot D
+line --from 72,60 --to 73,60 --slot E
+line --from 74,60 --to 77,60 --slot D
+line --from 78,60 --to 86,60 --slot C
+paint --at 87,60 --slot D
+line --from 88,60 --to 89,60 --slot F
+paint --at 90,60 --slot G
+paint --at 91,60 --slot K
+paint --at 92,60 --slot N
+line --from 93,60 --to 95,60 --slot Q
+line --from 96,60 --to 97,60 --slot U
+line --from 98,60 --to 99,60 --slot X
+line --from 100,60 --to 101,60 --slot b
+paint --at 102,60 --slot Z
+line --from 103,60 --to 110,60 --slot b
+paint --at 111,60 --slot Z
+line --from 112,60 --to 113,60 --slot b
+paint --at 114,60 --slot Z
+line --from 115,60 --to 118,60 --slot X
+line --from 119,60 --to 121,60 --slot Z
+paint --at 122,60 --slot X
+paint --at 123,60 --slot U
+line --from 124,60 --to 128,60 --slot Q
+paint --at 129,60 --slot b
+paint --at 130,60 --slot f
+line --from 131,60 --to 135,60 --slot g
+paint --at 136,60 --slot f
+paint --at 137,60 --slot b
+line --from 138,60 --to 141,60 --slot X
+paint --at 142,60 --slot N
+line --from 147,60 --to 148,60 --slot B
+line --from 12,61 --to 14,61 --slot B
+line --from 20,61 --to 27,61 --slot B
+paint --at 28,61 --slot N
+paint --at 29,61 --slot b
+paint --at 30,61 --slot Q
+paint --at 31,61 --slot M
+line --from 32,61 --to 35,61 --slot f
+paint --at 36,61 --slot b
+paint --at 37,61 --slot X
+paint --at 38,61 --slot K
+line --from 39,61 --to 52,61 --slot C
+line --from 53,61 --to 55,61 --slot D
+paint --at 56,61 --slot G
+paint --at 57,61 --slot K
+line --from 58,61 --to 62,61 --slot N
+line --from 63,61 --to 64,61 --slot Q
+line --from 65,61 --to 67,61 --slot N
+paint --at 68,61 --slot I
+paint --at 69,61 --slot G
+line --from 70,61 --to 71,61 --slot E
+paint --at 72,61 --slot D
+paint --at 73,61 --slot G
+line --from 74,61 --to 76,61 --slot D
+line --from 77,61 --to 86,61 --slot C
+paint --at 87,61 --slot D
+line --from 88,61 --to 89,61 --slot F
+line --from 90,61 --to 91,61 --slot G
+paint --at 92,61 --slot N
+line --from 93,61 --to 95,61 --slot Q
+paint --at 96,61 --slot U
+paint --at 97,61 --slot X
+paint --at 98,61 --slot Z
+line --from 99,61 --to 111,61 --slot b
+paint --at 112,61 --slot Z
+line --from 113,61 --to 115,61 --slot b
+line --from 116,61 --to 121,61 --slot X
+paint --at 122,61 --slot U
+paint --at 123,61 --slot Q
+line --from 124,61 --to 125,61 --slot U
+line --from 126,61 --to 128,61 --slot Q
+paint --at 129,61 --slot U
+paint --at 130,61 --slot b
+paint --at 131,61 --slot f
+line --from 132,61 --to 137,61 --slot g
+paint --at 138,61 --slot f
+paint --at 139,61 --slot b
+line --from 140,61 --to 142,61 --slot X
+paint --at 143,61 --slot C
+paint --at 148,61 --slot B
+line --from 12,62 --to 14,62 --slot B
+line --from 19,62 --to 26,62 --slot B
+paint --at 27,62 --slot N
+paint --at 28,62 --slot f
+paint --at 29,62 --slot Z
+paint --at 30,62 --slot Q
+paint --at 31,62 --slot f
+paint --at 32,62 --slot g
+line --from 33,62 --to 34,62 --slot f
+paint --at 35,62 --slot b
+paint --at 36,62 --slot U
+paint --at 37,62 --slot K
+paint --at 38,62 --slot C
+paint --at 39,62 --slot D
+line --from 40,62 --to 50,62 --slot C
+paint --at 51,62 --slot D
+paint --at 52,62 --slot F
+line --from 53,62 --to 54,62 --slot G
+paint --at 55,62 --slot K
+line --from 56,62 --to 60,62 --slot N
+line --from 61,62 --to 64,62 --slot Q
+line --from 65,62 --to 67,62 --slot N
+paint --at 68,62 --slot I
+line --from 69,62 --to 73,62 --slot G
+paint --at 74,62 --slot D
+line --from 75,62 --to 86,62 --slot C
+paint --at 87,62 --slot D
+line --from 88,62 --to 90,62 --slot F
+paint --at 91,62 --slot G
+line --from 92,62 --to 93,62 --slot N
+line --from 94,62 --to 95,62 --slot Q
+paint --at 96,62 --slot Z
+line --from 97,62 --to 101,62 --slot f
+line --from 102,62 --to 103,62 --slot g
+line --from 104,62 --to 105,62 --slot f
+line --from 106,62 --to 111,62 --slot b
+line --from 112,62 --to 114,62 --slot Z
+line --from 115,62 --to 116,62 --slot b
+line --from 117,62 --to 121,62 --slot X
+paint --at 122,62 --slot U
+line --from 123,62 --to 128,62 --slot Q
+line --from 129,62 --to 130,62 --slot U
+paint --at 131,62 --slot X
+line --from 132,62 --to 133,62 --slot f
+line --from 134,62 --to 139,62 --slot g
+paint --at 140,62 --slot b
+paint --at 141,62 --slot X
+paint --at 142,62 --slot Z
+paint --at 143,62 --slot N
+paint --at 148,62 --slot B
+line --from 12,63 --to 14,63 --slot B
+line --from 19,63 --to 24,63 --slot B
+paint --at 25,63 --slot C
+paint --at 26,63 --slot Q
+paint --at 27,63 --slot f
+paint --at 28,63 --slot Z
+paint --at 29,63 --slot X
+paint --at 30,63 --slot f
+line --from 31,63 --to 32,63 --slot g
+paint --at 33,63 --slot f
+paint --at 34,63 --slot b
+paint --at 35,63 --slot Q
+paint --at 36,63 --slot F
+paint --at 37,63 --slot C
+line --from 38,63 --to 47,63 --slot D
+paint --at 48,63 --slot F
+line --from 49,63 --to 51,63 --slot G
+paint --at 52,63 --slot K
+line --from 53,63 --to 57,63 --slot N
+line --from 58,63 --to 64,63 --slot Q
+line --from 65,63 --to 67,63 --slot N
+paint --at 68,63 --slot I
+line --from 69,63 --to 73,63 --slot G
+line --from 74,63 --to 75,63 --slot D
+line --from 76,63 --to 86,63 --slot C
+line --from 87,63 --to 89,63 --slot D
+paint --at 90,63 --slot F
+line --from 91,63 --to 92,63 --slot G
+paint --at 93,63 --slot N
+paint --at 94,63 --slot X
+paint --at 95,63 --slot b
+paint --at 96,63 --slot f
+line --from 97,63 --to 101,63 --slot b
+line --from 102,63 --to 104,63 --slot f
+line --from 105,63 --to 106,63 --slot g
+paint --at 107,63 --slot f
+line --from 108,63 --to 112,63 --slot b
+line --from 113,63 --to 114,63 --slot Z
+paint --at 115,63 --slot X
+line --from 116,63 --to 121,63 --slot b
+line --from 122,63 --to 123,63 --slot X
+paint --at 124,63 --slot U
+line --from 125,63 --to 126,63 --slot Q
+line --from 127,63 --to 129,63 --slot U
+line --from 130,63 --to 132,63 --slot X
+paint --at 133,63 --slot b
+paint --at 134,63 --slot f
+line --from 135,63 --to 140,63 --slot g
+paint --at 141,63 --slot b
+paint --at 142,63 --slot Z
+paint --at 143,63 --slot X
+paint --at 144,63 --slot B
+line --from 19,64 --to 23,64 --slot B
+paint --at 24,64 --slot C
+paint --at 25,64 --slot Q
+paint --at 26,64 --slot f
+paint --at 27,64 --slot b
+paint --at 28,64 --slot Z
+paint --at 29,64 --slot f
+paint --at 30,64 --slot g
+line --from 31,64 --to 32,64 --slot f
+paint --at 33,64 --slot X
+paint --at 34,64 --slot Q
+paint --at 35,64 --slot F
+line --from 36,64 --to 39,64 --slot D
+line --from 40,64 --to 45,64 --slot F
+line --from 46,64 --to 48,64 --slot G
+paint --at 49,64 --slot K
+paint --at 50,64 --slot G
+paint --at 51,64 --slot K
+line --from 52,64 --to 54,64 --slot N
+line --from 55,64 --to 63,64 --slot Q
+line --from 64,64 --to 66,64 --slot N
+paint --at 67,64 --slot I
+line --from 68,64 --to 73,64 --slot G
+line --from 74,64 --to 76,64 --slot D
+line --from 77,64 --to 87,64 --slot C
+line --from 88,64 --to 89,64 --slot D
+line --from 90,64 --to 91,64 --slot F
+paint --at 92,64 --slot G
+paint --at 93,64 --slot U
+paint --at 94,64 --slot b
+paint --at 95,64 --slot Z
+paint --at 96,64 --slot X
+paint --at 97,64 --slot U
+line --from 98,64 --to 99,64 --slot X
+paint --at 100,64 --slot Z
+line --from 101,64 --to 104,64 --slot b
+line --from 105,64 --to 106,64 --slot f
+paint --at 107,64 --slot g
+paint --at 108,64 --slot f
+line --from 109,64 --to 113,64 --slot b
+paint --at 114,64 --slot Z
+line --from 115,64 --to 122,64 --slot b
+paint --at 123,64 --slot X
+line --from 124,64 --to 127,64 --slot U
+line --from 128,64 --to 131,64 --slot X
+line --from 132,64 --to 133,64 --slot W
+paint --at 134,64 --slot b
+line --from 135,64 --to 136,64 --slot f
+line --from 137,64 --to 140,64 --slot g
+paint --at 141,64 --slot f
+paint --at 142,64 --slot Z
+paint --at 143,64 --slot b
+paint --at 144,64 --slot L
+line --from 19,65 --to 22,65 --slot B
+paint --at 23,65 --slot C
+paint --at 24,65 --slot Q
+paint --at 25,65 --slot f
+paint --at 26,65 --slot d
+paint --at 27,65 --slot Z
+paint --at 28,65 --slot f
+paint --at 29,65 --slot g
+line --from 30,65 --to 31,65 --slot f
+paint --at 32,65 --slot W
+paint --at 33,65 --slot M
+paint --at 34,65 --slot F
+line --from 35,65 --to 38,65 --slot D
+paint --at 39,65 --slot F
+line --from 40,65 --to 42,65 --slot G
+paint --at 43,65 --slot K
+line --from 44,65 --to 46,65 --slot G
+paint --at 47,65 --slot K
+line --from 48,65 --to 52,65 --slot N
+line --from 53,65 --to 62,65 --slot Q
+line --from 63,65 --to 64,65 --slot N
+paint --at 65,65 --slot K
+line --from 66,65 --to 73,65 --slot G
+line --from 74,65 --to 76,65 --slot D
+line --from 77,65 --to 89,65 --slot C
+line --from 90,65 --to 91,65 --slot D
+paint --at 92,65 --slot N
+paint --at 93,65 --slot X
+line --from 94,65 --to 97,65 --slot Q
+paint --at 98,65 --slot U
+line --from 99,65 --to 100,65 --slot X
+line --from 101,65 --to 102,65 --slot Z
+line --from 103,65 --to 106,65 --slot b
+paint --at 107,65 --slot f
+paint --at 108,65 --slot g
+paint --at 109,65 --slot f
+line --from 110,65 --to 113,65 --slot b
+paint --at 114,65 --slot Z
+line --from 115,65 --to 122,65 --slot b
+line --from 123,65 --to 125,65 --slot X
+paint --at 126,65 --slot U
+line --from 127,65 --to 128,65 --slot X
+paint --at 129,65 --slot U
+paint --at 130,65 --slot X
+paint --at 131,65 --slot W
+line --from 132,65 --to 133,65 --slot X
+line --from 134,65 --to 137,65 --slot b
+line --from 138,65 --to 141,65 --slot g
+paint --at 142,65 --slot f
+paint --at 143,65 --slot b
+paint --at 144,65 --slot Q
+line --from 19,66 --to 22,66 --slot B
+paint --at 23,66 --slot N
+line --from 24,66 --to 25,66 --slot f
+paint --at 26,66 --slot Z
+line --from 27,66 --to 30,66 --slot f
+paint --at 31,66 --slot Q
+paint --at 32,66 --slot K
+line --from 33,66 --to 35,66 --slot F
+line --from 36,66 --to 37,66 --slot D
+paint --at 38,66 --slot F
+line --from 39,66 --to 41,66 --slot G
+line --from 42,66 --to 44,66 --slot K
+paint --at 45,66 --slot G
+paint --at 46,66 --slot K
+line --from 47,66 --to 50,66 --slot N
+line --from 51,66 --to 61,66 --slot Q
+line --from 62,66 --to 64,66 --slot N
+line --from 65,66 --to 66,66 --slot K
+line --from 67,66 --to 73,66 --slot G
+line --from 74,66 --to 76,66 --slot D
+line --from 77,66 --to 90,66 --slot C
+paint --at 91,66 --slot G
+paint --at 92,66 --slot N
+paint --at 93,66 --slot G
+paint --at 94,66 --slot K
+paint --at 95,66 --slot M
+line --from 96,66 --to 98,66 --slot Q
+line --from 99,66 --to 100,66 --slot X
+paint --at 101,66 --slot Z
+line --from 102,66 --to 108,66 --slot b
+line --from 109,66 --to 110,66 --slot f
+line --from 111,66 --to 121,66 --slot b
+paint --at 122,66 --slot X
+line --from 123,66 --to 125,66 --slot b
+line --from 126,66 --to 128,66 --slot X
+paint --at 129,66 --slot W
+line --from 130,66 --to 131,66 --slot X
+paint --at 132,66 --slot Z
+line --from 133,66 --to 138,66 --slot b
+paint --at 139,66 --slot f
+line --from 140,66 --to 142,66 --slot g
+paint --at 143,66 --slot b
+paint --at 144,66 --slot X
+paint --at 145,66 --slot D
+line --from 19,67 --to 21,67 --slot B
+paint --at 22,67 --slot G
+paint --at 23,67 --slot d
+paint --at 24,67 --slot f
+line --from 25,67 --to 26,67 --slot Z
+line --from 27,67 --to 28,67 --slot f
+paint --at 29,67 --slot b
+paint --at 30,67 --slot Q
+line --from 31,67 --to 34,67 --slot F
+paint --at 35,67 --slot D
+line --from 36,67 --to 37,67 --slot F
+line --from 38,67 --to 40,67 --slot G
+line --from 41,67 --to 45,67 --slot K
+line --from 46,67 --to 51,67 --slot N
+line --from 52,67 --to 59,67 --slot Q
+line --from 60,67 --to 64,67 --slot N
+line --from 65,67 --to 66,67 --slot K
+line --from 67,67 --to 73,67 --slot G
+line --from 74,67 --to 76,67 --slot D
+line --from 77,67 --to 89,67 --slot C
+paint --at 90,67 --slot E
+paint --at 91,67 --slot G
+paint --at 92,67 --slot D
+paint --at 93,67 --slot F
+paint --at 94,67 --slot K
+paint --at 95,67 --slot M
+line --from 96,67 --to 98,67 --slot Q
+paint --at 99,67 --slot X
+paint --at 100,67 --slot Z
+line --from 101,67 --to 109,67 --slot b
+paint --at 110,67 --slot f
+line --from 111,67 --to 121,67 --slot b
+paint --at 122,67 --slot X
+line --from 123,67 --to 125,67 --slot b
+line --from 126,67 --to 135,67 --slot X
+line --from 136,67 --to 139,67 --slot b
+paint --at 140,67 --slot f
+line --from 141,67 --to 143,67 --slot g
+paint --at 144,67 --slot b
+paint --at 145,67 --slot K
+paint --at 20,68 --slot B
+paint --at 21,68 --slot D
+paint --at 22,68 --slot Z
+paint --at 23,68 --slot f
+line --from 24,68 --to 25,68 --slot Z
+line --from 26,68 --to 27,68 --slot f
+paint --at 28,68 --slot b
+paint --at 29,68 --slot M
+line --from 30,68 --to 34,68 --slot F
+paint --at 35,68 --slot D
+paint --at 36,68 --slot F
+line --from 37,68 --to 40,68 --slot G
+line --from 41,68 --to 45,68 --slot K
+line --from 46,68 --to 49,68 --slot N
+line --from 50,68 --to 58,68 --slot Q
+line --from 59,68 --to 61,68 --slot N
+line --from 62,68 --to 63,68 --slot K
+paint --at 64,68 --slot N
+paint --at 65,68 --slot K
+line --from 66,68 --to 67,68 --slot G
+paint --at 68,68 --slot K
+line --from 69,68 --to 73,68 --slot G
+line --from 74,68 --to 76,68 --slot D
+line --from 77,68 --to 88,68 --slot C
+paint --at 89,68 --slot D
+paint --at 90,68 --slot F
+line --from 91,68 --to 92,68 --slot D
+paint --at 93,68 --slot F
+paint --at 94,68 --slot K
+paint --at 95,68 --slot M
+line --from 96,68 --to 98,68 --slot Q
+paint --at 99,68 --slot X
+paint --at 100,68 --slot Z
+line --from 101,68 --to 109,68 --slot b
+line --from 110,68 --to 111,68 --slot f
+line --from 112,68 --to 124,68 --slot b
+line --from 125,68 --to 129,68 --slot X
+paint --at 130,68 --slot b
+line --from 131,68 --to 133,68 --slot X
+line --from 134,68 --to 140,68 --slot b
+paint --at 141,68 --slot f
+line --from 142,68 --to 143,68 --slot g
+paint --at 144,68 --slot f
+paint --at 145,68 --slot Q
+paint --at 20,69 --slot B
+paint --at 21,69 --slot N
+paint --at 22,69 --slot f
+paint --at 23,69 --slot Z
+paint --at 24,69 --slot Q
+paint --at 25,69 --slot b
+paint --at 26,69 --slot f
+paint --at 27,69 --slot b
+paint --at 28,69 --slot K
+paint --at 29,69 --slot F
+paint --at 30,69 --slot D
+line --from 31,69 --to 35,69 --slot F
+line --from 36,69 --to 42,69 --slot G
+line --from 43,69 --to 45,69 --slot K
+line --from 46,69 --to 49,69 --slot N
+line --from 50,69 --to 57,69 --slot Q
+line --from 58,69 --to 61,69 --slot N
+line --from 62,69 --to 64,69 --slot K
+line --from 65,69 --to 66,69 --slot G
+paint --at 67,69 --slot K
+line --from 68,69 --to 73,69 --slot G
+line --from 74,69 --to 76,69 --slot D
+line --from 77,69 --to 79,69 --slot C
+line --from 80,69 --to 81,69 --slot B
+line --from 82,69 --to 88,69 --slot C
+line --from 89,69 --to 92,69 --slot D
+paint --at 93,69 --slot F
+line --from 94,69 --to 95,69 --slot K
+paint --at 96,69 --slot M
+paint --at 97,69 --slot Q
+paint --at 98,69 --slot U
+paint --at 99,69 --slot X
+paint --at 100,69 --slot Z
+line --from 101,69 --to 110,69 --slot b
+line --from 111,69 --to 112,69 --slot f
+line --from 113,69 --to 123,69 --slot b
+line --from 124,69 --to 128,69 --slot X
+line --from 129,69 --to 141,69 --slot b
+line --from 142,69 --to 144,69 --slot g
+paint --at 145,69 --slot W
+paint --at 146,69 --slot C
+paint --at 20,70 --slot D
+paint --at 21,70 --slot X
+paint --at 22,70 --slot Z
+paint --at 23,70 --slot N
+paint --at 24,70 --slot X
+paint --at 25,70 --slot f
+paint --at 26,70 --slot b
+paint --at 27,70 --slot K
+line --from 28,70 --to 30,70 --slot D
+line --from 31,70 --to 34,70 --slot F
+line --from 35,70 --to 41,70 --slot G
+line --from 42,70 --to 45,70 --slot K
+line --from 46,70 --to 49,70 --slot N
+line --from 50,70 --to 55,70 --slot Q
+line --from 56,70 --to 61,70 --slot N
+line --from 62,70 --to 63,70 --slot K
+line --from 64,70 --to 65,70 --slot G
+line --from 66,70 --to 67,70 --slot K
+line --from 68,70 --to 73,70 --slot G
+line --from 74,70 --to 75,70 --slot D
+line --from 76,70 --to 79,70 --slot C
+line --from 80,70 --to 82,70 --slot B
+line --from 83,70 --to 87,70 --slot C
+paint --at 88,70 --slot D
+line --from 89,70 --to 90,70 --slot C
+line --from 91,70 --to 92,70 --slot D
+paint --at 93,70 --slot F
+paint --at 94,70 --slot G
+paint --at 95,70 --slot K
+paint --at 96,70 --slot M
+line --from 97,70 --to 98,70 --slot Q
+line --from 99,70 --to 100,70 --slot X
+line --from 101,70 --to 111,70 --slot b
+paint --at 112,70 --slot f
+line --from 113,70 --to 121,70 --slot b
+line --from 122,70 --to 123,70 --slot X
+line --from 124,70 --to 141,70 --slot b
+paint --at 142,70 --slot f
+line --from 143,70 --to 144,70 --slot g
+paint --at 145,70 --slot b
+paint --at 146,70 --slot G
+paint --at 19,71 --slot B
+paint --at 20,71 --slot I
+paint --at 21,71 --slot O
+line --from 22,71 --to 23,71 --slot N
+line --from 24,71 --to 25,71 --slot b
+paint --at 26,71 --slot K
+paint --at 27,71 --slot C
+line --from 28,71 --to 33,71 --slot D
+paint --at 34,71 --slot F
+line --from 35,71 --to 40,71 --slot G
+line --from 41,71 --to 49,71 --slot K
+line --from 50,71 --to 51,71 --slot N
+line --from 52,71 --to 58,71 --slot Q
+paint --at 59,71 --slot M
+line --from 60,71 --to 61,71 --slot N
+line --from 62,71 --to 67,71 --slot K
+line --from 68,71 --to 73,71 --slot G
+line --from 74,71 --to 75,71 --slot D
+line --from 76,71 --to 78,71 --slot C
+line --from 79,71 --to 82,71 --slot B
+line --from 83,71 --to 86,71 --slot C
+line --from 87,71 --to 88,71 --slot D
+line --from 89,71 --to 90,71 --slot C
+line --from 91,71 --to 93,71 --slot D
+paint --at 94,71 --slot F
+paint --at 95,71 --slot K
+paint --at 96,71 --slot M
+line --from 97,71 --to 98,71 --slot Q
+paint --at 99,71 --slot U
+line --from 100,71 --to 102,71 --slot X
+line --from 103,71 --to 108,71 --slot b
+paint --at 109,71 --slot Z
+line --from 110,71 --to 142,71 --slot b
+paint --at 143,71 --slot f
+paint --at 144,71 --slot g
+paint --at 145,71 --slot f
+paint --at 146,71 --slot K
+paint --at 19,72 --slot D
+paint --at 20,72 --slot L
+paint --at 21,72 --slot Q
+paint --at 22,72 --slot L
+paint --at 23,72 --slot N
+paint --at 24,72 --slot b
+paint --at 25,72 --slot K
+paint --at 26,72 --slot C
+line --from 27,72 --to 33,72 --slot D
+paint --at 34,72 --slot F
+line --from 35,72 --to 42,72 --slot G
+line --from 43,72 --to 45,72 --slot K
+line --from 46,72 --to 50,72 --slot N
+line --from 51,72 --to 52,72 --slot K
+paint --at 53,72 --slot N
+line --from 54,72 --to 59,72 --slot Q
+paint --at 60,72 --slot M
+line --from 61,72 --to 67,72 --slot N
+paint --at 68,72 --slot K
+line --from 69,72 --to 73,72 --slot G
+line --from 74,72 --to 75,72 --slot D
+line --from 76,72 --to 78,72 --slot C
+line --from 79,72 --to 80,72 --slot B
+line --from 81,72 --to 85,72 --slot C
+line --from 86,72 --to 87,72 --slot D
+line --from 88,72 --to 91,72 --slot C
+line --from 92,72 --to 93,72 --slot D
+paint --at 94,72 --slot F
+paint --at 95,72 --slot K
+paint --at 96,72 --slot N
+paint --at 97,72 --slot M
+line --from 98,72 --to 99,72 --slot Q
+line --from 100,72 --to 103,72 --slot X
+paint --at 104,72 --slot Z
+line --from 105,72 --to 109,72 --slot b
+paint --at 110,72 --slot Z
+line --from 111,72 --to 143,72 --slot b
+line --from 144,72 --to 145,72 --slot g
+paint --at 146,72 --slot Q
+paint --at 19,73 --slot B
+paint --at 20,73 --slot E
+line --from 21,73 --to 22,73 --slot N
+paint --at 23,73 --slot Q
+paint --at 24,73 --slot K
+line --from 25,73 --to 26,73 --slot D
+line --from 27,73 --to 29,73 --slot C
+line --from 30,73 --to 31,73 --slot D
+line --from 32,73 --to 34,73 --slot F
+line --from 35,73 --to 39,73 --slot G
+line --from 40,73 --to 41,73 --slot K
+paint --at 42,73 --slot G
+line --from 43,73 --to 47,73 --slot K
+line --from 48,73 --to 53,73 --slot N
+line --from 54,73 --to 60,73 --slot Q
+line --from 61,73 --to 68,73 --slot N
+paint --at 69,73 --slot K
+line --from 70,73 --to 73,73 --slot G
+paint --at 74,73 --slot D
+line --from 75,73 --to 77,73 --slot C
+line --from 78,73 --to 79,73 --slot B
+line --from 80,73 --to 84,73 --slot C
+line --from 85,73 --to 86,73 --slot D
+line --from 87,73 --to 91,73 --slot C
+line --from 92,73 --to 93,73 --slot D
+paint --at 94,73 --slot F
+paint --at 95,73 --slot G
+line --from 96,73 --to 97,73 --slot K
+paint --at 98,73 --slot M
+line --from 99,73 --to 100,73 --slot Q
+paint --at 101,73 --slot U
+line --from 102,73 --to 103,73 --slot X
+line --from 104,73 --to 106,73 --slot Z
+line --from 107,73 --to 119,73 --slot b
+paint --at 120,73 --slot X
+line --from 121,73 --to 143,73 --slot b
+paint --at 144,73 --slot f
+paint --at 145,73 --slot g
+paint --at 146,73 --slot X
+paint --at 20,74 --slot B
+paint --at 21,74 --slot E
+paint --at 22,74 --slot N
+paint --at 23,74 --slot G
+line --from 24,74 --to 29,74 --slot C
+line --from 30,74 --to 32,74 --slot D
+line --from 33,74 --to 34,74 --slot F
+line --from 35,74 --to 36,74 --slot G
+paint --at 37,74 --slot F
+paint --at 38,74 --slot G
+line --from 39,74 --to 47,74 --slot K
+line --from 48,74 --to 67,74 --slot N
+line --from 68,74 --to 70,74 --slot K
+line --from 71,74 --to 72,74 --slot G
+paint --at 73,74 --slot D
+line --from 74,74 --to 77,74 --slot C
+line --from 78,74 --to 79,74 --slot B
+line --from 80,74 --to 83,74 --slot C
+paint --at 84,74 --slot D
+paint --at 85,74 --slot E
+line --from 86,74 --to 92,74 --slot C
+paint --at 93,74 --slot D
+paint --at 94,74 --slot F
+paint --at 95,74 --slot G
+line --from 96,74 --to 97,74 --slot K
+paint --at 98,74 --slot M
+line --from 99,74 --to 101,74 --slot Q
+paint --at 102,74 --slot U
+line --from 103,74 --to 109,74 --slot X
+paint --at 110,74 --slot Z
+line --from 111,74 --to 144,74 --slot b
+paint --at 145,74 --slot g
+paint --at 146,74 --slot b
+paint --at 147,74 --slot B
+paint --at 20,75 --slot B
+paint --at 21,75 --slot D
+paint --at 22,75 --slot C
+line --from 23,75 --to 24,75 --slot B
+line --from 25,75 --to 29,75 --slot C
+line --from 30,75 --to 33,75 --slot D
+paint --at 34,75 --slot F
+line --from 35,75 --to 39,75 --slot G
+line --from 40,75 --to 44,75 --slot K
+paint --at 45,75 --slot N
+line --from 46,75 --to 47,75 --slot K
+line --from 48,75 --to 51,75 --slot N
+line --from 52,75 --to 53,75 --slot K
+paint --at 54,75 --slot N
+paint --at 55,75 --slot K
+line --from 56,75 --to 64,75 --slot N
+paint --at 65,75 --slot K
+line --from 66,75 --to 69,75 --slot N
+paint --at 70,75 --slot K
+paint --at 71,75 --slot G
+paint --at 72,75 --slot F
+paint --at 73,75 --slot D
+line --from 74,75 --to 76,75 --slot C
+line --from 77,75 --to 78,75 --slot B
+line --from 79,75 --to 83,75 --slot C
+paint --at 84,75 --slot E
+line --from 85,75 --to 93,75 --slot C
+line --from 94,75 --to 95,75 --slot F
+paint --at 96,75 --slot G
+line --from 97,75 --to 98,75 --slot K
+line --from 99,75 --to 102,75 --slot Q
+paint --at 103,75 --slot U
+line --from 104,75 --to 110,75 --slot X
+paint --at 111,75 --slot Z
+line --from 112,75 --to 144,75 --slot b
+paint --at 145,75 --slot f
+paint --at 146,75 --slot b
+paint --at 147,75 --slot D
+line --from 20,76 --to 24,76 --slot B
+line --from 25,76 --to 28,76 --slot C
+paint --at 29,76 --slot D
+paint --at 30,76 --slot C
+line --from 31,76 --to 33,76 --slot D
+paint --at 34,76 --slot F
+line --from 35,76 --to 40,76 --slot G
+line --from 41,76 --to 44,76 --slot K
+line --from 45,76 --to 64,76 --slot N
+line --from 65,76 --to 66,76 --slot K
+line --from 67,76 --to 69,76 --slot N
+line --from 70,76 --to 71,76 --slot G
+paint --at 72,76 --slot F
+paint --at 73,76 --slot D
+line --from 74,76 --to 76,76 --slot C
+paint --at 77,76 --slot B
+line --from 78,76 --to 82,76 --slot C
+paint --at 83,76 --slot E
+line --from 84,76 --to 93,76 --slot C
+paint --at 94,76 --slot D
+paint --at 95,76 --slot F
+paint --at 96,76 --slot G
+line --from 97,76 --to 98,76 --slot K
+paint --at 99,76 --slot M
+line --from 100,76 --to 104,76 --slot Q
+paint --at 105,76 --slot U
+line --from 106,76 --to 110,76 --slot X
+line --from 111,76 --to 112,76 --slot Z
+line --from 113,76 --to 145,76 --slot b
+paint --at 146,76 --slot f
+paint --at 147,76 --slot E
+line --from 19,77 --to 24,77 --slot B
+line --from 25,77 --to 27,77 --slot C
+line --from 28,77 --to 33,77 --slot D
+paint --at 34,77 --slot F
+line --from 35,77 --to 40,77 --slot G
+line --from 41,77 --to 44,77 --slot K
+line --from 45,77 --to 51,77 --slot N
+paint --at 52,77 --slot Q
+line --from 53,77 --to 54,77 --slot N
+line --from 55,77 --to 57,77 --slot Q
+paint --at 58,77 --slot M
+line --from 59,77 --to 68,77 --slot N
+paint --at 69,77 --slot K
+line --from 70,77 --to 71,77 --slot G
+paint --at 72,77 --slot F
+paint --at 73,77 --slot D
+line --from 74,77 --to 76,77 --slot C
+paint --at 77,77 --slot B
+line --from 78,77 --to 81,77 --slot C
+paint --at 82,77 --slot E
+paint --at 83,77 --slot D
+line --from 84,77 --to 94,77 --slot C
+paint --at 95,77 --slot D
+line --from 96,77 --to 97,77 --slot G
+line --from 98,77 --to 99,77 --slot K
+paint --at 100,77 --slot M
+line --from 101,77 --to 105,77 --slot Q
+line --from 106,77 --to 107,77 --slot U
+line --from 108,77 --to 111,77 --slot X
+paint --at 112,77 --slot Z
+line --from 113,77 --to 138,77 --slot b
+paint --at 139,77 --slot Z
+line --from 140,77 --to 145,77 --slot b
+paint --at 146,77 --slot f
+paint --at 147,77 --slot D
+line --from 19,78 --to 24,78 --slot B
+line --from 25,78 --to 29,78 --slot C
+line --from 30,78 --to 34,78 --slot D
+line --from 35,78 --to 40,78 --slot G
+line --from 41,78 --to 44,78 --slot K
+line --from 45,78 --to 52,78 --slot N
+paint --at 53,78 --slot K
+paint --at 54,78 --slot N
+paint --at 55,78 --slot Q
+line --from 56,78 --to 58,78 --slot N
+paint --at 59,78 --slot M
+line --from 60,78 --to 63,78 --slot Q
+paint --at 64,78 --slot N
+paint --at 65,78 --slot K
+line --from 66,78 --to 68,78 --slot N
+paint --at 69,78 --slot K
+line --from 70,78 --to 71,78 --slot G
+paint --at 72,78 --slot F
+paint --at 73,78 --slot D
+line --from 74,78 --to 76,78 --slot C
+paint --at 77,78 --slot B
+line --from 78,78 --to 80,78 --slot C
+line --from 81,78 --to 82,78 --slot D
+line --from 83,78 --to 94,78 --slot C
+paint --at 95,78 --slot D
+paint --at 96,78 --slot F
+paint --at 97,78 --slot G
+line --from 98,78 --to 99,78 --slot K
+paint --at 100,78 --slot N
+line --from 101,78 --to 106,78 --slot Q
+line --from 107,78 --to 109,78 --slot U
+line --from 110,78 --to 112,78 --slot X
+line --from 113,78 --to 139,78 --slot b
+paint --at 140,78 --slot X
+line --from 141,78 --to 145,78 --slot b
+paint --at 146,78 --slot f
+paint --at 147,78 --slot D
+line --from 19,79 --to 24,79 --slot B
+line --from 25,79 --to 31,79 --slot C
+line --from 32,79 --to 34,79 --slot D
+line --from 35,79 --to 40,79 --slot G
+line --from 41,79 --to 43,79 --slot K
+line --from 44,79 --to 50,79 --slot N
+paint --at 51,79 --slot Q
+line --from 52,79 --to 59,79 --slot N
+line --from 60,79 --to 61,79 --slot M
+line --from 62,79 --to 63,79 --slot Q
+paint --at 64,79 --slot N
+paint --at 65,79 --slot K
+line --from 66,79 --to 67,79 --slot N
+paint --at 68,79 --slot K
+line --from 69,79 --to 71,79 --slot G
+paint --at 72,79 --slot F
+paint --at 73,79 --slot D
+line --from 74,79 --to 76,79 --slot C
+paint --at 77,79 --slot B
+line --from 78,79 --to 80,79 --slot C
+paint --at 81,79 --slot D
+line --from 82,79 --to 92,79 --slot C
+paint --at 93,79 --slot D
+line --from 94,79 --to 95,79 --slot C
+paint --at 96,79 --slot D
+paint --at 97,79 --slot F
+line --from 98,79 --to 99,79 --slot G
+line --from 100,79 --to 101,79 --slot K
+paint --at 102,79 --slot M
+line --from 103,79 --to 109,79 --slot Q
+line --from 110,79 --to 112,79 --slot X
+paint --at 113,79 --slot f
+line --from 114,79 --to 129,79 --slot b
+paint --at 130,79 --slot X
+line --from 131,79 --to 140,79 --slot b
+paint --at 141,79 --slot X
+line --from 142,79 --to 146,79 --slot b
+paint --at 147,79 --slot D
+line --from 19,80 --to 24,80 --slot B
+line --from 25,80 --to 32,80 --slot C
+paint --at 33,80 --slot D
+paint --at 34,80 --slot F
+paint --at 35,80 --slot G
+line --from 36,80 --to 37,80 --slot F
+line --from 38,80 --to 41,80 --slot G
+line --from 42,80 --to 43,80 --slot K
+line --from 44,80 --to 51,80 --slot N
+paint --at 52,80 --slot Q
+line --from 53,80 --to 58,80 --slot N
+paint --at 59,80 --slot M
+line --from 60,80 --to 61,80 --slot K
+line --from 62,80 --to 67,80 --slot N
+paint --at 68,80 --slot K
+line --from 69,80 --to 71,80 --slot G
+paint --at 72,80 --slot F
+paint --at 73,80 --slot D
+line --from 74,80 --to 76,80 --slot C
+paint --at 77,80 --slot B
+line --from 78,80 --to 79,80 --slot C
+paint --at 80,80 --slot D
+line --from 81,80 --to 87,80 --slot C
+line --from 88,80 --to 94,80 --slot D
+paint --at 95,80 --slot C
+paint --at 96,80 --slot D
+paint --at 97,80 --slot G
+paint --at 98,80 --slot F
+paint --at 99,80 --slot G
+line --from 100,80 --to 101,80 --slot K
+line --from 102,80 --to 105,80 --slot M
+line --from 106,80 --to 108,80 --slot Q
+paint --at 109,80 --slot X
+line --from 110,80 --to 111,80 --slot Q
+paint --at 112,80 --slot X
+paint --at 113,80 --slot f
+line --from 114,80 --to 140,80 --slot b
+paint --at 141,80 --slot X
+line --from 142,80 --to 145,80 --slot b
+paint --at 146,80 --slot Z
+paint --at 147,80 --slot B
+paint --at 149,80 --slot B
+paint --at 20,81 --slot B
+line --from 22,81 --to 25,81 --slot B
+line --from 26,81 --to 32,81 --slot C
+line --from 33,81 --to 34,81 --slot D
+paint --at 35,81 --slot G
+paint --at 36,81 --slot F
+line --from 37,81 --to 42,81 --slot G
+paint --at 43,81 --slot K
+line --from 44,81 --to 49,81 --slot N
+line --from 50,81 --to 51,81 --slot K
+line --from 52,81 --to 57,81 --slot N
+line --from 58,81 --to 59,81 --slot K
+line --from 60,81 --to 66,81 --slot N
+line --from 67,81 --to 69,81 --slot K
+line --from 70,81 --to 71,81 --slot G
+paint --at 72,81 --slot F
+paint --at 73,81 --slot D
+line --from 74,81 --to 76,81 --slot C
+paint --at 77,81 --slot B
+line --from 78,81 --to 84,81 --slot C
+line --from 85,81 --to 90,81 --slot D
+line --from 91,81 --to 95,81 --slot C
+paint --at 96,81 --slot D
+line --from 97,81 --to 98,81 --slot F
+paint --at 99,81 --slot G
+line --from 100,81 --to 105,81 --slot K
+line --from 106,81 --to 107,81 --slot Q
+paint --at 108,81 --slot U
+paint --at 109,81 --slot Q
+paint --at 110,81 --slot M
+paint --at 111,81 --slot Q
+line --from 112,81 --to 115,81 --slot b
+paint --at 116,81 --slot X
+line --from 117,81 --to 118,81 --slot Z
+line --from 119,81 --to 121,81 --slot b
+paint --at 122,81 --slot Z
+line --from 123,81 --to 131,81 --slot b
+paint --at 132,81 --slot X
+line --from 133,81 --to 140,81 --slot b
+paint --at 141,81 --slot Z
+line --from 142,81 --to 143,81 --slot b
+paint --at 144,81 --slot X
+paint --at 145,81 --slot b
+paint --at 146,81 --slot X
+paint --at 147,81 --slot B
+paint --at 149,81 --slot B
+paint --at 22,82 --slot B
+paint --at 23,82 --slot C
+line --from 24,82 --to 26,82 --slot B
+line --from 27,82 --to 33,82 --slot C
+line --from 34,82 --to 35,82 --slot D
+paint --at 36,82 --slot F
+paint --at 37,82 --slot G
+paint --at 38,82 --slot F
+line --from 39,82 --to 43,82 --slot G
+line --from 44,82 --to 46,82 --slot K
+line --from 47,82 --to 57,82 --slot N
+line --from 58,82 --to 60,82 --slot K
+line --from 61,82 --to 66,82 --slot N
+line --from 67,82 --to 68,82 --slot K
+line --from 69,82 --to 71,82 --slot G
+paint --at 72,82 --slot F
+paint --at 73,82 --slot D
+line --from 74,82 --to 76,82 --slot C
+paint --at 77,82 --slot B
+line --from 78,82 --to 83,82 --slot C
+line --from 84,82 --to 89,82 --slot D
+paint --at 90,82 --slot B
+line --from 92,82 --to 95,82 --slot B
+paint --at 96,82 --slot C
+line --from 97,82 --to 98,82 --slot D
+paint --at 99,82 --slot F
+line --from 100,82 --to 105,82 --slot K
+line --from 106,82 --to 108,82 --slot Q
+line --from 109,82 --to 110,82 --slot M
+paint --at 111,82 --slot Q
+paint --at 112,82 --slot X
+line --from 113,82 --to 114,82 --slot b
+line --from 115,82 --to 118,82 --slot X
+line --from 119,82 --to 121,82 --slot b
+line --from 122,82 --to 123,82 --slot X
+line --from 124,82 --to 130,82 --slot b
+line --from 131,82 --to 133,82 --slot X
+line --from 134,82 --to 143,82 --slot b
+line --from 144,82 --to 145,82 --slot X
+paint --at 146,82 --slot Q
+paint --at 149,82 --slot B
+paint --at 23,83 --slot B
+paint --at 24,83 --slot C
+line --from 25,83 --to 28,83 --slot B
+line --from 29,83 --to 33,83 --slot C
+line --from 34,83 --to 35,83 --slot D
+paint --at 36,83 --slot F
+paint --at 37,83 --slot G
+line --from 38,83 --to 39,83 --slot F
+line --from 40,83 --to 44,83 --slot G
+line --from 45,83 --to 50,83 --slot K
+line --from 51,83 --to 57,83 --slot N
+line --from 58,83 --to 59,83 --slot K
+line --from 60,83 --to 63,83 --slot N
+line --from 64,83 --to 68,83 --slot K
+line --from 69,83 --to 71,83 --slot G
+paint --at 72,83 --slot F
+paint --at 73,83 --slot D
+line --from 74,83 --to 76,83 --slot C
+line --from 77,83 --to 78,83 --slot B
+line --from 79,83 --to 83,83 --slot C
+line --from 84,83 --to 87,83 --slot D
+paint --at 88,83 --slot C
+line --from 91,83 --to 92,83 --slot B
+line --from 93,83 --to 94,83 --slot C
+line --from 95,83 --to 96,83 --slot B
+paint --at 97,83 --slot C
+paint --at 98,83 --slot D
+line --from 99,83 --to 100,83 --slot F
+line --from 101,83 --to 104,83 --slot K
+paint --at 105,83 --slot M
+line --from 106,83 --to 107,83 --slot Q
+line --from 108,83 --to 110,83 --slot M
+paint --at 111,83 --slot Q
+paint --at 112,83 --slot U
+line --from 113,83 --to 114,83 --slot X
+paint --at 115,83 --slot U
+line --from 116,83 --to 118,83 --slot X
+line --from 119,83 --to 120,83 --slot b
+line --from 121,83 --to 124,83 --slot X
+line --from 125,83 --to 128,83 --slot b
+paint --at 129,83 --slot X
+paint --at 130,83 --slot b
+line --from 131,83 --to 134,83 --slot X
+line --from 135,83 --to 138,83 --slot b
+paint --at 139,83 --slot Z
+paint --at 140,83 --slot b
+paint --at 141,83 --slot Z
+line --from 142,83 --to 145,83 --slot X
+paint --at 146,83 --slot Q
+line --from 148,83 --to 149,83 --slot B
+line --from 24,84 --to 28,84 --slot B
+line --from 29,84 --to 33,84 --slot C
+line --from 34,84 --to 35,84 --slot D
+line --from 36,84 --to 37,84 --slot G
+line --from 38,84 --to 40,84 --slot F
+line --from 41,84 --to 45,84 --slot G
+line --from 46,84 --to 58,84 --slot K
+line --from 59,84 --to 63,84 --slot N
+paint --at 64,84 --slot K
+paint --at 65,84 --slot N
+line --from 66,84 --to 68,84 --slot K
+line --from 69,84 --to 72,84 --slot G
+paint --at 73,84 --slot D
+line --from 74,84 --to 76,84 --slot C
+line --from 77,84 --to 78,84 --slot B
+line --from 79,84 --to 83,84 --slot C
+line --from 84,84 --to 87,84 --slot D
+line --from 88,84 --to 91,84 --slot B
+line --from 92,84 --to 98,84 --slot C
+line --from 99,84 --to 101,84 --slot F
+line --from 102,84 --to 103,84 --slot K
+paint --at 104,84 --slot Q
+paint --at 105,84 --slot X
+paint --at 106,84 --slot U
+line --from 107,84 --to 110,84 --slot M
+paint --at 111,84 --slot Q
+line --from 112,84 --to 114,84 --slot X
+paint --at 115,84 --slot U
+line --from 116,84 --to 117,84 --slot X
+paint --at 118,84 --slot Z
+line --from 119,84 --to 126,84 --slot X
+line --from 127,84 --to 128,84 --slot Z
+paint --at 129,84 --slot X
+paint --at 130,84 --slot b
+paint --at 131,84 --slot Z
+line --from 132,84 --to 135,84 --slot X
+line --from 136,84 --to 138,84 --slot Z
+paint --at 139,84 --slot X
+paint --at 140,84 --slot Z
+line --from 141,84 --to 145,84 --slot X
+paint --at 146,84 --slot N
+line --from 148,84 --to 149,84 --slot B
+line --from 24,85 --to 28,85 --slot B
+line --from 29,85 --to 33,85 --slot C
+line --from 34,85 --to 36,85 --slot D
+line --from 37,85 --to 38,85 --slot F
+paint --at 39,85 --slot G
+line --from 40,85 --to 41,85 --slot F
+line --from 42,85 --to 46,85 --slot G
+line --from 47,85 --to 59,85 --slot K
+line --from 60,85 --to 66,85 --slot N
+line --from 67,85 --to 68,85 --slot K
+line --from 69,85 --to 72,85 --slot G
+paint --at 73,85 --slot F
+line --from 74,85 --to 76,85 --slot C
+line --from 77,85 --to 79,85 --slot B
+line --from 80,85 --to 82,85 --slot C
+line --from 83,85 --to 85,85 --slot D
+paint --at 86,85 --slot C
+line --from 87,85 --to 90,85 --slot B
+line --from 91,85 --to 97,85 --slot C
+paint --at 98,85 --slot D
+paint --at 99,85 --slot F
+paint --at 100,85 --slot G
+line --from 101,85 --to 102,85 --slot K
+paint --at 103,85 --slot Q
+line --from 104,85 --to 105,85 --slot X
+line --from 106,85 --to 107,85 --slot Q
+line --from 108,85 --to 109,85 --slot M
+paint --at 110,85 --slot Q
+line --from 111,85 --to 120,85 --slot X
+line --from 121,85 --to 123,85 --slot U
+line --from 124,85 --to 127,85 --slot X
+paint --at 128,85 --slot Z
+line --from 129,85 --to 141,85 --slot X
+line --from 142,85 --to 143,85 --slot Z
+paint --at 144,85 --slot X
+paint --at 145,85 --slot W
+paint --at 146,85 --slot G
+paint --at 148,85 --slot B
+line --from 24,86 --to 28,86 --slot B
+line --from 29,86 --to 33,86 --slot C
+line --from 34,86 --to 36,86 --slot D
+paint --at 37,86 --slot C
+paint --at 38,86 --slot D
+paint --at 39,86 --slot G
+line --from 40,86 --to 42,86 --slot F
+line --from 43,86 --to 46,86 --slot G
+line --from 47,86 --to 48,86 --slot K
+paint --at 49,86 --slot G
+line --from 50,86 --to 60,86 --slot K
+line --from 61,86 --to 65,86 --slot N
+line --from 66,86 --to 68,86 --slot K
+line --from 69,86 --to 72,86 --slot G
+paint --at 73,86 --slot F
+line --from 74,86 --to 77,86 --slot C
+line --from 78,86 --to 81,86 --slot B
+line --from 82,86 --to 85,86 --slot C
+line --from 86,86 --to 89,86 --slot B
+line --from 90,86 --to 96,86 --slot C
+paint --at 97,86 --slot D
+line --from 98,86 --to 99,86 --slot F
+paint --at 100,86 --slot K
+line --from 101,86 --to 106,86 --slot Q
+paint --at 107,86 --slot X
+line --from 108,86 --to 109,86 --slot U
+line --from 110,86 --to 119,86 --slot X
+paint --at 120,86 --slot U
+line --from 121,86 --to 125,86 --slot Q
+paint --at 126,86 --slot U
+line --from 127,86 --to 139,86 --slot X
+paint --at 140,86 --slot U
+line --from 141,86 --to 144,86 --slot X
+paint --at 145,86 --slot Q
+paint --at 146,86 --slot B
+paint --at 148,86 --slot B
+line --from 25,87 --to 28,87 --slot B
+line --from 29,87 --to 36,87 --slot C
+line --from 37,87 --to 41,87 --slot D
+paint --at 42,87 --slot F
+line --from 43,87 --to 44,87 --slot G
+paint --at 45,87 --slot F
+line --from 46,87 --to 49,87 --slot G
+line --from 50,87 --to 53,87 --slot K
+line --from 54,87 --to 55,87 --slot G
+line --from 56,87 --to 61,87 --slot K
+line --from 62,87 --to 63,87 --slot N
+line --from 64,87 --to 67,87 --slot K
+line --from 68,87 --to 72,87 --slot G
+paint --at 73,87 --slot F
+paint --at 74,87 --slot D
+line --from 75,87 --to 78,87 --slot C
+line --from 79,87 --to 89,87 --slot B
+line --from 90,87 --to 95,87 --slot C
+line --from 96,87 --to 97,87 --slot D
+paint --at 98,87 --slot G
+paint --at 99,87 --slot K
+line --from 100,87 --to 106,87 --slot Q
+paint --at 107,87 --slot U
+line --from 108,87 --to 110,87 --slot Z
+line --from 111,87 --to 119,87 --slot X
+line --from 120,87 --to 126,87 --slot Q
+line --from 127,87 --to 130,87 --slot U
+line --from 131,87 --to 137,87 --slot X
+line --from 138,87 --to 140,87 --slot U
+line --from 141,87 --to 144,87 --slot X
+paint --at 145,87 --slot N
+paint --at 148,87 --slot B
+line --from 26,88 --to 30,88 --slot B
+line --from 31,88 --to 38,88 --slot C
+line --from 39,88 --to 41,88 --slot D
+paint --at 42,88 --slot F
+line --from 43,88 --to 49,88 --slot G
+line --from 50,88 --to 51,88 --slot K
+line --from 52,88 --to 56,88 --slot G
+line --from 57,88 --to 65,88 --slot K
+line --from 66,88 --to 72,88 --slot G
+paint --at 73,88 --slot F
+paint --at 74,88 --slot D
+line --from 75,88 --to 79,88 --slot C
+line --from 80,88 --to 89,88 --slot B
+line --from 90,88 --to 95,88 --slot C
+paint --at 96,88 --slot D
+paint --at 97,88 --slot G
+paint --at 98,88 --slot N
+line --from 99,88 --to 107,88 --slot Q
+paint --at 108,88 --slot U
+paint --at 109,88 --slot X
+paint --at 110,88 --slot Z
+line --from 111,88 --to 118,88 --slot X
+paint --at 119,88 --slot U
+line --from 120,88 --to 129,88 --slot Q
+line --from 130,88 --to 131,88 --slot U
+line --from 132,88 --to 137,88 --slot X
+paint --at 138,88 --slot U
+paint --at 139,88 --slot Q
+paint --at 140,88 --slot U
+line --from 141,88 --to 142,88 --slot X
+line --from 143,88 --to 144,88 --slot U
+paint --at 145,88 --slot G
+paint --at 147,88 --slot B
+line --from 27,89 --to 31,89 --slot B
+line --from 32,89 --to 38,89 --slot C
+line --from 39,89 --to 42,89 --slot D
+line --from 43,89 --to 56,89 --slot G
+line --from 57,89 --to 64,89 --slot K
+line --from 65,89 --to 73,89 --slot G
+paint --at 74,89 --slot D
+line --from 75,89 --to 81,89 --slot C
+line --from 82,89 --to 89,89 --slot B
+line --from 90,89 --to 94,89 --slot C
+paint --at 95,89 --slot D
+paint --at 96,89 --slot F
+paint --at 97,89 --slot K
+paint --at 98,89 --slot N
+line --from 99,89 --to 108,89 --slot Q
+line --from 109,89 --to 113,89 --slot X
+paint --at 114,89 --slot Q
+paint --at 115,89 --slot U
+line --from 116,89 --to 117,89 --slot X
+paint --at 118,89 --slot U
+line --from 119,89 --to 131,89 --slot Q
+line --from 132,89 --to 136,89 --slot U
+line --from 137,89 --to 142,89 --slot Q
+paint --at 143,89 --slot U
+paint --at 144,89 --slot Q
+paint --at 145,89 --slot C
+paint --at 147,89 --slot B
+
+clip rename idle wink
+clip fps --name wink --fps 12
+frame dup
+frame dup
+frame dup
+frame dup
+frame dup
+frame dup
+frame dup
+frame dup
+frame dup
+frame dup
+frame dup
+
+# quadro 6: direito 40%, esquerdo 8%
+line --frame 6 --from 108,43 --to 108,43 --slot N
+line --frame 6 --from 108,44 --to 108,44 --slot Q
+paint --frame 6 --at 108,45 --slot B
+line --frame 6 --from 109,42 --to 109,43 --slot N
+line --frame 6 --from 109,44 --to 109,44 --slot Q
+paint --frame 6 --at 109,45 --slot B
+line --frame 6 --from 110,41 --to 110,42 --slot N
+line --frame 6 --from 110,43 --to 110,43 --slot Q
+paint --frame 6 --at 110,44 --slot B
+line --frame 6 --from 111,41 --to 111,42 --slot N
+line --frame 6 --from 111,43 --to 111,43 --slot Q
+paint --frame 6 --at 111,44 --slot B
+line --frame 6 --from 112,40 --to 112,41 --slot N
+line --frame 6 --from 112,42 --to 112,42 --slot Q
+paint --frame 6 --at 112,43 --slot B
+line --frame 6 --from 113,40 --to 113,41 --slot N
+line --frame 6 --from 113,42 --to 113,42 --slot Q
+paint --frame 6 --at 113,43 --slot B
+line --frame 6 --from 114,40 --to 114,41 --slot N
+line --frame 6 --from 114,42 --to 114,42 --slot Q
+paint --frame 6 --at 114,43 --slot B
+line --frame 6 --from 115,40 --to 115,41 --slot N
+line --frame 6 --from 115,42 --to 115,42 --slot Q
+paint --frame 6 --at 115,43 --slot B
+line --frame 6 --from 116,38 --to 116,39 --slot N
+line --frame 6 --from 116,40 --to 116,40 --slot Q
+paint --frame 6 --at 116,41 --slot B
+line --frame 6 --from 117,38 --to 117,39 --slot N
+line --frame 6 --from 117,40 --to 117,40 --slot Q
+paint --frame 6 --at 117,41 --slot B
+line --frame 6 --from 118,38 --to 118,39 --slot N
+line --frame 6 --from 118,40 --to 118,40 --slot Q
+paint --frame 6 --at 118,41 --slot B
+line --frame 6 --from 119,38 --to 119,39 --slot N
+line --frame 6 --from 119,40 --to 119,40 --slot Q
+paint --frame 6 --at 119,41 --slot B
+line --frame 6 --from 120,38 --to 120,39 --slot N
+line --frame 6 --from 120,40 --to 120,41 --slot Q
+paint --frame 6 --at 120,42 --slot B
+line --frame 6 --from 121,38 --to 121,39 --slot N
+line --frame 6 --from 121,40 --to 121,41 --slot Q
+paint --frame 6 --at 121,42 --slot B
+line --frame 6 --from 122,38 --to 122,39 --slot N
+line --frame 6 --from 122,40 --to 122,41 --slot Q
+paint --frame 6 --at 122,42 --slot B
+line --frame 6 --from 123,38 --to 123,39 --slot N
+line --frame 6 --from 123,40 --to 123,41 --slot Q
+paint --frame 6 --at 123,42 --slot B
+line --frame 6 --from 124,38 --to 124,39 --slot N
+line --frame 6 --from 124,40 --to 124,41 --slot Q
+paint --frame 6 --at 124,42 --slot B
+line --frame 6 --from 125,38 --to 125,39 --slot N
+line --frame 6 --from 125,40 --to 125,41 --slot Q
+paint --frame 6 --at 125,42 --slot B
+line --frame 6 --from 126,38 --to 126,39 --slot N
+line --frame 6 --from 126,40 --to 126,41 --slot Q
+paint --frame 6 --at 126,42 --slot B
+line --frame 6 --from 127,39 --to 127,40 --slot N
+line --frame 6 --from 127,41 --to 127,41 --slot Q
+paint --frame 6 --at 127,42 --slot B
+line --frame 6 --from 128,40 --to 128,41 --slot N
+line --frame 6 --from 128,42 --to 128,42 --slot Q
+paint --frame 6 --at 128,43 --slot B
+line --frame 6 --from 129,40 --to 129,41 --slot N
+line --frame 6 --from 129,42 --to 129,42 --slot Q
+paint --frame 6 --at 129,43 --slot B
+line --frame 6 --from 130,41 --to 130,41 --slot N
+line --frame 6 --from 130,42 --to 130,42 --slot Q
+paint --frame 6 --at 130,43 --slot B
+line --frame 6 --from 131,43 --to 131,43 --slot N
+paint --frame 6 --at 131,44 --slot B
+paint --frame 6 --at 47,43 --slot B
+paint --frame 6 --at 48,43 --slot B
+paint --frame 6 --at 49,43 --slot B
+paint --frame 6 --at 50,43 --slot B
+paint --frame 6 --at 51,43 --slot B
+paint --frame 6 --at 52,43 --slot B
+paint --frame 6 --at 53,42 --slot B
+paint --frame 6 --at 54,42 --slot B
+paint --frame 6 --at 55,42 --slot B
+paint --frame 6 --at 56,40 --slot B
+paint --frame 6 --at 57,40 --slot B
+paint --frame 6 --at 58,40 --slot B
+paint --frame 6 --at 59,40 --slot B
+paint --frame 6 --at 60,41 --slot B
+paint --frame 6 --at 61,41 --slot B
+paint --frame 6 --at 62,42 --slot B
+paint --frame 6 --at 63,42 --slot B
+paint --frame 6 --at 64,43 --slot B
+paint --frame 6 --at 65,44 --slot B
+
+# quadro 7: direito 100%, esquerdo 22%
+line --frame 7 --from 108,43 --to 108,45 --slot N
+line --frame 7 --from 108,46 --to 108,48 --slot Q
+line --frame 7 --from 108,49 --to 108,49 --slot U
+paint --frame 7 --at 108,50 --slot B
+line --frame 7 --from 109,42 --to 109,44 --slot N
+line --frame 7 --from 109,45 --to 109,48 --slot Q
+line --frame 7 --from 109,49 --to 109,49 --slot U
+paint --frame 7 --at 109,50 --slot B
+line --frame 7 --from 110,41 --to 110,43 --slot N
+line --frame 7 --from 110,44 --to 110,47 --slot Q
+line --frame 7 --from 110,48 --to 110,48 --slot U
+paint --frame 7 --at 110,49 --slot B
+line --frame 7 --from 111,41 --to 111,43 --slot N
+line --frame 7 --from 111,44 --to 111,47 --slot Q
+line --frame 7 --from 111,48 --to 111,48 --slot U
+paint --frame 7 --at 111,49 --slot B
+line --frame 7 --from 112,40 --to 112,42 --slot N
+line --frame 7 --from 112,43 --to 112,46 --slot Q
+line --frame 7 --from 112,47 --to 112,47 --slot U
+paint --frame 7 --at 112,48 --slot B
+line --frame 7 --from 113,40 --to 113,42 --slot N
+line --frame 7 --from 113,43 --to 113,46 --slot Q
+line --frame 7 --from 113,47 --to 113,47 --slot U
+paint --frame 7 --at 113,48 --slot B
+line --frame 7 --from 114,40 --to 114,42 --slot N
+line --frame 7 --from 114,43 --to 114,46 --slot Q
+line --frame 7 --from 114,47 --to 114,47 --slot U
+paint --frame 7 --at 114,48 --slot B
+line --frame 7 --from 115,40 --to 115,42 --slot N
+line --frame 7 --from 115,43 --to 115,46 --slot Q
+line --frame 7 --from 115,47 --to 115,47 --slot U
+paint --frame 7 --at 115,48 --slot B
+line --frame 7 --from 116,38 --to 116,41 --slot N
+line --frame 7 --from 116,42 --to 116,45 --slot Q
+line --frame 7 --from 116,46 --to 116,47 --slot U
+paint --frame 7 --at 116,48 --slot B
+line --frame 7 --from 117,38 --to 117,41 --slot N
+line --frame 7 --from 117,42 --to 117,45 --slot Q
+line --frame 7 --from 117,46 --to 117,47 --slot U
+paint --frame 7 --at 117,48 --slot B
+line --frame 7 --from 118,38 --to 118,41 --slot N
+line --frame 7 --from 118,42 --to 118,45 --slot Q
+line --frame 7 --from 118,46 --to 118,47 --slot U
+paint --frame 7 --at 118,48 --slot B
+line --frame 7 --from 119,38 --to 119,41 --slot N
+line --frame 7 --from 119,42 --to 119,45 --slot Q
+line --frame 7 --from 119,46 --to 119,47 --slot U
+paint --frame 7 --at 119,48 --slot B
+line --frame 7 --from 120,38 --to 120,41 --slot N
+line --frame 7 --from 120,42 --to 120,46 --slot Q
+line --frame 7 --from 120,47 --to 120,48 --slot U
+paint --frame 7 --at 120,49 --slot B
+line --frame 7 --from 121,38 --to 121,41 --slot N
+line --frame 7 --from 121,42 --to 121,46 --slot Q
+line --frame 7 --from 121,47 --to 121,48 --slot U
+paint --frame 7 --at 121,49 --slot B
+line --frame 7 --from 122,38 --to 122,41 --slot N
+line --frame 7 --from 122,42 --to 122,46 --slot Q
+line --frame 7 --from 122,47 --to 122,48 --slot U
+paint --frame 7 --at 122,49 --slot B
+line --frame 7 --from 123,38 --to 123,41 --slot N
+line --frame 7 --from 123,42 --to 123,46 --slot Q
+line --frame 7 --from 123,47 --to 123,48 --slot U
+paint --frame 7 --at 123,49 --slot B
+line --frame 7 --from 124,38 --to 124,41 --slot N
+line --frame 7 --from 124,42 --to 124,46 --slot Q
+line --frame 7 --from 124,47 --to 124,48 --slot U
+paint --frame 7 --at 124,49 --slot B
+line --frame 7 --from 125,38 --to 125,41 --slot N
+line --frame 7 --from 125,42 --to 125,46 --slot Q
+line --frame 7 --from 125,47 --to 125,48 --slot U
+paint --frame 7 --at 125,49 --slot B
+line --frame 7 --from 126,38 --to 126,41 --slot N
+line --frame 7 --from 126,42 --to 126,46 --slot Q
+line --frame 7 --from 126,47 --to 126,48 --slot U
+paint --frame 7 --at 126,49 --slot B
+line --frame 7 --from 127,39 --to 127,42 --slot N
+line --frame 7 --from 127,43 --to 127,46 --slot Q
+line --frame 7 --from 127,47 --to 127,47 --slot U
+paint --frame 7 --at 127,48 --slot B
+line --frame 7 --from 128,40 --to 128,42 --slot N
+line --frame 7 --from 128,43 --to 128,46 --slot Q
+line --frame 7 --from 128,47 --to 128,47 --slot U
+paint --frame 7 --at 128,48 --slot B
+line --frame 7 --from 129,40 --to 129,42 --slot N
+line --frame 7 --from 129,43 --to 129,46 --slot Q
+line --frame 7 --from 129,47 --to 129,47 --slot U
+paint --frame 7 --at 129,48 --slot B
+line --frame 7 --from 130,41 --to 130,43 --slot N
+line --frame 7 --from 130,44 --to 130,46 --slot Q
+line --frame 7 --from 130,47 --to 130,47 --slot U
+paint --frame 7 --at 130,48 --slot B
+line --frame 7 --from 131,43 --to 131,44 --slot N
+line --frame 7 --from 131,45 --to 131,46 --slot Q
+line --frame 7 --from 131,47 --to 131,47 --slot U
+paint --frame 7 --at 131,48 --slot B
+line --frame 7 --from 47,43 --to 47,43 --slot G
+paint --frame 7 --at 47,44 --slot B
+line --frame 7 --from 48,43 --to 48,43 --slot G
+paint --frame 7 --at 48,44 --slot B
+line --frame 7 --from 49,43 --to 49,43 --slot G
+paint --frame 7 --at 49,44 --slot B
+line --frame 7 --from 50,43 --to 50,43 --slot G
+paint --frame 7 --at 50,44 --slot B
+line --frame 7 --from 51,43 --to 51,43 --slot G
+paint --frame 7 --at 51,44 --slot B
+line --frame 7 --from 52,43 --to 52,43 --slot G
+paint --frame 7 --at 52,44 --slot B
+line --frame 7 --from 53,42 --to 53,42 --slot G
+paint --frame 7 --at 53,43 --slot B
+line --frame 7 --from 54,42 --to 54,42 --slot G
+paint --frame 7 --at 54,43 --slot B
+line --frame 7 --from 55,42 --to 55,42 --slot G
+paint --frame 7 --at 55,43 --slot B
+line --frame 7 --from 56,40 --to 56,40 --slot G
+line --frame 7 --from 56,41 --to 56,41 --slot K
+paint --frame 7 --at 56,42 --slot B
+line --frame 7 --from 57,40 --to 57,40 --slot G
+line --frame 7 --from 57,41 --to 57,41 --slot K
+paint --frame 7 --at 57,42 --slot B
+line --frame 7 --from 58,40 --to 58,40 --slot G
+line --frame 7 --from 58,41 --to 58,41 --slot K
+paint --frame 7 --at 58,42 --slot B
+line --frame 7 --from 59,40 --to 59,40 --slot G
+line --frame 7 --from 59,41 --to 59,41 --slot K
+paint --frame 7 --at 59,42 --slot B
+line --frame 7 --from 60,41 --to 60,41 --slot G
+paint --frame 7 --at 60,42 --slot B
+line --frame 7 --from 61,41 --to 61,41 --slot G
+paint --frame 7 --at 61,42 --slot B
+line --frame 7 --from 62,42 --to 62,42 --slot G
+paint --frame 7 --at 62,43 --slot B
+line --frame 7 --from 63,42 --to 63,42 --slot G
+paint --frame 7 --at 63,43 --slot B
+line --frame 7 --from 64,43 --to 64,43 --slot G
+paint --frame 7 --at 64,44 --slot B
+line --frame 7 --from 65,44 --to 65,44 --slot G
+paint --frame 7 --at 65,45 --slot B
+paint --frame 7 --at 66,45 --slot B
+paint --frame 7 --at 67,47 --slot B
+paint --frame 7 --at 68,47 --slot B
+edit shift --frame 7 --by 0,1
+line --frame 7 --from 0,0 --to 159,0 --slot A
+
+# quadro 8: direito 100%, esquerdo 22%
+line --frame 8 --from 108,43 --to 108,45 --slot N
+line --frame 8 --from 108,46 --to 108,48 --slot Q
+line --frame 8 --from 108,49 --to 108,49 --slot U
+paint --frame 8 --at 108,50 --slot B
+line --frame 8 --from 109,42 --to 109,44 --slot N
+line --frame 8 --from 109,45 --to 109,48 --slot Q
+line --frame 8 --from 109,49 --to 109,49 --slot U
+paint --frame 8 --at 109,50 --slot B
+line --frame 8 --from 110,41 --to 110,43 --slot N
+line --frame 8 --from 110,44 --to 110,47 --slot Q
+line --frame 8 --from 110,48 --to 110,48 --slot U
+paint --frame 8 --at 110,49 --slot B
+line --frame 8 --from 111,41 --to 111,43 --slot N
+line --frame 8 --from 111,44 --to 111,47 --slot Q
+line --frame 8 --from 111,48 --to 111,48 --slot U
+paint --frame 8 --at 111,49 --slot B
+line --frame 8 --from 112,40 --to 112,42 --slot N
+line --frame 8 --from 112,43 --to 112,46 --slot Q
+line --frame 8 --from 112,47 --to 112,47 --slot U
+paint --frame 8 --at 112,48 --slot B
+line --frame 8 --from 113,40 --to 113,42 --slot N
+line --frame 8 --from 113,43 --to 113,46 --slot Q
+line --frame 8 --from 113,47 --to 113,47 --slot U
+paint --frame 8 --at 113,48 --slot B
+line --frame 8 --from 114,40 --to 114,42 --slot N
+line --frame 8 --from 114,43 --to 114,46 --slot Q
+line --frame 8 --from 114,47 --to 114,47 --slot U
+paint --frame 8 --at 114,48 --slot B
+line --frame 8 --from 115,40 --to 115,42 --slot N
+line --frame 8 --from 115,43 --to 115,46 --slot Q
+line --frame 8 --from 115,47 --to 115,47 --slot U
+paint --frame 8 --at 115,48 --slot B
+line --frame 8 --from 116,38 --to 116,41 --slot N
+line --frame 8 --from 116,42 --to 116,45 --slot Q
+line --frame 8 --from 116,46 --to 116,47 --slot U
+paint --frame 8 --at 116,48 --slot B
+line --frame 8 --from 117,38 --to 117,41 --slot N
+line --frame 8 --from 117,42 --to 117,45 --slot Q
+line --frame 8 --from 117,46 --to 117,47 --slot U
+paint --frame 8 --at 117,48 --slot B
+line --frame 8 --from 118,38 --to 118,41 --slot N
+line --frame 8 --from 118,42 --to 118,45 --slot Q
+line --frame 8 --from 118,46 --to 118,47 --slot U
+paint --frame 8 --at 118,48 --slot B
+line --frame 8 --from 119,38 --to 119,41 --slot N
+line --frame 8 --from 119,42 --to 119,45 --slot Q
+line --frame 8 --from 119,46 --to 119,47 --slot U
+paint --frame 8 --at 119,48 --slot B
+line --frame 8 --from 120,38 --to 120,41 --slot N
+line --frame 8 --from 120,42 --to 120,46 --slot Q
+line --frame 8 --from 120,47 --to 120,48 --slot U
+paint --frame 8 --at 120,49 --slot B
+line --frame 8 --from 121,38 --to 121,41 --slot N
+line --frame 8 --from 121,42 --to 121,46 --slot Q
+line --frame 8 --from 121,47 --to 121,48 --slot U
+paint --frame 8 --at 121,49 --slot B
+line --frame 8 --from 122,38 --to 122,41 --slot N
+line --frame 8 --from 122,42 --to 122,46 --slot Q
+line --frame 8 --from 122,47 --to 122,48 --slot U
+paint --frame 8 --at 122,49 --slot B
+line --frame 8 --from 123,38 --to 123,41 --slot N
+line --frame 8 --from 123,42 --to 123,46 --slot Q
+line --frame 8 --from 123,47 --to 123,48 --slot U
+paint --frame 8 --at 123,49 --slot B
+line --frame 8 --from 124,38 --to 124,41 --slot N
+line --frame 8 --from 124,42 --to 124,46 --slot Q
+line --frame 8 --from 124,47 --to 124,48 --slot U
+paint --frame 8 --at 124,49 --slot B
+line --frame 8 --from 125,38 --to 125,41 --slot N
+line --frame 8 --from 125,42 --to 125,46 --slot Q
+line --frame 8 --from 125,47 --to 125,48 --slot U
+paint --frame 8 --at 125,49 --slot B
+line --frame 8 --from 126,38 --to 126,41 --slot N
+line --frame 8 --from 126,42 --to 126,46 --slot Q
+line --frame 8 --from 126,47 --to 126,48 --slot U
+paint --frame 8 --at 126,49 --slot B
+line --frame 8 --from 127,39 --to 127,42 --slot N
+line --frame 8 --from 127,43 --to 127,46 --slot Q
+line --frame 8 --from 127,47 --to 127,47 --slot U
+paint --frame 8 --at 127,48 --slot B
+line --frame 8 --from 128,40 --to 128,42 --slot N
+line --frame 8 --from 128,43 --to 128,46 --slot Q
+line --frame 8 --from 128,47 --to 128,47 --slot U
+paint --frame 8 --at 128,48 --slot B
+line --frame 8 --from 129,40 --to 129,42 --slot N
+line --frame 8 --from 129,43 --to 129,46 --slot Q
+line --frame 8 --from 129,47 --to 129,47 --slot U
+paint --frame 8 --at 129,48 --slot B
+line --frame 8 --from 130,41 --to 130,43 --slot N
+line --frame 8 --from 130,44 --to 130,46 --slot Q
+line --frame 8 --from 130,47 --to 130,47 --slot U
+paint --frame 8 --at 130,48 --slot B
+line --frame 8 --from 131,43 --to 131,44 --slot N
+line --frame 8 --from 131,45 --to 131,46 --slot Q
+line --frame 8 --from 131,47 --to 131,47 --slot U
+paint --frame 8 --at 131,48 --slot B
+line --frame 8 --from 47,43 --to 47,43 --slot G
+paint --frame 8 --at 47,44 --slot B
+line --frame 8 --from 48,43 --to 48,43 --slot G
+paint --frame 8 --at 48,44 --slot B
+line --frame 8 --from 49,43 --to 49,43 --slot G
+paint --frame 8 --at 49,44 --slot B
+line --frame 8 --from 50,43 --to 50,43 --slot G
+paint --frame 8 --at 50,44 --slot B
+line --frame 8 --from 51,43 --to 51,43 --slot G
+paint --frame 8 --at 51,44 --slot B
+line --frame 8 --from 52,43 --to 52,43 --slot G
+paint --frame 8 --at 52,44 --slot B
+line --frame 8 --from 53,42 --to 53,42 --slot G
+paint --frame 8 --at 53,43 --slot B
+line --frame 8 --from 54,42 --to 54,42 --slot G
+paint --frame 8 --at 54,43 --slot B
+line --frame 8 --from 55,42 --to 55,42 --slot G
+paint --frame 8 --at 55,43 --slot B
+line --frame 8 --from 56,40 --to 56,40 --slot G
+line --frame 8 --from 56,41 --to 56,41 --slot K
+paint --frame 8 --at 56,42 --slot B
+line --frame 8 --from 57,40 --to 57,40 --slot G
+line --frame 8 --from 57,41 --to 57,41 --slot K
+paint --frame 8 --at 57,42 --slot B
+line --frame 8 --from 58,40 --to 58,40 --slot G
+line --frame 8 --from 58,41 --to 58,41 --slot K
+paint --frame 8 --at 58,42 --slot B
+line --frame 8 --from 59,40 --to 59,40 --slot G
+line --frame 8 --from 59,41 --to 59,41 --slot K
+paint --frame 8 --at 59,42 --slot B
+line --frame 8 --from 60,41 --to 60,41 --slot G
+paint --frame 8 --at 60,42 --slot B
+line --frame 8 --from 61,41 --to 61,41 --slot G
+paint --frame 8 --at 61,42 --slot B
+line --frame 8 --from 62,42 --to 62,42 --slot G
+paint --frame 8 --at 62,43 --slot B
+line --frame 8 --from 63,42 --to 63,42 --slot G
+paint --frame 8 --at 63,43 --slot B
+line --frame 8 --from 64,43 --to 64,43 --slot G
+paint --frame 8 --at 64,44 --slot B
+line --frame 8 --from 65,44 --to 65,44 --slot G
+paint --frame 8 --at 65,45 --slot B
+paint --frame 8 --at 66,45 --slot B
+paint --frame 8 --at 67,47 --slot B
+paint --frame 8 --at 68,47 --slot B
+edit shift --frame 8 --by 0,1
+line --frame 8 --from 0,0 --to 159,0 --slot A
+
+# quadro 9: direito 100%, esquerdo 18%
+line --frame 9 --from 108,43 --to 108,45 --slot N
+line --frame 9 --from 108,46 --to 108,48 --slot Q
+line --frame 9 --from 108,49 --to 108,49 --slot U
+paint --frame 9 --at 108,50 --slot B
+line --frame 9 --from 109,42 --to 109,44 --slot N
+line --frame 9 --from 109,45 --to 109,48 --slot Q
+line --frame 9 --from 109,49 --to 109,49 --slot U
+paint --frame 9 --at 109,50 --slot B
+line --frame 9 --from 110,41 --to 110,43 --slot N
+line --frame 9 --from 110,44 --to 110,47 --slot Q
+line --frame 9 --from 110,48 --to 110,48 --slot U
+paint --frame 9 --at 110,49 --slot B
+line --frame 9 --from 111,41 --to 111,43 --slot N
+line --frame 9 --from 111,44 --to 111,47 --slot Q
+line --frame 9 --from 111,48 --to 111,48 --slot U
+paint --frame 9 --at 111,49 --slot B
+line --frame 9 --from 112,40 --to 112,42 --slot N
+line --frame 9 --from 112,43 --to 112,46 --slot Q
+line --frame 9 --from 112,47 --to 112,47 --slot U
+paint --frame 9 --at 112,48 --slot B
+line --frame 9 --from 113,40 --to 113,42 --slot N
+line --frame 9 --from 113,43 --to 113,46 --slot Q
+line --frame 9 --from 113,47 --to 113,47 --slot U
+paint --frame 9 --at 113,48 --slot B
+line --frame 9 --from 114,40 --to 114,42 --slot N
+line --frame 9 --from 114,43 --to 114,46 --slot Q
+line --frame 9 --from 114,47 --to 114,47 --slot U
+paint --frame 9 --at 114,48 --slot B
+line --frame 9 --from 115,40 --to 115,42 --slot N
+line --frame 9 --from 115,43 --to 115,46 --slot Q
+line --frame 9 --from 115,47 --to 115,47 --slot U
+paint --frame 9 --at 115,48 --slot B
+line --frame 9 --from 116,38 --to 116,41 --slot N
+line --frame 9 --from 116,42 --to 116,45 --slot Q
+line --frame 9 --from 116,46 --to 116,47 --slot U
+paint --frame 9 --at 116,48 --slot B
+line --frame 9 --from 117,38 --to 117,41 --slot N
+line --frame 9 --from 117,42 --to 117,45 --slot Q
+line --frame 9 --from 117,46 --to 117,47 --slot U
+paint --frame 9 --at 117,48 --slot B
+line --frame 9 --from 118,38 --to 118,41 --slot N
+line --frame 9 --from 118,42 --to 118,45 --slot Q
+line --frame 9 --from 118,46 --to 118,47 --slot U
+paint --frame 9 --at 118,48 --slot B
+line --frame 9 --from 119,38 --to 119,41 --slot N
+line --frame 9 --from 119,42 --to 119,45 --slot Q
+line --frame 9 --from 119,46 --to 119,47 --slot U
+paint --frame 9 --at 119,48 --slot B
+line --frame 9 --from 120,38 --to 120,41 --slot N
+line --frame 9 --from 120,42 --to 120,46 --slot Q
+line --frame 9 --from 120,47 --to 120,48 --slot U
+paint --frame 9 --at 120,49 --slot B
+line --frame 9 --from 121,38 --to 121,41 --slot N
+line --frame 9 --from 121,42 --to 121,46 --slot Q
+line --frame 9 --from 121,47 --to 121,48 --slot U
+paint --frame 9 --at 121,49 --slot B
+line --frame 9 --from 122,38 --to 122,41 --slot N
+line --frame 9 --from 122,42 --to 122,46 --slot Q
+line --frame 9 --from 122,47 --to 122,48 --slot U
+paint --frame 9 --at 122,49 --slot B
+line --frame 9 --from 123,38 --to 123,41 --slot N
+line --frame 9 --from 123,42 --to 123,46 --slot Q
+line --frame 9 --from 123,47 --to 123,48 --slot U
+paint --frame 9 --at 123,49 --slot B
+line --frame 9 --from 124,38 --to 124,41 --slot N
+line --frame 9 --from 124,42 --to 124,46 --slot Q
+line --frame 9 --from 124,47 --to 124,48 --slot U
+paint --frame 9 --at 124,49 --slot B
+line --frame 9 --from 125,38 --to 125,41 --slot N
+line --frame 9 --from 125,42 --to 125,46 --slot Q
+line --frame 9 --from 125,47 --to 125,48 --slot U
+paint --frame 9 --at 125,49 --slot B
+line --frame 9 --from 126,38 --to 126,41 --slot N
+line --frame 9 --from 126,42 --to 126,46 --slot Q
+line --frame 9 --from 126,47 --to 126,48 --slot U
+paint --frame 9 --at 126,49 --slot B
+line --frame 9 --from 127,39 --to 127,42 --slot N
+line --frame 9 --from 127,43 --to 127,46 --slot Q
+line --frame 9 --from 127,47 --to 127,47 --slot U
+paint --frame 9 --at 127,48 --slot B
+line --frame 9 --from 128,40 --to 128,42 --slot N
+line --frame 9 --from 128,43 --to 128,46 --slot Q
+line --frame 9 --from 128,47 --to 128,47 --slot U
+paint --frame 9 --at 128,48 --slot B
+line --frame 9 --from 129,40 --to 129,42 --slot N
+line --frame 9 --from 129,43 --to 129,46 --slot Q
+line --frame 9 --from 129,47 --to 129,47 --slot U
+paint --frame 9 --at 129,48 --slot B
+line --frame 9 --from 130,41 --to 130,43 --slot N
+line --frame 9 --from 130,44 --to 130,46 --slot Q
+line --frame 9 --from 130,47 --to 130,47 --slot U
+paint --frame 9 --at 130,48 --slot B
+line --frame 9 --from 131,43 --to 131,44 --slot N
+line --frame 9 --from 131,45 --to 131,46 --slot Q
+line --frame 9 --from 131,47 --to 131,47 --slot U
+paint --frame 9 --at 131,48 --slot B
+line --frame 9 --from 47,43 --to 47,43 --slot G
+paint --frame 9 --at 47,44 --slot B
+line --frame 9 --from 48,43 --to 48,43 --slot G
+paint --frame 9 --at 48,44 --slot B
+line --frame 9 --from 49,43 --to 49,43 --slot G
+paint --frame 9 --at 49,44 --slot B
+line --frame 9 --from 50,43 --to 50,43 --slot G
+paint --frame 9 --at 50,44 --slot B
+line --frame 9 --from 51,43 --to 51,43 --slot G
+paint --frame 9 --at 51,44 --slot B
+line --frame 9 --from 52,43 --to 52,43 --slot G
+paint --frame 9 --at 52,44 --slot B
+line --frame 9 --from 53,42 --to 53,42 --slot G
+paint --frame 9 --at 53,43 --slot B
+line --frame 9 --from 54,42 --to 54,42 --slot G
+paint --frame 9 --at 54,43 --slot B
+line --frame 9 --from 55,42 --to 55,42 --slot G
+paint --frame 9 --at 55,43 --slot B
+line --frame 9 --from 56,40 --to 56,40 --slot G
+paint --frame 9 --at 56,41 --slot B
+line --frame 9 --from 57,40 --to 57,40 --slot G
+paint --frame 9 --at 57,41 --slot B
+line --frame 9 --from 58,40 --to 58,40 --slot G
+paint --frame 9 --at 58,41 --slot B
+line --frame 9 --from 59,40 --to 59,40 --slot G
+paint --frame 9 --at 59,41 --slot B
+line --frame 9 --from 60,41 --to 60,41 --slot G
+paint --frame 9 --at 60,42 --slot B
+line --frame 9 --from 61,41 --to 61,41 --slot G
+paint --frame 9 --at 61,42 --slot B
+line --frame 9 --from 62,42 --to 62,42 --slot G
+paint --frame 9 --at 62,43 --slot B
+line --frame 9 --from 63,42 --to 63,42 --slot G
+paint --frame 9 --at 63,43 --slot B
+line --frame 9 --from 64,43 --to 64,43 --slot G
+paint --frame 9 --at 64,44 --slot B
+paint --frame 9 --at 65,44 --slot B
+paint --frame 9 --at 66,45 --slot B
+paint --frame 9 --at 67,47 --slot B
+paint --frame 9 --at 68,47 --slot B
+edit shift --frame 9 --by 0,1
+line --frame 9 --from 0,0 --to 159,0 --slot A
+
+# quadro 10: direito 55%, esquerdo 10%
+line --frame 10 --from 108,43 --to 108,44 --slot N
+line --frame 10 --from 108,45 --to 108,45 --slot Q
+paint --frame 10 --at 108,46 --slot B
+line --frame 10 --from 109,42 --to 109,43 --slot N
+line --frame 10 --from 109,44 --to 109,45 --slot Q
+paint --frame 10 --at 109,46 --slot B
+line --frame 10 --from 110,41 --to 110,42 --slot N
+line --frame 10 --from 110,43 --to 110,44 --slot Q
+paint --frame 10 --at 110,45 --slot B
+line --frame 10 --from 111,41 --to 111,42 --slot N
+line --frame 10 --from 111,43 --to 111,44 --slot Q
+paint --frame 10 --at 111,45 --slot B
+line --frame 10 --from 112,40 --to 112,41 --slot N
+line --frame 10 --from 112,42 --to 112,43 --slot Q
+paint --frame 10 --at 112,44 --slot B
+line --frame 10 --from 113,40 --to 113,41 --slot N
+line --frame 10 --from 113,42 --to 113,43 --slot Q
+paint --frame 10 --at 113,44 --slot B
+line --frame 10 --from 114,40 --to 114,41 --slot N
+line --frame 10 --from 114,42 --to 114,43 --slot Q
+paint --frame 10 --at 114,44 --slot B
+line --frame 10 --from 115,40 --to 115,41 --slot N
+line --frame 10 --from 115,42 --to 115,43 --slot Q
+paint --frame 10 --at 115,44 --slot B
+line --frame 10 --from 116,38 --to 116,39 --slot N
+line --frame 10 --from 116,40 --to 116,41 --slot Q
+line --frame 10 --from 116,42 --to 116,42 --slot U
+paint --frame 10 --at 116,43 --slot B
+line --frame 10 --from 117,38 --to 117,39 --slot N
+line --frame 10 --from 117,40 --to 117,41 --slot Q
+line --frame 10 --from 117,42 --to 117,42 --slot U
+paint --frame 10 --at 117,43 --slot B
+line --frame 10 --from 118,38 --to 118,39 --slot N
+line --frame 10 --from 118,40 --to 118,41 --slot Q
+line --frame 10 --from 118,42 --to 118,42 --slot U
+paint --frame 10 --at 118,43 --slot B
+line --frame 10 --from 119,38 --to 119,39 --slot N
+line --frame 10 --from 119,40 --to 119,41 --slot Q
+line --frame 10 --from 119,42 --to 119,42 --slot U
+paint --frame 10 --at 119,43 --slot B
+line --frame 10 --from 120,38 --to 120,40 --slot N
+line --frame 10 --from 120,41 --to 120,42 --slot Q
+line --frame 10 --from 120,43 --to 120,43 --slot U
+paint --frame 10 --at 120,44 --slot B
+line --frame 10 --from 121,38 --to 121,40 --slot N
+line --frame 10 --from 121,41 --to 121,42 --slot Q
+line --frame 10 --from 121,43 --to 121,43 --slot U
+paint --frame 10 --at 121,44 --slot B
+line --frame 10 --from 122,38 --to 122,40 --slot N
+line --frame 10 --from 122,41 --to 122,42 --slot Q
+line --frame 10 --from 122,43 --to 122,43 --slot U
+paint --frame 10 --at 122,44 --slot B
+line --frame 10 --from 123,38 --to 123,40 --slot N
+line --frame 10 --from 123,41 --to 123,42 --slot Q
+line --frame 10 --from 123,43 --to 123,43 --slot U
+paint --frame 10 --at 123,44 --slot B
+line --frame 10 --from 124,38 --to 124,40 --slot N
+line --frame 10 --from 124,41 --to 124,42 --slot Q
+line --frame 10 --from 124,43 --to 124,43 --slot U
+paint --frame 10 --at 124,44 --slot B
+line --frame 10 --from 125,38 --to 125,40 --slot N
+line --frame 10 --from 125,41 --to 125,42 --slot Q
+line --frame 10 --from 125,43 --to 125,43 --slot U
+paint --frame 10 --at 125,44 --slot B
+line --frame 10 --from 126,38 --to 126,40 --slot N
+line --frame 10 --from 126,41 --to 126,42 --slot Q
+line --frame 10 --from 126,43 --to 126,43 --slot U
+paint --frame 10 --at 126,44 --slot B
+line --frame 10 --from 127,39 --to 127,40 --slot N
+line --frame 10 --from 127,41 --to 127,42 --slot Q
+line --frame 10 --from 127,43 --to 127,43 --slot U
+paint --frame 10 --at 127,44 --slot B
+line --frame 10 --from 128,40 --to 128,41 --slot N
+line --frame 10 --from 128,42 --to 128,43 --slot Q
+paint --frame 10 --at 128,44 --slot B
+line --frame 10 --from 129,40 --to 129,41 --slot N
+line --frame 10 --from 129,42 --to 129,43 --slot Q
+paint --frame 10 --at 129,44 --slot B
+line --frame 10 --from 130,41 --to 130,42 --slot N
+line --frame 10 --from 130,43 --to 130,43 --slot Q
+paint --frame 10 --at 130,44 --slot B
+line --frame 10 --from 131,43 --to 131,43 --slot N
+line --frame 10 --from 131,44 --to 131,44 --slot Q
+paint --frame 10 --at 131,45 --slot B
+paint --frame 10 --at 47,43 --slot B
+paint --frame 10 --at 48,43 --slot B
+paint --frame 10 --at 49,43 --slot B
+paint --frame 10 --at 50,43 --slot B
+paint --frame 10 --at 51,43 --slot B
+paint --frame 10 --at 52,43 --slot B
+paint --frame 10 --at 53,42 --slot B
+paint --frame 10 --at 54,42 --slot B
+paint --frame 10 --at 55,42 --slot B
+paint --frame 10 --at 56,40 --slot B
+paint --frame 10 --at 57,40 --slot B
+paint --frame 10 --at 58,40 --slot B
+paint --frame 10 --at 59,40 --slot B
+paint --frame 10 --at 60,41 --slot B
+paint --frame 10 --at 61,41 --slot B
+paint --frame 10 --at 62,42 --slot B
+paint --frame 10 --at 63,42 --slot B
+paint --frame 10 --at 64,43 --slot B
+paint --frame 10 --at 65,44 --slot B
+paint --frame 10 --at 66,45 --slot B
+edit shift --frame 10 --by 0,1
+line --frame 10 --from 0,0 --to 159,0 --slot A
+
+# quadro 11: direito 22%, esquerdo 0%
+line --frame 11 --from 108,43 --to 108,43 --slot N
+paint --frame 11 --at 108,44 --slot B
+line --frame 11 --from 109,42 --to 109,42 --slot N
+paint --frame 11 --at 109,43 --slot B
+line --frame 11 --from 110,41 --to 110,41 --slot N
+paint --frame 11 --at 110,42 --slot B
+line --frame 11 --from 111,41 --to 111,41 --slot N
+paint --frame 11 --at 111,42 --slot B
+line --frame 11 --from 112,40 --to 112,40 --slot N
+paint --frame 11 --at 112,41 --slot B
+line --frame 11 --from 113,40 --to 113,40 --slot N
+paint --frame 11 --at 113,41 --slot B
+line --frame 11 --from 114,40 --to 114,40 --slot N
+paint --frame 11 --at 114,41 --slot B
+line --frame 11 --from 115,40 --to 115,40 --slot N
+paint --frame 11 --at 115,41 --slot B
+line --frame 11 --from 116,38 --to 116,38 --slot N
+paint --frame 11 --at 116,39 --slot B
+line --frame 11 --from 117,38 --to 117,38 --slot N
+paint --frame 11 --at 117,39 --slot B
+line --frame 11 --from 118,38 --to 118,38 --slot N
+paint --frame 11 --at 118,39 --slot B
+line --frame 11 --from 119,38 --to 119,38 --slot N
+paint --frame 11 --at 119,39 --slot B
+line --frame 11 --from 120,38 --to 120,38 --slot N
+line --frame 11 --from 120,39 --to 120,39 --slot Q
+paint --frame 11 --at 120,40 --slot B
+line --frame 11 --from 121,38 --to 121,38 --slot N
+line --frame 11 --from 121,39 --to 121,39 --slot Q
+paint --frame 11 --at 121,40 --slot B
+line --frame 11 --from 122,38 --to 122,38 --slot N
+line --frame 11 --from 122,39 --to 122,39 --slot Q
+paint --frame 11 --at 122,40 --slot B
+line --frame 11 --from 123,38 --to 123,38 --slot N
+line --frame 11 --from 123,39 --to 123,39 --slot Q
+paint --frame 11 --at 123,40 --slot B
+line --frame 11 --from 124,38 --to 124,38 --slot N
+line --frame 11 --from 124,39 --to 124,39 --slot Q
+paint --frame 11 --at 124,40 --slot B
+line --frame 11 --from 125,38 --to 125,38 --slot N
+line --frame 11 --from 125,39 --to 125,39 --slot Q
+paint --frame 11 --at 125,40 --slot B
+line --frame 11 --from 126,38 --to 126,38 --slot N
+line --frame 11 --from 126,39 --to 126,39 --slot Q
+paint --frame 11 --at 126,40 --slot B
+line --frame 11 --from 127,39 --to 127,39 --slot N
+paint --frame 11 --at 127,40 --slot B
+line --frame 11 --from 128,40 --to 128,40 --slot N
+paint --frame 11 --at 128,41 --slot B
+line --frame 11 --from 129,40 --to 129,40 --slot N
+paint --frame 11 --at 129,41 --slot B
+line --frame 11 --from 130,41 --to 130,41 --slot N
+paint --frame 11 --at 130,42 --slot B
+paint --frame 11 --at 131,43 --slot B
