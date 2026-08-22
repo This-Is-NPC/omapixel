@@ -27,6 +27,14 @@ and written once. Everything an agent does should go through it.
 
 ## Quickstart
 
+On Omarchy:
+
+```bash
+sudo pacman -S omapixel
+```
+
+From a checkout:
+
 ```bash
 mise run deps      # says what is missing and how to install it
 mise run build     # the command line and the studio
@@ -135,6 +143,7 @@ Full docs live in [`docs/`](docs/).
 - **[Settings and keys](docs/configuration.md)**: one TOML file, every setting, every binding.
 - **[Adding a language](docs/i18n.md)**: every word comes from a JSON file.
 - **[How it is built](docs/design.md)**: one core, two front ends, and why it is shaped this way.
+- **[Releasing](docs/releasing.md)**: push a tag, and how the package reaches Omarchy.
 
 ## License
 
