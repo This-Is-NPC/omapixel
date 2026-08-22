@@ -2,6 +2,9 @@
 
 #include <QEvent>
 #include <QNativeGestureEvent>
+#include <QKeyEvent>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QWheelEvent>
 
 #include <cstdio>
@@ -38,6 +41,25 @@ bool InputLog::eventFilter(QObject *watched, QEvent *event)
                      wheel->angleDelta().x(), wheel->angleDelta().y(),
                      wheel->pixelDelta().x(), wheel->pixelDelta().y(),
                      int(wheel->modifiers()), int(wheel->phase()));
+        break;
+    }
+    case QEvent::KeyPress: {
+        auto *key = static_cast<QKeyEvent *>(event);
+        // Which item holds the keyboard matters as much as which key was
+        // pressed: keys that reach the window and keys that reach the drawing
+        // are different things, and "the arrows do nothing" is usually the
+        // second one failing while the first works.
+        QString holder = QStringLiteral("nobody");
+        if (auto *quick = qobject_cast<QQuickWindow *>(watched)) {
+            if (QQuickItem *focused = quick->activeFocusItem()) {
+                holder = QString::fromUtf8(focused->metaObject()->className());
+                if (!focused->objectName().isEmpty())
+                    holder += QStringLiteral(" (") + focused->objectName()
+                              + QStringLiteral(")");
+            }
+        }
+        std::fprintf(stderr, "key    0x%x  modifiers 0x%x  focus %s\n", key->key(),
+                     int(key->modifiers()), qPrintable(holder));
         break;
     }
     case QEvent::NativeGesture: {

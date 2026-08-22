@@ -16,6 +16,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
+#include <QTimer>
 #include <QtGlobal>
 
 #include <cstdio>
@@ -57,6 +58,11 @@ int main(int argc, char *argv[])
     // Exposed as a context property rather than instantiated from QML: there is
     // exactly one document per window, and letting QML make a second one would
     // be letting QML own the model.
+    // OMAPIXEL_SHOT_SHEET=colour opens that panel before the screenshot is
+    // taken. Popups do not appear in a window grab, so a panel that only
+    // exists once opened cannot otherwise be looked at without a display.
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("shotSheet"), QString::fromUtf8(qgetenv("OMAPIXEL_SHOT_SHEET")));
     engine.rootContext()->setContextProperty(QStringLiteral("log"), &inputLog);
     engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
     engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
@@ -71,6 +77,33 @@ int main(int argc, char *argv[])
                      Qt::QueuedConnection);
 
     engine.load(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
+
+    // OMAPIXEL_SHOT=<path> renders the window to a PNG and exits. The studio is
+    // the one part of this project that could not be inspected without a
+    // screen; a layout change had to be described and taken on trust. With this
+    // it can be looked at from a terminal, on a machine with no display at all.
+    const QByteArray shot = qgetenv("OMAPIXEL_SHOT");
+    if (!shot.isEmpty()) {
+        for (QObject *root : engine.rootObjects()) {
+            auto *window = qobject_cast<QQuickWindow *>(root);
+            if (!window)
+                continue;
+            QObject::connect(
+                window, &QQuickWindow::afterRendering, &app,
+                [window, shot] {
+                    // One frame late: the first pass has laid nothing out yet.
+                    QTimer::singleShot(400, window, [window, shot] {
+                        const QImage image = window->grabWindow();
+                        const bool written = image.save(QString::fromUtf8(shot));
+                        std::fprintf(stderr, "%s %s (%dx%d)\n",
+                                     written ? "wrote" : "could not write",
+                                     shot.constData(), image.width(), image.height());
+                        QCoreApplication::exit(written ? 0 : 1);
+                    });
+                },
+                Qt::SingleShotConnection);
+        }
+    }
 
     if (inputLog.enabled()) {
         std::fprintf(stderr, "omapixel: input logging on — scroll over the drawing\n");

@@ -222,6 +222,7 @@ src/core/
   Render         to PNG, to ANSI, to text
 src/gui/
   DocumentModel  the core, made visible to QML; adapts types, owns the history
+  InputLog       pointer input, logged either side of the QML boundary
   PixelGridItem  the drawing surface, painted from Render at scale 1
   Theme          the omarchy theme, followed live
   qml/           Main, Surface, Timeline, and the controls
