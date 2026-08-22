@@ -1,0 +1,5 @@
+// Generated from version.h.in by qmake -- do not edit, and do not commit the
+// generated copy. The version itself lives in version.pri.
+#pragma once
+
+#define OMAPIXEL_VERSION $${VERSION_QUOTED}

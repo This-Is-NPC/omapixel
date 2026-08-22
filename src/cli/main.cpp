@@ -36,6 +36,8 @@
 #include <QSaveFile>
 #include <QTextStream>
 
+#include "version.h"
+
 #include <cstdio>
 
 using namespace omapixel;
@@ -400,7 +402,7 @@ int main(int argc, char *argv[])
         out().flush();
         return 0;
     }
-    QCoreApplication::setApplicationVersion(QStringLiteral("2.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(OMAPIXEL_VERSION));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral(

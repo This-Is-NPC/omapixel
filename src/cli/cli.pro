@@ -11,6 +11,9 @@ TARGET    = omapixel
 # every line of documentation has to know that.
 DESTDIR = $$OUT_PWD/../../bin
 
+# Where the version comes from. One file, both binaries.
+include($$PWD/../../version.pri)
+
 INCLUDEPATH += $$PWD/../core
 HEADERS     += Commands.h
 SOURCES     += main.cpp Commands.cpp
