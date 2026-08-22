@@ -105,6 +105,18 @@ Window {
     /// It adds a slot rather than recolouring one, like every other way a
     /// colour arrives here: the gamble is which colour you get, not which of
     /// the ones already in the drawing gets ruined.
+    /// The colour a replace would act on: what the cursor is standing on, and
+    /// failing that what you are drawing with. Standing on a pixel is the
+    /// clearer of the two ways of saying "that colour".
+    readonly property string focusedSlot: {
+        if (caretColumn >= 0) {
+            var there = doc.slotAt(caretColumn, caretRow)
+            if (there !== ".")
+                return there
+        }
+        return slot === "." ? "" : slot
+    }
+
     function russianRoulette() {
         if (caretColumn < 0)
             moveCaret(0, 0)
@@ -199,6 +211,7 @@ Window {
                     { key: "p", label: "pick up colours" },
                     { key: "c", label: "find a colour" },
                     { key: "r", label: "russian roulette" },
+                    { key: "⇧c", label: "replace this colour" },
                     { key: "l", label: "straight line" },
                     { key: "Esc", label: "put away" }]
 
@@ -324,6 +337,10 @@ Window {
         fillRegisters()
         if (shotSheet === "colour")
             colourSheet.show()
+        else if (shotSheet === "replace") {
+            caretColumn = 60; caretRow = 40
+            colourSheet.show("replace")
+        }
         else if (shotSheet === "new")
             newSheet.open()
         else if (shotSheet === "export")
@@ -399,6 +416,9 @@ Window {
              onTriggered: colourSheet.show() }
     C.Action { id: actRoulette; text: "Russian roulette"
              onTriggered: win.russianRoulette() }
+    C.Action { id: actReplace; text: "Replace this colour…"
+             enabled: win.focusedSlot !== ""
+             onTriggered: colourSheet.show("replace") }
     C.Action { id: actHints; text: "Key hints"; checkable: true; checked: win.showHints
              onTriggered: win.showHints = !win.showHints }
 
@@ -544,7 +564,10 @@ Window {
             case Qt.Key_Semicolon: win.awaitingSlot = true; break
 
             // A colour you do not know the name of yet.
-            case Qt.Key_C: colourSheet.show(); break
+            case Qt.Key_C:
+                colourSheet.show(event.modifiers & Qt.ShiftModifier ? "replace"
+                                                                    : "assign")
+                break
 
             // And one nobody knows.
             case Qt.Key_R: win.russianRoulette(); break
@@ -728,6 +751,7 @@ Window {
                     Cmd { action: actRemoveClip }
                     Rule {}
                     Cmd { action: actColour }
+                    Cmd { action: actReplace }
                     Cmd { action: actRoulette }
                     Rule {}
                     Cmd { action: actAddFrame }
@@ -1507,17 +1531,26 @@ Window {
 
     Sheet {
         id: colourSheet
-        title: "Choose a colour"
+        title: purpose === "replace"
+               ? "Replace every pixel of slot " + replacing
+               : "Choose a colour"
         onClosed: { armed = false; win.focusCanvas() }
 
         property string chosen: "#7AA2F7"
+        // What the panel will do with the colour: put it on a number key, or
+        // repaint every pixel of the one in focus. The search is the same
+        // either way; only the last step differs, so it is one panel.
+        property string purpose: "assign"
+        property string replacing: ""
         // True once a colour has been settled on and the panel is waiting to
         // be told which number key it goes on. Two steps because the digits
         // are needed for typing a hex until the colour is chosen, and the same
         // key cannot mean two things at once.
         property bool armed: false
 
-        function show() {
+        function show(why) {
+            purpose = why === "replace" ? "replace" : "assign"
+            replacing = win.focusedSlot
             chosen = win.slot === "." ? "#7AA2F7"
                                       : String(doc.colourOf(win.slot)).toUpperCase()
             armed = false
@@ -1544,6 +1577,13 @@ Window {
         function arm() {
             if (found.model.length === 0)
                 return
+            // Replacing has nowhere else to go: the colour it acts on was
+            // already chosen by where the cursor was standing.
+            if (purpose === "replace") {
+                doc.replaceColour(replacing, chosen)
+                close()
+                return
+            }
             armed = true
             digits.forceActiveFocus()
         }
@@ -1665,9 +1705,15 @@ Window {
                     width: 340
                     wrapMode: Text.Wrap
                     color: colourSheet.armed ? theme.accent : theme.dim
-                    text: colourSheet.armed
-                          ? colourSheet.chosen + " — now press a number key to keep it there"
-                          : colourSheet.chosen + " — Enter to choose it"
+                    text: {
+                        if (colourSheet.purpose === "replace")
+                            return colourSheet.chosen + " — Enter repaints "
+                                   + doc.countSlot(colourSheet.replacing)
+                                   + " pixel(s), everywhere in the document"
+                        return colourSheet.armed
+                               ? colourSheet.chosen + " — now press a number key to keep it there"
+                               : colourSheet.chosen + " — Enter to choose it"
+                    }
                 }
             },
 
@@ -1676,7 +1722,8 @@ Window {
             Item {
                 id: digits
                 width: 380
-                height: 34
+                height: colourSheet.purpose === "replace" ? 0 : 34
+                visible: colourSheet.purpose !== "replace"
                 focus: colourSheet.armed
 
                 Keys.onPressed: function (event) {

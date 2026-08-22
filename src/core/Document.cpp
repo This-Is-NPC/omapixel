@@ -1,5 +1,7 @@
 #include "Document.h"
 
+#include "Ops.h"
+
 namespace omapixel {
 
 Document Document::blank(int columns, int rows)
@@ -208,6 +210,33 @@ void Document::resize(int columns, int rows)
 
     m_columns = columns;
     m_rows = rows;
+}
+
+int Document::replaceSlot(QChar from, QChar to)
+{
+    if (from == to)
+        return 0;
+    int changed = 0;
+    for (Clip &clip : m_clips) {
+        for (Grid &grid : clip.frames)
+            changed += ops::swapSlot(grid, from, to);
+    }
+    return changed;
+}
+
+bool Document::usesSlot(QChar slot) const
+{
+    for (const Clip &clip : m_clips) {
+        for (const Grid &grid : clip.frames) {
+            for (int y = 0; y < grid.rows(); ++y) {
+                for (int x = 0; x < grid.columns(); ++x) {
+                    if (grid.at(x, y) == slot)
+                        return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 // ------------------------------------------------------------------ problems

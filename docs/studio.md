@@ -139,6 +139,7 @@ the drawing has pixels, and it stops measuring the grid and starts hiding it.
 | <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>0</kbd> | put the current colour on that digit |
 | <kbd>p</kbd> | pick up the colour under the cursor |
 | <kbd>c</kbd> | find a colour by name or hex, and put it on a number |
+| <kbd>Shift</kbd>+<kbd>c</kbd> | replace every pixel of the colour in focus |
 | <kbd>r</kbd> | Russian roulette — paint with a colour nobody chose |
 | <kbd>;</kbd> then a letter | choose that palette slot, and paint the cursor with it |
 | <kbd>Backspace</kbd> | erase at the cursor |
@@ -265,6 +266,23 @@ of them at once. It is the best thing about this format and the worst thing to d
 by accident: you reach for a nicer blue and the sky you painted last week changes
 with it. The one control that does it on purpose is the colour field in the
 **Palette** panel, and it says so underneath.
+
+## Replacing a colour
+
+<kbd>Shift</kbd>+<kbd>c</kbd>, or **Sprite → Replace this colour…**, opens the
+same search panel pointed at the colour in focus — what the cursor is standing
+on, and failing that what you are drawing with. <kbd>Enter</kbd> repaints every
+pixel of it, and the panel says how many there are before you commit.
+
+**Every frame of every clip.** A colour belongs to the document, not to the
+frame you happen to be looking at; replacing it in one frame of twelve leaves an
+animation that flickers between two colours, which is never what anybody meant.
+
+It works by moving those pixels onto a slot that holds the new colour, not by
+recolouring the slot they were on. The two look identical here and are not: if
+some other part of the drawing shares that slot on purpose, it keeps its colour.
+The emptied slot is dropped from the palette, so replacing repeatedly does not
+silt it up with entries no pixel refers to.
 
 ## Russian roulette
 
@@ -479,8 +497,8 @@ Renders the window to a PNG and exits. The studio was the one part of this
 project that could not be inspected without a display — a layout change had to
 be described and taken on trust. This is how the layout above was checked.
 
-`OMAPIXEL_SHOT_SHEET=colour` opens that panel first — `new` and `export` work
-too. A popup does not appear in a window grab, so a panel that only exists once
+`OMAPIXEL_SHOT_SHEET=colour` opens that panel first — `replace`, `new` and
+`export` work too. A popup does not appear in a window grab, so a panel that only exists once
 opened cannot otherwise be looked at without a display.
 
 `OMAPIXEL_DEBUG_INPUT=1` logs every wheel and gesture event as it reaches the

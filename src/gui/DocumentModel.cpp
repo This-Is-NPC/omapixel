@@ -211,6 +211,74 @@ QVariantList DocumentModel::findColours(const QString &query) const
     return out;
 }
 
+int DocumentModel::countSlot(const QString &slot) const
+{
+    if (slot.size() != 1)
+        return 0;
+    const QChar wanted = slot.at(0);
+    int found = 0;
+    for (const Clip &clip : m_document.clips()) {
+        for (const Grid &grid : clip.frames) {
+            for (int y = 0; y < grid.rows(); ++y) {
+                for (int x = 0; x < grid.columns(); ++x) {
+                    if (grid.at(x, y) == wanted)
+                        found += 1;
+                }
+            }
+        }
+    }
+    return found;
+}
+
+void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex)
+{
+    const QColor colour(hex);
+    if (fromSlot.size() != 1 || !colour.isValid())
+        return;
+    const QChar from = fromSlot.at(0);
+
+    // A slot that already holds this colour, or a new one. Reusing keeps the
+    // palette from growing an identical entry every time.
+    QChar to;
+    for (const Palette::Slot &entry : m_document.palette().entries()) {
+        if (entry.colour == colour) {
+            to = entry.letter;
+            break;
+        }
+    }
+    if (to.isNull()) {
+        const QString fresh = freeSlot();
+        if (fresh.isEmpty()) {
+            say(QStringLiteral("the palette is full — remove a slot first"));
+            return;
+        }
+        to = fresh.at(0);
+    }
+    if (to == from)
+        return;
+
+    const Document before = m_document;
+    if (!m_document.palette().colour(to).isValid())
+        m_document.palette().set(to, colour);
+    const int moved = m_document.replaceSlot(from, to);
+    if (moved == 0) {
+        m_document = before;
+        say(QStringLiteral("nothing was drawn with %1").arg(from));
+        return;
+    }
+    // Nothing refers to the old slot any more, so it is clutter.
+    if (!m_document.usesSlot(from))
+        m_document.palette().remove(from);
+
+    remember(before);
+    m_dirty = true;
+    m_clip = m_document.clip(m_clip) ? m_clip : m_document.clipNames().value(0);
+    say(QStringLiteral("replaced %1 pixel(s) of %2").arg(moved).arg(from));
+    emit changed();
+    emit viewChanged();
+    emit fileChanged();
+}
+
 QString DocumentModel::freeSlot() const
 {
     const auto usable = [](char16_t c) {

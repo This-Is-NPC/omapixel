@@ -89,6 +89,18 @@ public:
     /// which is a file nothing can draw.
     void resize(int columns, int rows);
 
+    /// Swaps one slot for another everywhere in the document, and says how
+    /// many pixels changed.
+    ///
+    /// Every frame of every clip, because a colour belongs to the document
+    /// rather than to the frame you happen to be looking at. Replacing it in
+    /// one frame of twelve leaves an animation that flickers between two
+    /// colours, which is never what anybody meant.
+    int replaceSlot(QChar from, QChar to);
+
+    /// Whether any pixel anywhere still draws with this slot.
+    bool usesSlot(QChar slot) const;
+
     // ------------------------------------------------------------- integrity
 
     /// What stops the document from being drawn, in plain sentences. Returns

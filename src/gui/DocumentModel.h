@@ -131,6 +131,22 @@ public:
     /// Every printable character works, and so does most of Latin-1, which puts
     /// the ceiling in the high two hundreds rather than at sixty-two.
     Q_INVOKABLE QString freeSlot() const;
+
+    /// How many pixels in the whole document draw with this slot.
+    Q_INVOKABLE int countSlot(const QString &slot) const;
+
+    /// Repaints every pixel of `fromSlot` in `hex`, everywhere.
+    ///
+    /// By moving those pixels onto a slot that holds the new colour, not by
+    /// recolouring the slot they were on. The two look identical here and are
+    /// not: recolouring changes every pixel that refers to that slot, and
+    /// "every pixel of this colour" is what was asked for -- if some other
+    /// part of the drawing shares the slot on purpose, it keeps its colour.
+    ///
+    /// The old slot is dropped from the palette if nothing is left using it, so
+    /// replacing a colour repeatedly does not silt the palette up with entries
+    /// no pixel refers to.
+    Q_INVOKABLE void replaceColour(const QString &fromSlot, const QString &hex);
     Q_INVOKABLE void paint(int x, int y, const QString &slot);
     Q_INVOKABLE void line(int x0, int y0, int x1, int y1, const QString &slot);
     Q_INVOKABLE void rect(int x0, int y0, int x1, int y1, const QString &slot,

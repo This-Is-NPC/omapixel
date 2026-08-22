@@ -1127,6 +1127,34 @@ private slots:
                  "a wheel over the drawing did not scroll it");
     }
 
+    void replacingASlotReachesEveryFrame()
+    {
+        // A colour belongs to the document, not to the frame you happen to be
+        // looking at. Replacing it in one frame of twelve leaves an animation
+        // that flickers between two colours, which is never what anybody meant.
+        Document doc = Document::blank(4, 2);
+        doc.addClip(QStringLiteral("walk"));
+        doc.addFrame(QStringLiteral("walk"), 0, false);
+
+        Grid one = doc.frame(QStringLiteral("idle"), 0);
+        ops::paint(one, 0, 0, u'R');
+        ops::paint(one, 1, 0, u'R');
+        doc.setFrame(QStringLiteral("idle"), 0, one);
+
+        Grid two = doc.frame(QStringLiteral("walk"), 1);
+        ops::paint(two, 3, 1, u'R');
+        doc.setFrame(QStringLiteral("walk"), 1, two);
+
+        QCOMPARE(doc.replaceSlot(u'R', u'B'), 3);
+        QCOMPARE(doc.frame(QStringLiteral("idle"), 0).at(0, 0), QChar(u'B'));
+        QCOMPARE(doc.frame(QStringLiteral("walk"), 1).at(3, 1), QChar(u'B'));
+        QVERIFY(!doc.usesSlot(u'R'));
+        QVERIFY(doc.usesSlot(u'B'));
+
+        // Replacing a slot with itself is not an edit.
+        QCOMPARE(doc.replaceSlot(u'B', u'B'), 0);
+    }
+
     void thePaletteGoesWellPastTheAlphabet()
     {
         // A slot is one character -- that is the format. One character is far
@@ -1500,6 +1528,47 @@ private slots:
         QVERIFY(!letter.isEmpty());
         QCOMPARE(document.colourOf(letter).name(QColor::HexRgb).toUpper(), picked);
         QCOMPARE(root->property("slot").toString(), letter);
+    }
+
+    void replaceRepaintsOneColourAndLeavesTheOthersAlone()
+    {
+        DocumentModel doc;
+        doc.reset(8, 8);
+        doc.addFrame(true);                       // two frames
+
+        doc.paint(1, 1, QStringLiteral("R"));
+        doc.setFrame(0);
+        doc.paint(2, 2, QStringLiteral("R"));
+        doc.paint(3, 3, QStringLiteral("B"));     // a bystander
+        QCOMPARE(doc.countSlot(QStringLiteral("R")), 2);
+
+        const QColor bystander = doc.colourOf(QStringLiteral("B"));
+        doc.replaceColour(QStringLiteral("R"), QStringLiteral("#00FF00"));
+
+        // Every frame, because a colour belongs to the document and not to the
+        // frame you happen to be looking at.
+        const QString now = doc.slotAt(2, 2);
+        QCOMPARE(doc.colourOf(now), QColor(QStringLiteral("#00FF00")));
+        doc.setFrame(1);
+        QCOMPARE(doc.slotAt(1, 1), now);
+
+        // The bystander keeps its colour: "every pixel of this colour" is what
+        // was asked for, not "every pixel that shares a slot with it".
+        doc.setFrame(0);
+        QCOMPARE(doc.colourOf(QStringLiteral("B")), bystander);
+        QCOMPARE(doc.slotAt(3, 3), QStringLiteral("B"));
+
+        // And the emptied slot does not sit in the palette forever.
+        bool stillThere = false;
+        for (const QVariant &entry : doc.palette())
+            stillThere = stillThere
+                         || entry.toMap().value(QStringLiteral("slot")) == QStringLiteral("R");
+        QVERIFY2(!stillThere, "the replaced slot was left in the palette");
+
+        // One undo step, like anything else that paints.
+        doc.undo();
+        doc.setFrame(0);
+        QCOMPARE(doc.slotAt(2, 2), QStringLiteral("R"));
     }
 
     void theRoundingComesFromHyprland()
