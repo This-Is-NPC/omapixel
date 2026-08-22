@@ -24,6 +24,7 @@ public:
         QStringList skipped;
         bool ok = false;
         QString error;
+        int exported = 0;
 
         explicit operator bool() const { return ok; }
     };
@@ -39,6 +40,11 @@ public:
     /// author only finds out when the companion fails to appear.
     static Result exportInto(QJsonObject catalog, const Document &document,
                              const QString &species, const QString &variant);
+
+    /// Validates the catalog branch export would edit without changing it.
+    /// An empty result means the JSON has the expected topology and types.
+    static QString validateExport(const QJsonObject &catalog, const QString &species,
+                                  const QString &variant);
 
 private:
     /// The sequences that do not live under `fat`. `spawn` and `boom` are a

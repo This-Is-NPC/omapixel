@@ -4,6 +4,7 @@
 
 #include <QByteArray>
 #include <QString>
+#include <QStringList>
 
 namespace omapixel {
 
@@ -30,16 +31,27 @@ namespace omapixel {
 class Codec
 {
 public:
+    struct WarningLimits {
+        qint64 fileBytes = 16 * 1024 * 1024;
+        int clips = 256;
+        int framesPerClip = 1024;
+        int totalFrames = 4096;
+        int paletteSlots = 256;
+    };
+
     struct Result {
         Document document;
         bool ok = false;
         QString error;
+        QStringList warnings;
 
         explicit operator bool() const { return ok; }
     };
 
     static Result read(const QByteArray &json);
+    static Result read(const QByteArray &json, const WarningLimits &limits);
     static Result readFile(const QString &path);
+    static Result readFile(const QString &path, const WarningLimits &limits);
 
     static QByteArray write(const Document &document);
 

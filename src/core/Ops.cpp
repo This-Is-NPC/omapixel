@@ -2,6 +2,8 @@
 
 #include <QStack>
 
+#include <cmath>
+
 namespace omapixel {
 namespace ops {
 
@@ -12,19 +14,68 @@ void paint(Grid &grid, int x, int y, QChar slot)
 
 void line(Grid &grid, QPoint from, QPoint to, QChar slot)
 {
-    int x0 = from.x(), y0 = from.y();
-    const int x1 = to.x(), y1 = to.y();
-    const int dx = qAbs(x1 - x0);
-    const int dy = -qAbs(y1 - y0);
-    const int sx = x0 < x1 ? 1 : -1;
-    const int sy = y0 < y1 ? 1 : -1;
-    int error = dx + dy;
+    if (grid.isEmpty())
+        return;
+
+    if (!grid.contains(from.x(), from.y()) || !grid.contains(to.x(), to.y())) {
+        const long double x0 = from.x();
+        const long double y0 = from.y();
+        const long double dx = static_cast<long double>(to.x()) - x0;
+        const long double dy = static_cast<long double>(to.y()) - y0;
+        const long double right = grid.columns() - 1;
+        const long double bottom = grid.rows() - 1;
+        long double entering = 0;
+        long double leaving = 1;
+
+        const auto clip = [&](long double p, long double q) {
+            if (p == 0)
+                return q >= 0;
+            const long double t = q / p;
+            if (p < 0) {
+                if (t > leaving)
+                    return false;
+                entering = qMax(entering, t);
+            } else {
+                if (t < entering)
+                    return false;
+                leaving = qMin(leaving, t);
+            }
+            return true;
+        };
+
+        if (!clip(-dx, x0) || !clip(dx, right - x0) || !clip(-dy, y0)
+            || !clip(dy, bottom - y0))
+            return;
+
+        const auto coordinate = [](long double value, int maximum) {
+            value = std::round(value);
+            if (value <= 0)
+                return 0;
+            if (value >= maximum)
+                return maximum;
+            return static_cast<int>(value);
+        };
+        const auto pointAt = [&](long double t) {
+            return QPoint(coordinate(x0 + t * dx, grid.columns() - 1),
+                          coordinate(y0 + t * dy, grid.rows() - 1));
+        };
+        from = pointAt(entering);
+        to = pointAt(leaving);
+    }
+
+    qint64 x0 = from.x(), y0 = from.y();
+    const qint64 x1 = to.x(), y1 = to.y();
+    const qint64 dx = x1 >= x0 ? x1 - x0 : x0 - x1;
+    const qint64 dy = y1 >= y0 ? -(y1 - y0) : -(y0 - y1);
+    const qint64 sx = x0 < x1 ? 1 : -1;
+    const qint64 sy = y0 < y1 ? 1 : -1;
+    qint64 error = dx + dy;
 
     forever {
-        grid.set(x0, y0, slot);
+        grid.set(static_cast<int>(x0), static_cast<int>(y0), slot);
         if (x0 == x1 && y0 == y1)
             break;
-        const int doubled = 2 * error;
+        const qint64 doubled = error + error;
         if (doubled >= dy) {
             error += dy;
             x0 += sx;
@@ -42,9 +93,16 @@ void rect(Grid &grid, QPoint from, QPoint to, QChar slot, bool filled)
     const int right = qMax(from.x(), to.x());
     const int top = qMin(from.y(), to.y());
     const int bottom = qMax(from.y(), to.y());
+    const int clippedLeft = qMax(left, 0);
+    const int clippedRight = qMin(right, grid.columns() - 1);
+    const int clippedTop = qMax(top, 0);
+    const int clippedBottom = qMin(bottom, grid.rows() - 1);
 
-    for (int y = top; y <= bottom; ++y) {
-        for (int x = left; x <= right; ++x) {
+    if (clippedLeft > clippedRight || clippedTop > clippedBottom)
+        return;
+
+    for (int y = clippedTop; y <= clippedBottom; ++y) {
+        for (int x = clippedLeft; x <= clippedRight; ++x) {
             const bool edge = x == left || x == right || y == top || y == bottom;
             if (filled || edge)
                 grid.set(x, y, slot);

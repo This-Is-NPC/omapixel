@@ -75,13 +75,18 @@ qmake6 "{{config_root}}/tests/tests.pro"
 make -j"$(nproc 2>/dev/null || echo 1)"
 # offscreen: the tests touch QImage and never open a window, and CI has no
 # display. Without this Qt aborts on a missing platform plugin.
-QT_QPA_PLATFORM=offscreen ./tst_omapixel
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./tst_omapixel
 """
 
 [tasks.i18n]
 description = "Compare a language file against English — mise run i18n pt"
 depends = ["build"]
 run = '"$BUILD_DIR/bin/omapixel" i18n "$@"'
+
+[tasks.config]
+description = "The settings file — mise run config check"
+depends = ["build"]
+run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 
 [tasks.check]
 description = "Everything CI would run"
@@ -101,11 +106,17 @@ depends = ["build"]
 run = '"$BUILD_DIR/bin/omapixel-studio" "$@"'
 
 [tasks.install]
-description = "Install both binaries into ~/.local/bin"
+description = "Install the binaries, the language files and the default config"
 depends = ["build"]
 run = """
-mkdir -p "$HOME/.local/bin"
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/omapixel/i18n"
 install -m755 "$BUILD_DIR/bin/omapixel" "$HOME/.local/bin/omapixel"
 install -m755 "$BUILD_DIR/bin/omapixel-studio" "$HOME/.local/bin/omapixel-studio"
+# Beside the binaries, where an installed build looks for them. Without this
+# an installed omapixel speaks English and cannot print its own default config.
+install -m644 "{{config_root}}"/i18n/*.json "$HOME/.local/share/omapixel/i18n/"
+install -m644 "{{config_root}}/config/config.toml" "$HOME/.local/share/omapixel/config.toml"
 echo "installed to $HOME/.local/bin"
+echo
+echo "to keep settings of your own:  omapixel config write"
 """

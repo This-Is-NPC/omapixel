@@ -4,6 +4,9 @@
 #include "Render.h"
 
 #include <QCommandLineParser>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPoint>
 
 namespace omapixel {
@@ -101,32 +104,37 @@ bool isSet(const QCommandLineParser &parser, const char *name)
 
 Outcome doInfo(const Document &doc)
 {
-    QString text = QStringLiteral("{\n  \"size\": {\"w\": %1, \"h\": %2},\n")
-                       .arg(doc.columns())
-                       .arg(doc.rows());
-    text += QStringLiteral("  \"palette\": [");
-    QStringList letters;
+    QJsonObject size;
+    size.insert(QStringLiteral("w"), doc.columns());
+    size.insert(QStringLiteral("h"), doc.rows());
+
+    QJsonArray palette;
     for (const Palette::Slot &slot : doc.palette().entries()) {
-        letters.append(QStringLiteral("{\"slot\": \"%1\", \"colour\": \"%2\"}")
-                           .arg(slot.letter)
-                           .arg(slot.colour.name(QColor::HexRgb).toUpper()));
+        QJsonObject entry;
+        entry.insert(QStringLiteral("slot"), QString(slot.letter));
+        entry.insert(QStringLiteral("colour"),
+                     slot.colour.name(QColor::HexRgb).toUpper());
+        palette.append(entry);
     }
-    text += letters.join(QStringLiteral(", ")) + QStringLiteral("],\n");
-    text += QStringLiteral("  \"clips\": [");
-    QStringList clips;
+
+    QJsonArray clips;
     for (const Clip &clip : doc.clips()) {
         int drawn = 0;
         for (const Grid &grid : clip.frames)
             drawn += grid.drawnCount();
-        clips.append(QStringLiteral("{\"name\": \"%1\", \"fps\": %2, \"frames\": %3, "
-                                    "\"drawn\": %4}")
-                         .arg(clip.name)
-                         .arg(clip.fps)
-                         .arg(clip.frames.size())
-                         .arg(drawn));
+        QJsonObject entry;
+        entry.insert(QStringLiteral("name"), clip.name);
+        entry.insert(QStringLiteral("fps"), clip.fps);
+        entry.insert(QStringLiteral("frames"), clip.frames.size());
+        entry.insert(QStringLiteral("drawn"), drawn);
+        clips.append(entry);
     }
-    text += clips.join(QStringLiteral(", ")) + QStringLiteral("]\n}\n");
-    return Outcome::ok(text);
+
+    QJsonObject root;
+    root.insert(QStringLiteral("size"), size);
+    root.insert(QStringLiteral("palette"), palette);
+    root.insert(QStringLiteral("clips"), clips);
+    return Outcome::ok(QJsonDocument(root).toJson(QJsonDocument::Indented));
 }
 
 Outcome doCheck(const Document &doc)
@@ -405,6 +413,154 @@ bool isDocumentCommand(const QString &command)
         QStringLiteral("edit"),
     };
     return known.contains(command);
+}
+
+QStringList documentDifferences(const Document &left, const Document &right,
+                               const QString &leftLabel, const QString &rightLabel)
+{
+    QStringList differences;
+    if (left.columns() != right.columns() || left.rows() != right.rows()) {
+        differences << QStringLiteral("size: %1 is %2x%3, %4 is %5x%6")
+                           .arg(leftLabel)
+                           .arg(left.columns())
+                           .arg(left.rows())
+                           .arg(rightLabel)
+                           .arg(right.columns())
+                           .arg(right.rows());
+    }
+
+    const QList<Palette::Slot> &leftPalette = left.palette().entries();
+    const QList<Palette::Slot> &rightPalette = right.palette().entries();
+    if (leftPalette.size() != rightPalette.size()) {
+        differences << QStringLiteral("palette: %1 has %2 slot(s), %3 has %4")
+                           .arg(leftLabel)
+                           .arg(leftPalette.size())
+                           .arg(rightLabel)
+                           .arg(rightPalette.size());
+    }
+    const int paletteCount = qMin(leftPalette.size(), rightPalette.size());
+    for (int i = 0; i < paletteCount; ++i) {
+        const Palette::Slot &mine = leftPalette.at(i);
+        const Palette::Slot &theirs = rightPalette.at(i);
+        if (mine.letter != theirs.letter) {
+            differences << QStringLiteral("palette[%1]: slot is %2 in %3, %4 in %5 (order differs)")
+                               .arg(i)
+                               .arg(QString(mine.letter))
+                               .arg(leftLabel)
+                               .arg(QString(theirs.letter))
+                               .arg(rightLabel);
+        } else if (mine.colour != theirs.colour) {
+            differences << QStringLiteral("palette[%1] %2: colour is %3 in %4, %5 in %6")
+                               .arg(i)
+                               .arg(QString(mine.letter))
+                               .arg(mine.colour.name(QColor::HexRgb).toUpper())
+                               .arg(leftLabel)
+                               .arg(theirs.colour.name(QColor::HexRgb).toUpper())
+                               .arg(rightLabel);
+        }
+    }
+    for (int i = paletteCount; i < leftPalette.size(); ++i) {
+        differences << QStringLiteral("palette[%1]: only in %2 (slot %3)")
+                           .arg(i)
+                           .arg(leftLabel)
+                           .arg(QString(leftPalette.at(i).letter));
+    }
+    for (int i = paletteCount; i < rightPalette.size(); ++i) {
+        differences << QStringLiteral("palette[%1]: only in %2 (slot %3)")
+                           .arg(i)
+                           .arg(rightLabel)
+                           .arg(QString(rightPalette.at(i).letter));
+    }
+
+    const QList<Clip> &leftClips = left.clips();
+    const QList<Clip> &rightClips = right.clips();
+    if (leftClips.size() != rightClips.size()) {
+        differences << QStringLiteral("clips: %1 has %2, %3 has %4 (count differs)")
+                           .arg(leftLabel)
+                           .arg(leftClips.size())
+                           .arg(rightLabel)
+                           .arg(rightClips.size());
+    }
+    const int clipCount = qMin(leftClips.size(), rightClips.size());
+    for (int i = 0; i < clipCount; ++i) {
+        const Clip &mine = leftClips.at(i);
+        const Clip &theirs = rightClips.at(i);
+        if (mine.name != theirs.name) {
+            differences << QStringLiteral("clips[%1]: name is %2 in %3, %4 in %5 (order differs)")
+                               .arg(i)
+                               .arg(mine.name)
+                               .arg(leftLabel)
+                               .arg(theirs.name)
+                               .arg(rightLabel);
+        }
+        const QString clipLabel = QStringLiteral("clip[%1] (%2/%3)")
+                                      .arg(i)
+                                      .arg(mine.name)
+                                      .arg(theirs.name);
+        if (mine.fps != theirs.fps) {
+            differences << QStringLiteral("%1: FPS is %2 in %3, %4 in %5")
+                               .arg(clipLabel)
+                               .arg(mine.fps)
+                               .arg(leftLabel)
+                               .arg(theirs.fps)
+                               .arg(rightLabel);
+        }
+        if (mine.frames.size() != theirs.frames.size()) {
+            differences << QStringLiteral("%1: frame count is %2 in %3, %4 in %5")
+                               .arg(clipLabel)
+                               .arg(mine.frames.size())
+                               .arg(leftLabel)
+                               .arg(theirs.frames.size())
+                               .arg(rightLabel);
+        }
+
+        const int frameCount = qMin(mine.frames.size(), theirs.frames.size());
+        for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+            const Grid &mineFrame = mine.frames.at(frameIndex);
+            const Grid &theirFrame = theirs.frames.at(frameIndex);
+            if (mineFrame.columns() != theirFrame.columns()
+                || mineFrame.rows() != theirFrame.rows()) {
+                differences << QStringLiteral("%1 frame %2: dimensions are %3x%4 in %5, %6x%7 in %8")
+                                   .arg(clipLabel)
+                                   .arg(frameIndex)
+                                   .arg(mineFrame.columns())
+                                   .arg(mineFrame.rows())
+                                   .arg(leftLabel)
+                                   .arg(theirFrame.columns())
+                                   .arg(theirFrame.rows())
+                                   .arg(rightLabel);
+            }
+
+            int pixels = 0;
+            const int columns = qMax(mineFrame.columns(), theirFrame.columns());
+            const int rows = qMax(mineFrame.rows(), theirFrame.rows());
+            for (int y = 0; y < rows; ++y) {
+                for (int x = 0; x < columns; ++x) {
+                    if (mineFrame.at(x, y) != theirFrame.at(x, y))
+                        ++pixels;
+                }
+            }
+            if (pixels > 0) {
+                differences << QStringLiteral("%1 frame %2: %3 pixel(s) differ")
+                                   .arg(clipLabel)
+                                   .arg(frameIndex)
+                                   .arg(pixels);
+            }
+        }
+    }
+    for (int i = clipCount; i < leftClips.size(); ++i) {
+        differences << QStringLiteral("clips[%1]: only in %2 (%3)")
+                           .arg(i)
+                           .arg(leftLabel)
+                           .arg(leftClips.at(i).name);
+    }
+    for (int i = clipCount; i < rightClips.size(); ++i) {
+        differences << QStringLiteral("clips[%1]: only in %2 (%3)")
+                           .arg(i)
+                           .arg(rightLabel)
+                           .arg(rightClips.at(i).name);
+    }
+    return differences;
 }
 
 Outcome applyCommand(Document &doc, const QString &command, QStringList words,

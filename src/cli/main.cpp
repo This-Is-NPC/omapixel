@@ -17,6 +17,7 @@
 #include "Bridge.h"
 #include "Codec.h"
 #include "Commands.h"
+#include "Config.h"
 #include "Document.h"
 #include "Ops.h"
 #include "Strings.h"
@@ -30,6 +31,7 @@
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QProcess>
 #include <QSaveFile>
 #include <QTextStream>
@@ -50,6 +52,27 @@ QTextStream &err()
 {
     static QTextStream stream(stderr);
     return stream;
+}
+
+Codec::WarningLimits warningLimits()
+{
+    const Config &config = Config::shared();
+    Codec::WarningLimits limits;
+    limits.fileBytes = qint64(config.number(QStringLiteral("warnings.file_mib")))
+                       * 1024 * 1024;
+    limits.clips = config.number(QStringLiteral("warnings.clips"));
+    limits.framesPerClip =
+        config.number(QStringLiteral("warnings.frames_per_clip"));
+    limits.totalFrames = config.number(QStringLiteral("warnings.frames_total"));
+    limits.paletteSlots = config.number(QStringLiteral("warnings.palette_slots"));
+    return limits;
+}
+
+qint64 renderWarningPixels()
+{
+    return qint64(Config::shared().number(
+                      QStringLiteral("warnings.render_megapixels")))
+           * 1000000;
 }
 
 /// Reads a batch script: a file, or standard input when the path is `-`.
@@ -233,6 +256,116 @@ int checkCatalogues(const QString &wanted)
     return missing.isEmpty() && stale.isEmpty() ? 0 : 1;
 }
 
+/// `config` -- the settings file, and what is wrong with it.
+///
+/// The same three questions omarchy's own programs answer about their config:
+/// where it is, whether it parses, and how to get one. `herdr config check`
+/// and `voxtype`'s commented default are the shape being followed here; a
+/// studio that invented its own would be one more thing to learn on a desktop
+/// where every other program already works this way.
+int inspectConfig(const QString &what)
+{
+    Config &config = Config::shared();
+    const QString path = Config::file();
+
+    if (what == QLatin1String("check")) {
+        const QStringList problems = config.problems();
+        if (!QFile::exists(path)) {
+            out() << path << ": not there — omapixel runs on its defaults\n";
+            return 0;
+        }
+        if (problems.isEmpty()) {
+            out() << path << ": good\n";
+            return 0;
+        }
+        err() << path << ":\n";
+        for (const QString &problem : problems)
+            err() << "  " << problem << "\n";
+        return 1;
+    }
+
+    if (what == QLatin1String("write")) {
+        const QString text = Config::defaultText();
+        if (text.isEmpty()) {
+            err() << "the default config is not installed — looked in:\n";
+            for (const QString &place : Config::defaultSearchPath())
+                err() << "  " << place << "\n";
+            return 1;
+        }
+        if (QFile::exists(path)) {
+            err() << path << " is already there — delete it first, or edit it\n";
+            return 1;
+        }
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            err() << "could not write " << path << "\n";
+            return 1;
+        }
+        file.write(text.toUtf8());
+        out() << "wrote " << path << "\n";
+        return 0;
+    }
+
+    if (!what.isEmpty()) {
+        err() << "config: say `check`, `write`, or nothing at all\n";
+        return 2;
+    }
+
+    out() << "file      " << path;
+    out() << (QFile::exists(path) ? "\n" : "   (not there — running on the defaults)\n");
+    const QString speaking = Strings::shared().language();
+    const QString wanted = Strings::preferredLanguage();
+    out() << "language  " << speaking;
+    // Asked for one and speaking another means there is no catalogue for it.
+    // Saying only the one it settled on reads as the setting being ignored.
+    if (!wanted.startsWith(speaking))
+        out() << "   (asked for " << wanted << ", no catalogue — `omapixel i18n`)";
+    out() << "\n";
+
+    // What the file actually changed. A config file you cannot diff against
+    // the defaults is a config file you stop trusting.
+    QStringList differs;
+    for (const auto &setting : Config::settings()) {
+        if (config.value(setting.first) != setting.second) {
+            differs << QStringLiteral("  %1 = %2 (default %3)")
+                           .arg(setting.first, -20)
+                           .arg(config.value(setting.first).toString(),
+                                setting.second.toString());
+        }
+    }
+    for (const auto &action : Config::actions()) {
+        const QStringList now = config.bindings(action.first);
+        QString was = action.second;
+        if (was.startsWith(QLatin1Char('[')))
+            was = was.remove(QLatin1Char('[')).remove(QLatin1Char(']'))
+                      .remove(QLatin1Char('"')).remove(QLatin1Char(' '));
+        else
+            was = was.toLower();
+        if (now.join(QLatin1Char(',')) != was) {
+            differs << QStringLiteral("  %1 = %2 (default %3)")
+                           .arg(QStringLiteral("keys.") + action.first, -20)
+                           .arg(now.isEmpty() ? QStringLiteral("nothing")
+                                              : now.join(QStringLiteral(", ")),
+                                was.isEmpty() ? QStringLiteral("nothing") : was);
+        }
+    }
+    if (differs.isEmpty()) {
+        out() << "\neverything is at its default\n";
+    } else {
+        out() << "\nchanged from the defaults:\n";
+        for (const QString &line : differs)
+            out() << line << "\n";
+    }
+
+    const QStringList problems = config.problems();
+    if (!problems.isEmpty()) {
+        out() << "\nand " << problems.size() << " problem(s) — run `omapixel config check`\n";
+        return 1;
+    }
+    return 0;
+}
+
 } // namespace
 
 // --------------------------------------------------------------- the commands
@@ -243,11 +376,30 @@ int main(int argc, char *argv[])
     // which needs the GUI stack up. It never opens a window, and the offscreen
     // platform keeps it working with no display at all.
     qputenv("QT_QPA_PLATFORM", "offscreen");
+    qunsetenv("QT_QPA_PLATFORMTHEME");
     QGuiApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("omapixel"));
     // The words, so the command line speaks whatever the window speaks. Both
     // front ends over one core, catalogues included.
+    // The settings first: the language the words are read in is one of them.
+    Config::shared().load();
     Strings::shared().load(Strings::preferredLanguage());
+
+    // The one flag rather than a sub-command, because this is the form
+    // omarchy's own tooling reads a program's defaults with -- it is how
+    // `omarchy-menu-herdr-keybindings` learns what the bindings are.
+    for (int i = 1; i < argc; ++i) {
+        if (QString::fromLocal8Bit(argv[i]) != QLatin1String("--default-config"))
+            continue;
+        const QString text = Config::defaultText();
+        if (text.isEmpty()) {
+            err() << "the default config is not installed\n";
+            return 1;
+        }
+        out() << text;
+        out().flush();
+        return 0;
+    }
     QCoreApplication::setApplicationVersion(QStringLiteral("2.0"));
 
     QCommandLineParser parser;
@@ -271,9 +423,12 @@ int main(int argc, char *argv[])
         "  palette  list | set | rm\n"
         "  batch    many commands over one document, read once and written once\n"
         "  i18n     what a language catalogue is still missing\n"
+        "  config   the settings file: check | write\n"
         "  diff     what differs between two documents\n"
         "  import   pull one sprite set out of a catalog\n"
         "  export   put the clips back into one\n"
+        "\n"
+        "--default-config prints the annotated settings file to standard output.\n"
         "\n"
         "The file comes second: omapixel <command> <file> [sub-command] [flags].\n"
         "Run `omapixel <command> --help` for the flags of one command."));
@@ -295,6 +450,9 @@ int main(int argc, char *argv[])
 
     if (command == QLatin1String("i18n"))
         return checkCatalogues(words.value(0));
+
+    if (command == QLatin1String("config"))
+        return inspectConfig(words.value(0));
 
     if (command == QLatin1String("new")) {
         if (words.isEmpty()) {
@@ -381,11 +539,13 @@ int main(int argc, char *argv[])
         return 2;
     }
     const QString path = words.takeFirst();
-    Codec::Result loaded = Codec::readFile(path);
+    Codec::Result loaded = Codec::readFile(path, warningLimits());
     if (!loaded) {
         err() << loaded.error << "\n";
         return 1;
     }
+    for (const QString &warning : loaded.warnings)
+        err() << "warning: " << warning << "\n";
     Document doc = loaded.document;
     QString error;
 
@@ -411,8 +571,18 @@ int main(int argc, char *argv[])
                             : 1;
         options.checker = parser.isSet(QStringLiteral("checker"));
         options.sheet = parser.isSet(QStringLiteral("sheet"));
-        const QImage image = render::toImage(doc, clipName, frame, options);
-        if (image.isNull() || !image.save(parser.value(QStringLiteral("out")))) {
+        options.warningPixels = renderWarningPixels();
+        QString warning;
+        QString renderError;
+        const QImage image =
+            render::toImage(doc, clipName, frame, options, &warning, &renderError);
+        if (!warning.isEmpty())
+            err() << "warning: " << warning << "\n";
+        if (image.isNull()) {
+            err() << "render: " << renderError << "\n";
+            return 1;
+        }
+        if (!image.save(parser.value(QStringLiteral("out")))) {
             err() << "render: could not write " << parser.value(QStringLiteral("out"))
                   << "\n";
             return 1;
@@ -425,6 +595,11 @@ int main(int argc, char *argv[])
     if (command == QLatin1String("export")) {
         if (words.isEmpty()) {
             err() << "export: say which catalog to write into\n";
+            return 2;
+        }
+        if (!parser.isSet(QStringLiteral("name"))
+            || parser.value(QStringLiteral("name")).isEmpty()) {
+            err() << "export: say --name which set to export\n";
             return 2;
         }
         const QStringList problems = doc.problems();
@@ -440,8 +615,19 @@ int main(int argc, char *argv[])
             err() << into << ": " << file.errorString() << "\n";
             return 1;
         }
-        const QJsonObject catalog = QJsonDocument::fromJson(file.readAll()).object();
+        QJsonParseError parse;
+        const QJsonDocument parsed = QJsonDocument::fromJson(file.readAll(), &parse);
         file.close();
+        if (parse.error != QJsonParseError::NoError) {
+            err() << into << ": invalid JSON at offset " << parse.offset << ": "
+                  << parse.errorString() << "\n";
+            return 1;
+        }
+        if (!parsed.isObject()) {
+            err() << into << ": the catalog has to be a JSON object\n";
+            return 1;
+        }
+        const QJsonObject catalog = parsed.object();
         const QString species = parser.value(QStringLiteral("name"));
         const QString variant = parser.isSet(QStringLiteral("index"))
                                     ? parser.value(QStringLiteral("index"))
@@ -460,13 +646,20 @@ int main(int argc, char *argv[])
             err() << into << ": " << writing.errorString() << "\n";
             return 1;
         }
-        writing.write(QJsonDocument(pushed.catalog).toJson(QJsonDocument::Compact));
+        const QByteArray serialized =
+            QJsonDocument(pushed.catalog).toJson(QJsonDocument::Compact);
+        if (writing.write(serialized) != serialized.size()) {
+            err() << into << ": could not write the complete catalog: "
+                  << writing.errorString() << "\n";
+            writing.cancelWriting();
+            return 1;
+        }
         if (!writing.commit()) {
             err() << into << ": " << writing.errorString() << "\n";
             return 1;
         }
         out() << into << ": " << species << "/" << variant << " — "
-              << (doc.clips().size() - pushed.skipped.size()) << " sequence(s)\n";
+              << pushed.exported << " sequence(s)\n";
         return 0;
     }
 
@@ -475,36 +668,19 @@ int main(int argc, char *argv[])
             err() << "diff: say which document to compare against\n";
             return 2;
         }
-        Codec::Result other = Codec::readFile(words.first());
+        Codec::Result other = Codec::readFile(words.first(), warningLimits());
         if (!other) {
             err() << other.error << "\n";
             return 1;
         }
-        int total = 0;
-        for (const Clip &clip : doc.clips()) {
-            const Clip *theirs = other.document.clip(clip.name);
-            if (!theirs) {
-                out() << "only in " << path << ": clip " << clip.name << "\n";
-                continue;
-            }
-            const int frames = qMax(clip.frames.size(), theirs->frames.size());
-            for (int i = 0; i < frames; ++i) {
-                const Grid mine = doc.frame(clip.name, i);
-                const Grid yours = other.document.frame(clip.name, i);
-                const auto differences = ops::diff(mine, yours);
-                if (!differences.isEmpty()) {
-                    out() << clip.name << "[" << i << "]: " << differences.size()
-                          << " pixel(s)\n";
-                    total += differences.size();
-                }
-            }
-        }
-        for (const Clip &clip : other.document.clips()) {
-            if (!doc.clip(clip.name))
-                out() << "only in " << words.first() << ": clip " << clip.name << "\n";
-        }
-        out() << total << " pixel(s) differ\n";
-        return total == 0 ? 0 : 1;
+        for (const QString &warning : other.warnings)
+            err() << "warning: " << warning << "\n";
+        const QStringList differences =
+            cli::documentDifferences(doc, other.document, path, words.first());
+        for (const QString &difference : differences)
+            out() << difference << "\n";
+        out() << differences.size() << " difference(s)\n";
+        return differences.isEmpty() ? 0 : 1;
     }
 
     if (command == QLatin1String("batch"))

@@ -31,10 +31,14 @@ struct Options {
     /// Lays every frame of the clip side by side instead of drawing one.
     bool sheet = false;
     int sheetGap = 2;
+    /// Emits a warning before allocating an image above this many pixels.
+    /// Zero disables the warning; it is not an allocation limit.
+    qint64 warningPixels = 0;
 };
 
 QImage toImage(const Document &document, const QString &clip, int frame,
-               const Options &options);
+                const Options &options, QString *warning = nullptr,
+                QString *error = nullptr);
 
 /// Half-block characters, two sprite rows per terminal row, in 24-bit colour.
 /// Two rows per line because a terminal cell is about twice as tall as it is

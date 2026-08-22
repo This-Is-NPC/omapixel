@@ -60,5 +60,13 @@ Outcome applyCommand(Document &doc, const QString &command, QStringList words,
 /// from "not a command at all", which are different mistakes.
 bool isDocumentCommand(const QString &command);
 
+/// Describes every structural difference between two documents.
+///
+/// The labels are included in the frame diagnostics so callers comparing files
+/// can say which side owns a value without duplicating the comparison logic.
+QStringList documentDifferences(const Document &left, const Document &right,
+                               const QString &leftLabel = QStringLiteral("left"),
+                               const QString &rightLabel = QStringLiteral("right"));
+
 } // namespace cli
 } // namespace omapixel
