@@ -88,6 +88,49 @@ public:
     // ---------------------------------------------------------------- drawing
 
     Q_INVOKABLE QString slotAt(int x, int y) const;
+
+    /// A colour that will be seen against the pixel at (x, y).
+    ///
+    /// Roughly the inverse of what is there, which is what the eye expects of a
+    /// cursor, with one correction: the inverse of a mid grey is another mid
+    /// grey, and a cursor drawn in it disappears exactly where the drawing is
+    /// busiest. When inverting does not move far enough in brightness, this
+    /// goes to black or white instead.
+    ///
+    /// Returns an invalid colour for an empty pixel: what shows through there
+    /// is the chequerboard, which belongs to the window and not the document.
+    Q_INVOKABLE QColor contrastAt(int x, int y) const;
+
+    /// The colour a slot draws in, for showing a swatch beside its letter.
+    /// Invalid for a slot the palette does not define, which is not an error:
+    /// a hand-written file may use one, and it reads as empty until it is.
+    Q_INVOKABLE QColor colourOf(const QString &slot) const;
+
+    /// Colours matching `query`, as {name, colour} pairs.
+    ///
+    /// Searching by name is the point. Somebody who wants "a teal" does not
+    /// want to compose one out of three numbers, and a spectrum is only useful
+    /// once you already know roughly where you are going. The names are Qt's,
+    /// which are the SVG ones -- a hundred and forty-eight colours everybody
+    /// has already agreed on.
+    ///
+    /// A query that parses as a colour comes back first, under its own name, so
+    /// typing a hex works without a separate field for it.
+    Q_INVOKABLE QVariantList findColours(const QString &query) const;
+
+    /// A colour drawn out of the whole of RGB, not out of the palette.
+    ///
+    /// Genuinely random, which is the point: picking from what is already in
+    /// the document would be a shuffle, and a shuffle is not a gamble.
+    Q_INVOKABLE QString randomColour() const;
+
+    /// A slot letter nothing in the palette is using, or "" if there is none.
+    ///
+    /// A slot is one character -- that is the format, not a limit somebody
+    /// chose -- but one character is far more than the letters and digits.
+    /// Every printable character works, and so does most of Latin-1, which puts
+    /// the ceiling in the high two hundreds rather than at sixty-two.
+    Q_INVOKABLE QString freeSlot() const;
     Q_INVOKABLE void paint(int x, int y, const QString &slot);
     Q_INVOKABLE void line(int x0, int y0, int x1, int y1, const QString &slot);
     Q_INVOKABLE void rect(int x0, int y0, int x1, int y1, const QString &slot,
@@ -117,8 +160,27 @@ public:
 
     // ---------------------------------------------------------------- files
 
+    /// Puts a line on the status bar. Public because the window has things to
+    /// report that the model cannot know about -- a key that named no slot,
+    /// for one -- and they belong on the same line as everything else.
+    Q_INVOKABLE void say(const QString &note);
+
     Q_INVOKABLE bool open(const QString &path);
     Q_INVOKABLE bool save(const QString &path = QString());
+
+    /// Writes a PNG of the open clip. `sheet` lays every frame side by side
+    /// rather than writing the one on screen.
+    ///
+    /// Exporting belongs here rather than in the window because it is the same
+    /// operation the command line performs, through the same `render::` call --
+    /// a picture that comes out of the studio and a picture that comes out of
+    /// `omapixel render` have to be the same picture.
+    Q_INVOKABLE bool exportImage(const QString &path, int scale, bool sheet,
+                                 bool checker);
+
+    /// A path to offer when exporting: the document's own, with the suffix
+    /// swapped. Guessing this saves the one piece of typing nobody wants to do.
+    Q_INVOKABLE QString suggestedExportPath(bool sheet) const;
 
 signals:
     /// The document's contents changed: repaint, relist, everything.
@@ -134,7 +196,6 @@ private:
     /// drawing command is the same three steps, and writing them out at each
     /// call site is how one of them eventually forgets the store.
     void editFrame(const std::function<void(Grid &)> &edit);
-    void say(const QString &note);
     QChar slotOf(const QString &text) const;
 
     /// Files `before` as the state undo returns to, and drops the redo branch.

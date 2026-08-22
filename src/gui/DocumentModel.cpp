@@ -2,8 +2,11 @@
 
 #include "Codec.h"
 #include "Ops.h"
+#include "Render.h"
 
 #include <QFileInfo>
+#include <QDir>
+#include <QRandomGenerator>
 #include <QUrl>
 #include <QVariantMap>
 
@@ -166,6 +169,115 @@ QString DocumentModel::slotAt(int x, int y) const
 {
     const Grid grid = m_document.frame(m_clip, m_frame);
     return QString(grid.at(x, y));
+}
+
+QColor DocumentModel::colourOf(const QString &slot) const
+{
+    if (slot.size() != 1)
+        return QColor();
+    return m_document.palette().colour(slot.at(0));
+}
+
+QVariantList DocumentModel::findColours(const QString &query) const
+{
+    const QString wanted = query.trimmed();
+    QVariantList out;
+
+    const auto add = [&out](const QString &name, const QColor &colour) {
+        QVariantMap entry;
+        entry.insert(QStringLiteral("name"), name);
+        entry.insert(QStringLiteral("colour"), colour.name(QColor::HexRgb).toUpper());
+        out.append(entry);
+    };
+
+    // A hex, or anything else Qt can read as a colour, first and under the
+    // text that was typed.
+    const QColor literal(wanted);
+    if (!wanted.isEmpty() && literal.isValid())
+        add(wanted, literal);
+
+    for (const QString &name : QColor::colorNames()) {
+        if (out.size() >= 80)
+            break;
+        if (!wanted.isEmpty() && !name.contains(wanted, Qt::CaseInsensitive))
+            continue;
+        // `transparent` is a colour name Qt knows and this format has no use
+        // for: emptiness here is the absence of a slot, not a slot that
+        // happens to be see-through.
+        if (name == QLatin1String("transparent"))
+            continue;
+        add(name, QColor(name));
+    }
+    return out;
+}
+
+QString DocumentModel::freeSlot() const
+{
+    const auto usable = [](char16_t c) {
+        // `.` is emptiness and can never be a slot. The quote and the backslash
+        // are legal in the file -- JSON escapes them -- but they turn a row of
+        // pixels into a row of escapes for anyone reading it, and this format
+        // is meant to be read.
+        //
+        // The digits are reserved for the studio's colour keys. A slot called
+        // `3` whose colour is not what pressing 3 draws is a contradiction
+        // sitting on screen, and one nobody can be talked out of reading. A
+        // document that already uses a digit still works -- the format allows
+        // any character -- this only declines to hand one out.
+        return c != u'.' && c != u'"' && c != u'\\' && !(c >= u'0' && c <= u'9');
+    };
+
+    // Letters first, so a palette that stays small stays legible.
+    const QString preferred = QStringLiteral(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+    for (const QChar c : preferred) {
+        if (!m_document.palette().colour(c).isValid())
+            return QString(c);
+    }
+    for (char16_t c = u'!'; c <= u'~'; ++c) {
+        if (usable(c) && !m_document.palette().colour(QChar(c)).isValid())
+            return QString(QChar(c));
+    }
+    // Latin-1 and Latin Extended-A after that: accented letters that still
+    // read as letters in a wall of pixels, unlike box-drawing or arrows.
+    // Soft hyphen and the non-breaking space are skipped -- a slot you cannot
+    // see is a slot you cannot edit by hand.
+    for (char16_t c = 0xA1; c <= 0x24F; ++c) {
+        if (c == 0xAD)
+            continue;
+        if (usable(c) && !m_document.palette().colour(QChar(c)).isValid())
+            return QString(QChar(c));
+    }
+    return QString();
+}
+
+QString DocumentModel::randomColour() const
+{
+    auto *chance = QRandomGenerator::global();
+    return QColor::fromRgb(chance->bounded(256), chance->bounded(256),
+                           chance->bounded(256))
+        .name(QColor::HexRgb)
+        .toUpper();
+}
+
+QColor DocumentModel::contrastAt(int x, int y) const
+{
+    const Grid grid = m_document.frame(m_clip, m_frame);
+    const QChar slot = grid.at(x, y);
+    if (slot == Grid::Empty)
+        return QColor();
+
+    const QColor under = m_document.palette().colour(slot);
+    if (!under.isValid())
+        return QColor();
+
+    const auto luminance = [](const QColor &c) {
+        return 0.2126 * c.redF() + 0.7152 * c.greenF() + 0.0722 * c.blueF();
+    };
+    const QColor inverted(255 - under.red(), 255 - under.green(), 255 - under.blue());
+    if (qAbs(luminance(inverted) - luminance(under)) > 0.28)
+        return inverted;
+    return luminance(under) > 0.5 ? QColor(Qt::black) : QColor(Qt::white);
 }
 
 void DocumentModel::paint(int x, int y, const QString &slot)
@@ -429,6 +541,44 @@ bool DocumentModel::save(const QString &path)
     say(QStringLiteral("saved to %1").arg(where));
     emit fileChanged();
     return true;
+}
+
+bool DocumentModel::exportImage(const QString &path, int scale, bool sheet,
+                                bool checker)
+{
+    QString where = path;
+    if (where.startsWith(QLatin1String("file://")))
+        where = QUrl(where).toLocalFile();
+    if (where.isEmpty()) {
+        say(QStringLiteral("say where to export"));
+        return false;
+    }
+
+    render::Options options;
+    options.scale = qBound(1, scale, 64);
+    options.sheet = sheet;
+    options.checker = checker;
+    const QImage image = render::toImage(m_document, m_clip, m_frame, options);
+    if (image.isNull() || !image.save(where)) {
+        say(QStringLiteral("could not write %1").arg(where));
+        return false;
+    }
+    say(QStringLiteral("exported %1×%2 to %3")
+            .arg(image.width())
+            .arg(image.height())
+            .arg(QFileInfo(where).fileName()));
+    return true;
+}
+
+QString DocumentModel::suggestedExportPath(bool sheet) const
+{
+    const QString stem = m_path.isEmpty()
+                             ? QStringLiteral("untitled")
+                             : QFileInfo(m_path).completeBaseName();
+    const QString directory = m_path.isEmpty() ? QDir::currentPath()
+                                               : QFileInfo(m_path).absolutePath();
+    return QStringLiteral("%1/%2%3.png")
+        .arg(directory, stem, sheet ? QStringLiteral("-sheet") : QString());
 }
 
 } // namespace omapixel

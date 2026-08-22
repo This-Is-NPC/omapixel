@@ -81,6 +81,16 @@ Each entry is `{"slot": "<one character>", "colour": "#RRGGBB"}`. Any single
 character works as a slot; the standard palette uses capital letters because
 they stay legible in a wall of grid rows.
 
+**One character per pixel is the only ceiling on how many colours a document may
+have**, and it is a higher one than it sounds: letters and digits first, then the
+rest of printable ASCII, then Latin-1 and Latin Extended-A — over four hundred
+slots before anything runs out. `.` can never be one, because it is emptiness;
+`"` and `\` are excluded on purpose, since a row of pixels full of escapes is a
+row nobody can read; and the studio does not hand out digits, because it keeps
+`0`–`9` for its own colour keys. A file that already uses a digit as a slot still
+opens and draws — the format allows any character, and only the studio's choice
+of *new* slots is narrowed.
+
 The seventeen slots a new document starts with, in order — a dark-to-light ramp
 of neutrals, then skin, then accents:
 
