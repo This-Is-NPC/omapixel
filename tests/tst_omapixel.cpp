@@ -1153,6 +1153,20 @@ private slots:
 
         // Replacing a slot with itself is not an edit.
         QCOMPARE(doc.replaceSlot(u'B', u'B'), 0);
+
+        // And one frame at a time, for when the whole animation is not what
+        // you meant. Recolouring all twelve frames by accident is a bigger
+        // mistake than recolouring one, and a quieter one.
+        Grid three = doc.frame(QStringLiteral("idle"), 0);
+        ops::paint(three, 0, 1, u'G');
+        doc.setFrame(QStringLiteral("idle"), 0, three);
+        Grid four = doc.frame(QStringLiteral("walk"), 0);
+        ops::paint(four, 0, 1, u'G');
+        doc.setFrame(QStringLiteral("walk"), 0, four);
+
+        QCOMPARE(doc.replaceSlotInFrame(QStringLiteral("idle"), 0, u'G', u'Y'), 1);
+        QCOMPARE(doc.frame(QStringLiteral("idle"), 0).at(0, 1), QChar(u'Y'));
+        QCOMPARE(doc.frame(QStringLiteral("walk"), 0).at(0, 1), QChar(u'G'));
     }
 
     void thePaletteGoesWellPastTheAlphabet()
@@ -1540,10 +1554,11 @@ private slots:
         doc.setFrame(0);
         doc.paint(2, 2, QStringLiteral("R"));
         doc.paint(3, 3, QStringLiteral("B"));     // a bystander
-        QCOMPARE(doc.countSlot(QStringLiteral("R")), 2);
+        QCOMPARE(doc.countSlot(QStringLiteral("R"), true), 2);
+        QCOMPARE(doc.countSlot(QStringLiteral("R"), false), 1);   // this frame
 
         const QColor bystander = doc.colourOf(QStringLiteral("B"));
-        doc.replaceColour(QStringLiteral("R"), QStringLiteral("#00FF00"));
+        doc.replaceColour(QStringLiteral("R"), QStringLiteral("#00FF00"), true);
 
         // Every frame, because a colour belongs to the document and not to the
         // frame you happen to be looking at.
@@ -1569,6 +1584,36 @@ private slots:
         doc.undo();
         doc.setFrame(0);
         QCOMPARE(doc.slotAt(2, 2), QStringLiteral("R"));
+    }
+
+    void replaceCanBeHeldToOneFrame()
+    {
+        // Both scopes are wanted and neither is the obvious default. The
+        // window puts them one keystroke apart -- Enter and shift-Enter --
+        // rather than choosing on the person's behalf.
+        DocumentModel doc;
+        doc.reset(8, 8);
+        doc.paint(1, 1, QStringLiteral("R"));
+        doc.addFrame(true);                       // a copy, so both hold an R
+        QCOMPARE(doc.countSlot(QStringLiteral("R"), true), 2);
+        QCOMPARE(doc.countSlot(QStringLiteral("R"), false), 1);
+
+        doc.replaceColour(QStringLiteral("R"), QStringLiteral("#00FF00"), false);
+
+        // The frame that was open changed, and the other one did not.
+        const QString now = doc.slotAt(1, 1);
+        QVERIFY(now != QStringLiteral("R"));
+        QCOMPARE(doc.colourOf(now), QColor(QStringLiteral("#00FF00")));
+        doc.setFrame(0);
+        QCOMPARE(doc.slotAt(1, 1), QStringLiteral("R"));
+
+        // R is still in use, so it stays in the palette. Dropping it here
+        // would take the colour out from under the frame that still draws it.
+        bool kept = false;
+        for (const QVariant &entry : doc.palette())
+            kept = kept || entry.toMap().value(QStringLiteral("slot"))
+                               == QStringLiteral("R");
+        QVERIFY2(kept, "a slot still in use was dropped from the palette");
     }
 
     void theRoundingComesFromHyprland()

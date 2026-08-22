@@ -17,6 +17,11 @@ Column {
     /// the same place as back to the drawing, and a field cannot know which
     /// it is in.
     signal escaped()
+    /// Enter, with whatever was held down with it. `committed` cannot carry
+    /// that: it comes from TextInput's own onAccepted, which reports the text
+    /// and nothing else, and shift-Enter has to mean something different from
+    /// Enter in at least one place.
+    signal confirmed(string text, int modifiers)
 
     /// Takes the keyboard, and selects what is there so typing replaces it.
     function focusEntry() {
@@ -61,6 +66,16 @@ Column {
             // arrows belong to it for as long as it holds focus, and nothing
             // says so.
             Keys.onEscapePressed: field.escaped()
+            // Not accepted, so TextInput still sees it and `committed` fires
+            // for the callers that only want the text.
+            Keys.onReturnPressed: function (event) {
+                field.confirmed(text, event.modifiers)
+                event.accepted = false
+            }
+            Keys.onEnterPressed: function (event) {
+                field.confirmed(text, event.modifiers)
+                event.accepted = false
+            }
             Keys.onUpPressed: field.stepped(-1)
             Keys.onDownPressed: field.stepped(1)
         }

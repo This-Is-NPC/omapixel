@@ -271,12 +271,15 @@ with it. The one control that does it on purpose is the colour field in the
 
 <kbd>Shift</kbd>+<kbd>c</kbd>, or **Sprite → Replace this colour…**, opens the
 same search panel pointed at the colour in focus — what the cursor is standing
-on, and failing that what you are drawing with. <kbd>Enter</kbd> repaints every
-pixel of it, and the panel says how many there are before you commit.
+on, and failing that what you are drawing with.
 
-**Every frame of every clip.** A colour belongs to the document, not to the
-frame you happen to be looking at; replacing it in one frame of twelve leaves an
-animation that flickers between two colours, which is never what anybody meant.
+**<kbd>Enter</kbd> repaints this frame; <kbd>Shift</kbd>+<kbd>Enter</kbd>
+repaints every frame of every clip.** Both are wanted and neither is the obvious
+default — doing one frame of an animation leaves it flickering between two
+colours, and doing all twelve when you meant one is a bigger mistake and a
+quieter one — so they are one keystroke apart and the panel gives both counts
+before you commit to either. The buttons under it say the same thing for a hand
+on the mouse.
 
 It works by moving those pixels onto a slot that holds the new colour, not by
 recolouring the slot they were on. The two look identical here and are not: if

@@ -89,14 +89,17 @@ public:
     /// which is a file nothing can draw.
     void resize(int columns, int rows);
 
-    /// Swaps one slot for another everywhere in the document, and says how
+    /// Swaps one slot for another in every frame of every clip, and says how
     /// many pixels changed.
-    ///
-    /// Every frame of every clip, because a colour belongs to the document
-    /// rather than to the frame you happen to be looking at. Replacing it in
-    /// one frame of twelve leaves an animation that flickers between two
-    /// colours, which is never what anybody meant.
     int replaceSlot(QChar from, QChar to);
+
+    /// The same, in one frame only.
+    ///
+    /// Both exist because both are wanted and neither is the obvious default.
+    /// Recolouring one frame of an animation leaves it flickering between two
+    /// colours; recolouring all twelve when you meant to fix one is a bigger
+    /// mistake and a quieter one. The caller says which.
+    int replaceSlotInFrame(const QString &clip, int frame, QChar from, QChar to);
 
     /// Whether any pixel anywhere still draws with this slot.
     bool usesSlot(QChar slot) const;

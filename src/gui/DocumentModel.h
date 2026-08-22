@@ -132,8 +132,9 @@ public:
     /// the ceiling in the high two hundreds rather than at sixty-two.
     Q_INVOKABLE QString freeSlot() const;
 
-    /// How many pixels in the whole document draw with this slot.
-    Q_INVOKABLE int countSlot(const QString &slot) const;
+    /// How many pixels draw with this slot: in every frame of every clip, or
+    /// in the open frame alone.
+    Q_INVOKABLE int countSlot(const QString &slot, bool everywhere) const;
 
     /// Repaints every pixel of `fromSlot` in `hex`, everywhere.
     ///
@@ -146,7 +147,12 @@ public:
     /// The old slot is dropped from the palette if nothing is left using it, so
     /// replacing a colour repeatedly does not silt the palette up with entries
     /// no pixel refers to.
-    Q_INVOKABLE void replaceColour(const QString &fromSlot, const QString &hex);
+    /// `everywhere` decides the scope. Both are wanted and neither is the
+    /// obvious default: recolouring one frame of an animation leaves it
+    /// flickering, and recolouring all twelve when you meant one is a bigger
+    /// mistake and a quieter one.
+    Q_INVOKABLE void replaceColour(const QString &fromSlot, const QString &hex,
+                                   bool everywhere);
     Q_INVOKABLE void paint(int x, int y, const QString &slot);
     Q_INVOKABLE void line(int x0, int y0, int x1, int y1, const QString &slot);
     Q_INVOKABLE void rect(int x0, int y0, int x1, int y1, const QString &slot,

@@ -224,6 +224,20 @@ int Document::replaceSlot(QChar from, QChar to)
     return changed;
 }
 
+int Document::replaceSlotInFrame(const QString &clip, int frame, QChar from,
+                                 QChar to)
+{
+    if (from == to)
+        return 0;
+    Grid grid = this->frame(clip, frame);
+    if (grid.isEmpty())
+        return 0;
+    const int changed = ops::swapSlot(grid, from, to);
+    if (changed > 0)
+        setFrame(clip, frame, grid);
+    return changed;
+}
+
 bool Document::usesSlot(QChar slot) const
 {
     for (const Clip &clip : m_clips) {

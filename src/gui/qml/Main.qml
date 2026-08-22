@@ -1531,9 +1531,8 @@ Window {
 
     Sheet {
         id: colourSheet
-        title: purpose === "replace"
-               ? "Replace every pixel of slot " + replacing
-               : "Choose a colour"
+        title: purpose === "replace" ? "Replace slot " + replacing
+                                      : "Choose a colour"
         onClosed: { armed = false; win.focusCanvas() }
 
         property string chosen: "#7AA2F7"
@@ -1574,13 +1573,13 @@ Window {
                 chosen = found.model[row].colour
         }
 
-        function arm() {
+        function arm(everywhere) {
             if (found.model.length === 0)
                 return
             // Replacing has nowhere else to go: the colour it acts on was
             // already chosen by where the cursor was standing.
             if (purpose === "replace") {
-                doc.replaceColour(replacing, chosen)
+                doc.replaceColour(replacing, chosen, everywhere === true)
                 close()
                 return
             }
@@ -1609,7 +1608,11 @@ Window {
                         0, Math.min(found.model.length - 1, found.currentIndex + delta))
                     colourSheet.take(found.currentIndex)
                 }
-                onCommitted: colourSheet.arm()
+                // Shift decides the scope, so the two are one keystroke apart
+                // instead of one being buried behind a button.
+                onConfirmed: function (text, modifiers) {
+                    colourSheet.arm((modifiers & Qt.ShiftModifier) !== 0)
+                }
                 onEscaped: colourSheet.close()
             },
 
@@ -1680,7 +1683,12 @@ Window {
                             onTapped: {
                                 found.currentIndex = parent.index
                                 colourSheet.take(parent.index)
-                                colourSheet.arm()
+                                // Clicking a colour chooses it; in replace mode
+                                // the scope is a separate, explicit press
+                                // below, because a click that repaints twelve
+                                // frames is not a click anybody expects.
+                                if (colourSheet.purpose !== "replace")
+                                    colourSheet.arm()
                             }
                         }
                     }
@@ -1708,8 +1716,10 @@ Window {
                     text: {
                         if (colourSheet.purpose === "replace")
                             return colourSheet.chosen + " — Enter repaints "
-                                   + doc.countSlot(colourSheet.replacing)
-                                   + " pixel(s), everywhere in the document"
+                                   + doc.countSlot(colourSheet.replacing, false)
+                                   + " pixel(s) in this frame,  Shift+Enter "
+                                   + doc.countSlot(colourSheet.replacing, true)
+                                   + " in every frame"
                         return colourSheet.armed
                                ? colourSheet.chosen + " — now press a number key to keep it there"
                                : colourSheet.chosen + " — Enter to choose it"
@@ -1719,6 +1729,23 @@ Window {
 
             // The ten number keys, with what is on each. Clicking one does the
             // same as pressing it, for a hand that is already on the mouse.
+            Row {
+                spacing: 6
+                visible: colourSheet.purpose === "replace"
+
+                Chip {
+                    label: "this frame"
+                    on: true
+                    onClicked: colourSheet.arm(false)
+                }
+                Chip {
+                    label: "every frame"
+                    role: theme.urgent
+                    onClicked: colourSheet.arm(true)
+                }
+                Chip { label: "cancel"; onClicked: colourSheet.close() }
+            },
+
             Item {
                 id: digits
                 width: 380

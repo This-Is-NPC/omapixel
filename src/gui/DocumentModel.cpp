@@ -211,26 +211,37 @@ QVariantList DocumentModel::findColours(const QString &query) const
     return out;
 }
 
-int DocumentModel::countSlot(const QString &slot) const
+int DocumentModel::countSlot(const QString &slot, bool everywhere) const
 {
     if (slot.size() != 1)
         return 0;
     const QChar wanted = slot.at(0);
     int found = 0;
+
+    const auto tally = [&](const Grid &grid) {
+        for (int y = 0; y < grid.rows(); ++y) {
+            for (int x = 0; x < grid.columns(); ++x) {
+                if (grid.at(x, y) == wanted)
+                    found += 1;
+            }
+        }
+    };
+
+    if (!everywhere) {
+        tally(m_document.frame(m_clip, m_frame));
+        return found;
+    }
+
     for (const Clip &clip : m_document.clips()) {
         for (const Grid &grid : clip.frames) {
-            for (int y = 0; y < grid.rows(); ++y) {
-                for (int x = 0; x < grid.columns(); ++x) {
-                    if (grid.at(x, y) == wanted)
-                        found += 1;
-                }
-            }
+            tally(grid);
         }
     }
     return found;
 }
 
-void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex)
+void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex,
+                                  bool everywhere)
 {
     const QColor colour(hex);
     if (fromSlot.size() != 1 || !colour.isValid())
@@ -260,7 +271,9 @@ void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex)
     const Document before = m_document;
     if (!m_document.palette().colour(to).isValid())
         m_document.palette().set(to, colour);
-    const int moved = m_document.replaceSlot(from, to);
+    const int moved = everywhere
+                          ? m_document.replaceSlot(from, to)
+                          : m_document.replaceSlotInFrame(m_clip, m_frame, from, to);
     if (moved == 0) {
         m_document = before;
         say(QStringLiteral("nothing was drawn with %1").arg(from));
@@ -273,7 +286,11 @@ void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex)
     remember(before);
     m_dirty = true;
     m_clip = m_document.clip(m_clip) ? m_clip : m_document.clipNames().value(0);
-    say(QStringLiteral("replaced %1 pixel(s) of %2").arg(moved).arg(from));
+    say(QStringLiteral("replaced %1 pixel(s) of %2%3")
+            .arg(moved)
+            .arg(from)
+            .arg(everywhere ? QStringLiteral(", everywhere")
+                            : QStringLiteral(", in this frame")));
     emit changed();
     emit viewChanged();
     emit fileChanged();
