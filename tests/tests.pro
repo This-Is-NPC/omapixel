@@ -23,6 +23,7 @@ SOURCES += \
     ../src/core/Bridge.cpp \
     ../src/gui/Theme.cpp \
     ../src/gui/DocumentModel.cpp \
+    ../src/gui/PaletteModel.cpp \
     ../src/gui/PixelGridItem.cpp \
     ../src/gui/InputLog.cpp \
     ../src/cli/Commands.cpp
@@ -37,6 +38,7 @@ HEADERS += \
     ../src/core/Bridge.h \
     ../src/gui/Theme.h \
     ../src/gui/DocumentModel.h \
+    ../src/gui/PaletteModel.h \
     ../src/gui/PixelGridItem.h \
     ../src/gui/InputLog.h \
     ../src/cli/Commands.h

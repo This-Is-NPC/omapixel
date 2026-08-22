@@ -15,6 +15,7 @@ namespace omapixel {
 DocumentModel::DocumentModel(QObject *parent)
     : QObject(parent), m_document(Document::blank(32, 24))
 {
+    m_paletteRows.sync(m_document.palette());
     m_clip = m_document.clipNames().value(0);
     m_note = QStringLiteral("new document · 32×24");
 }
@@ -75,8 +76,25 @@ void DocumentModel::say(const QString &note)
     emit noteChanged();
 }
 
+void DocumentModel::paletteMoved()
+{
+    m_paletteRevision += 1;
+    m_paletteRows.sync(m_document.palette());
+    emit paletteChanged();
+}
+
 void DocumentModel::remember(const Document &before)
 {
+    // Inside a stroke only the first change is filed. It is what makes a drag
+    // one undo step, and it is also what lets an operation built from two
+    // edits -- a colour added and then painted with -- cost one snapshot
+    // instead of two. A document is not small; copying it twice per keypress
+    // is felt.
+    if (m_stroke) {
+        if (m_strokeRemembered)
+            return;
+        m_strokeRemembered = true;
+    }
     m_undo.append(before);
     if (m_undo.size() > HistoryDepth)
         m_undo.removeFirst();
@@ -102,6 +120,7 @@ void DocumentModel::undo()
     reseat();
     m_dirty = true;
     say(QStringLiteral("undone · %1 left").arg(m_undo.size()));
+    paletteMoved();
     emit changed();
     emit viewChanged();
     emit fileChanged();
@@ -119,6 +138,7 @@ void DocumentModel::redo()
     reseat();
     m_dirty = true;
     say(QStringLiteral("redone"));
+    paletteMoved();
     emit changed();
     emit viewChanged();
     emit fileChanged();
@@ -155,10 +175,7 @@ void DocumentModel::editFrame(const std::function<void(Grid &)> &edit)
     // Snapshot taken here rather than when the stroke opened: a stroke that
     // never changes a pixel -- a click that missed, a bucket on its own colour
     // -- should not land an entry that undo then has to step through.
-    if (!m_stroke || !m_strokeRemembered) {
-        remember(m_document);
-        m_strokeRemembered = true;
-    }
+    remember(m_document);
     m_document.setFrame(m_clip, m_frame, grid);
     m_dirty = true;
     emit changed();
@@ -286,6 +303,7 @@ void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex,
     remember(before);
     m_dirty = true;
     m_clip = m_document.clip(m_clip) ? m_clip : m_document.clipNames().value(0);
+    paletteMoved();
     say(QStringLiteral("replaced %1 pixel(s) of %2%3")
             .arg(moved)
             .arg(from)
@@ -534,6 +552,7 @@ void DocumentModel::reset(int columns, int rows)
     m_path.clear();
     m_dirty = false;
     say(QStringLiteral("new document · %1×%2").arg(columns).arg(rows));
+    paletteMoved();
     emit changed();
     emit viewChanged();
     emit fileChanged();
@@ -549,7 +568,7 @@ void DocumentModel::setPaletteColour(const QString &slot, const QString &colour)
     remember(m_document);
     m_document.palette().set(slot.at(0), parsed);
     m_dirty = true;
-    emit changed();
+    paletteMoved();
     emit fileChanged();
 }
 
@@ -600,6 +619,7 @@ bool DocumentModel::open(const QString &path)
     m_frame = 0;
     m_path = where;
     m_dirty = false;
+    paletteMoved();
     say(QStringLiteral("%1 · %2 clip(s)")
             .arg(QFileInfo(where).fileName())
             .arg(m_document.clips().size()));

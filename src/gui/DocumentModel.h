@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "PaletteModel.h"
 
 #include <QObject>
 #include <QStringList>
@@ -26,7 +27,19 @@ class DocumentModel : public QObject
     Q_PROPERTY(int columns READ columns NOTIFY changed)
     Q_PROPERTY(int rows READ rows NOTIFY changed)
     Q_PROPERTY(QStringList clipNames READ clipNames NOTIFY changed)
-    Q_PROPERTY(QVariantList palette READ palette NOTIFY changed)
+    // The palette has its own signal because it has its own lifetime: it
+    // changes when a colour is added or edited, and not when a pixel is
+    // painted. Bound to `changed` it was rebuilt on every brush stroke, and
+    // everything watching it -- a swatch per slot -- was destroyed and built
+    // again. With a few hundred slots that is thousands of items per keypress.
+    Q_PROPERTY(QVariantList palette READ palette NOTIFY paletteChanged)
+    /// Bumped with every palette change, for bindings that call colourOf() and
+    /// so cannot be tracked automatically.
+    Q_PROPERTY(int paletteRevision READ paletteRevision NOTIFY paletteChanged)
+    /// The same palette as a list model, for the view that draws one item per
+    /// slot. Constant, because it is the same object throughout: what changes
+    /// is its contents, row by row.
+    Q_PROPERTY(QAbstractListModel *paletteModel READ paletteModel CONSTANT)
 
     Q_PROPERTY(QString clip READ clip WRITE setClip NOTIFY viewChanged)
     Q_PROPERTY(int frame READ frame WRITE setFrame NOTIFY viewChanged)
@@ -51,6 +64,8 @@ public:
     int rows() const { return m_document.rows(); }
     QStringList clipNames() const { return m_document.clipNames(); }
     QVariantList palette() const;
+    int paletteRevision() const { return m_paletteRevision; }
+    QAbstractListModel *paletteModel() { return &m_paletteRows; }
 
     QString clip() const { return m_clip; }
     void setClip(const QString &clip);
@@ -212,6 +227,7 @@ signals:
     void fileChanged();
     void noteChanged();
     void historyChanged();
+    void paletteChanged();
 
 private:
     /// Fetches the open frame, hands it to `edit`, stores it back. Every
@@ -232,6 +248,11 @@ private:
     /// the snapshots cannot quietly eat a workstation.
     static constexpr int HistoryDepth = 80;
 
+    /// Announces a palette change, and keeps the revision counter honest.
+    void paletteMoved();
+
+    int m_paletteRevision = 0;
+    PaletteModel m_paletteRows;
     Document m_document;
     QList<Document> m_undo;
     QList<Document> m_redo;
