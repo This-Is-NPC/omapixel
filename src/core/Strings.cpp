@@ -1,5 +1,7 @@
 #include "Strings.h"
 
+#include "Config.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -44,10 +46,16 @@ QStringList Strings::searchPath()
 
 QString Strings::preferredLanguage()
 {
+    // The environment first, so one run can be in another language without
+    // editing anything; then the config file, which is where a lasting choice
+    // belongs; then the system.
     const QString asked =
         QProcessEnvironment::systemEnvironment().value(QStringLiteral("OMAPIXEL_LANG"));
     if (!asked.isEmpty())
         return asked;
+    const QString configured = Config::shared().text(QStringLiteral("language"));
+    if (!configured.isEmpty())
+        return configured;
     return QLocale::system().name();   // e.g. pt_BR
 }
 

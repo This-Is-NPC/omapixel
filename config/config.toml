@@ -1,0 +1,154 @@
+# omapixel configuration
+# Place this file at ~/.config/omapixel/config.toml
+#
+# Every setting is shown at its default and commented out. Uncomment the ones
+# you disagree with; with no file at all omapixel runs on exactly these values.
+# The file is re-read when you save it, so the studio does not need restarting.
+#
+#   omapixel config              where the file is, and what it changes
+#   omapixel config check        say what is wrong with it
+#   omapixel config write        put this file in place to start from
+#   omapixel --default-config    print this file
+
+# The language of the interface: a catalogue name from i18n/, such as "pt".
+# Empty follows the system, and OMAPIXEL_LANG in the environment beats both.
+# language = ""
+
+[window]
+# How big the studio opens.
+# width = 1280
+# height = 820
+
+# The bar of keys along the bottom of the drawing. Turn it off once you know
+# them; the studio says the same things in the menus either way.
+# hints = true
+
+[canvas]
+# The zoom a drawing opens at: "fit" to fill the space it has, or a number of
+# screen pixels per drawing pixel.
+# zoom = "fit"
+
+# The grid over the pixels, and the ghost of the frame before this one.
+# grid = true
+# onion = false
+
+# How far shift and an arrow jumps, in pixels.
+# big_step = 8
+
+[playback]
+# Whether ▶ starts the clip over when it reaches the last frame. Off plays it
+# once and stops on the end, which is what you want when the last frame is the
+# thing you are judging and a loop keeps snatching it away.
+# loop = true
+
+[document]
+# What File > New starts with.
+# width = 32
+# height = 24
+# fps = 8
+
+[history]
+# How many steps back undo can go. Each one is a whole document, so a large
+# drawing with a deep history is a lot of memory held for a rainy day.
+# depth = 80
+
+[warnings]
+# These are warnings, not limits. Set one to 0 to disable it. The operation
+# continues after warning because omapixel assumes its users know their own
+# workload; arithmetic overflow and impossible allocations are still errors.
+# file_mib = 16
+# clips = 256
+# frames_per_clip = 1024
+# frames_total = 4096
+# palette_slots = 256
+# render_megapixels = 64
+
+[keys]
+# An action on the left, the keys that fire it on the right. Several keys for
+# one action go in a list; an empty string leaves it unbound, which is how you
+# give a key back to something else.
+#
+#   paint = ["enter", "x"]
+#   roulette = ""
+#
+# Names are lowercase and joined with +: ctrl, shift, alt, super, then the key.
+# Letters and digits are themselves; the rest have names -- enter, esc, tab,
+# space, backspace, delete, left, right, up, down, home, end, pageup, pagedown,
+# f1 to f12, plus, minus, equal, comma, period, semicolon, slash, backslash,
+# apostrophe, backtick, bracketleft, bracketright. Punctuation may also be
+# written as itself: "[" is the same as "bracketleft".
+
+# Files
+# new = "ctrl+n"
+# open = "ctrl+o"
+# save = "ctrl+s"
+# save_as = "ctrl+shift+s"
+# export_png = "ctrl+e"
+# export_sheet = "ctrl+shift+e"
+# quit = "ctrl+q"
+
+# Undoing
+# undo = "ctrl+z"
+# redo = "ctrl+shift+z"
+# clear_frame = "delete"
+
+# Tools
+# tool_pencil = "b"
+# tool_eraser = "e"
+# tool_bucket = "f"
+# tool_picker = "i"
+# tool_hand = "h"
+
+# The keyboard cursor on the drawing. The far ones jump by canvas.big_step.
+# caret_left = "left"
+# caret_right = "right"
+# caret_up = "up"
+# caret_down = "down"
+# caret_left_far = "shift+left"
+# caret_right_far = "shift+right"
+# caret_up_far = "shift+up"
+# caret_down_far = "shift+down"
+
+# Drawing where the cursor stands.
+# paint = ["enter", "x"]
+# erase = "backspace"
+
+# Out of whatever you are in: a pending line, then a mode, then the cursor.
+# cancel = "esc"
+
+# Colours. The digits 1 to 0 are the ten colours in hand and are not rebindable
+# -- they are a row of slots rather than ten separate commands. slot_leader is
+# the key that makes the NEXT key name a palette letter instead of a command.
+# slot_leader = "semicolon"
+# choose_colour = "c"
+# replace_colour = "shift+c"
+# roulette = "r"
+
+# Modes: from draw the arrows paint while a colour is held; from pick they
+# collect colours off the drawing onto the digits.
+# draw_mode = "d"
+# pick_mode = "p"
+# line_point = "l"
+
+# Time
+# play = "space"
+# frame_previous = "comma"
+# frame_next = "period"
+# frame_add = "ctrl+shift+n"
+# frame_duplicate = "ctrl+d"
+# frame_move_back = "shift+comma"
+# frame_move_on = "shift+period"
+# clip_previous = "bracketleft"
+# clip_next = "bracketright"
+
+# Looking
+# zoom_in = ["ctrl+plus", "plus", "equal"]
+# zoom_out = ["ctrl+minus", "minus"]
+# zoom_fit = "ctrl+0"
+# toggle_grid = "m"
+# toggle_onion = "o"
+# toggle_hints = ""
+# toggle_loop = ""
+
+# The keyboard onto the menu bar, where the arrows walk it.
+# menus = "f10"

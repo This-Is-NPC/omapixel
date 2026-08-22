@@ -13,8 +13,14 @@ TARGET    = omapixelcore
 # look beside the binary, and the user's own config directory wins over both.
 DEFINES += OMAPIXEL_I18N_DIR=\\\"$$PWD/../../i18n\\\"
 
+# And where the annotated default config lives, for `omapixel --default-config`
+# and `omapixel config write`. Installed builds look under /usr/share too.
+DEFINES += OMAPIXEL_CONFIG_DIR=\\\"$$PWD/../../config\\\"
+
 HEADERS += \
     Strings.h \
+    Toml.h \
+    Config.h \
     Grid.h \
     Palette.h \
     Document.h \
@@ -25,6 +31,8 @@ HEADERS += \
 
 SOURCES += \
     Strings.cpp \
+    Toml.cpp \
+    Config.cpp \
     Grid.cpp \
     Palette.cpp \
     Document.cpp \
