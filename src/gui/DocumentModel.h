@@ -107,6 +107,8 @@ public:
     }
     Q_INVOKABLE void setSelection(int x0, int y0, int x1, int y1);
     Q_INVOKABLE void clearSelection();
+    Q_INVOKABLE bool copySelection();
+    Q_INVOKABLE bool pastePixels(int x, int y);
 
     QString path() const { return m_path; }
     void setPath(const QString &path);

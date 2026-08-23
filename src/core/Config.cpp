@@ -174,6 +174,8 @@ const QList<QPair<QString, QString>> &Config::actions()
 
         {QStringLiteral("undo"), QStringLiteral("ctrl+z")},
         {QStringLiteral("redo"), QStringLiteral("ctrl+shift+z")},
+        {QStringLiteral("copy_pixels"), QStringLiteral("ctrl+c")},
+        {QStringLiteral("paste_pixels"), QStringLiteral("ctrl+v")},
         {QStringLiteral("clear_frame"), QStringLiteral("ctrl+delete")},
         {QStringLiteral("trim"), QStringLiteral("ctrl+shift+t")},
 
@@ -199,6 +201,7 @@ const QList<QPair<QString, QString>> &Config::actions()
         {QStringLiteral("caret_right_far"), QStringLiteral("ctrl+right")},
         {QStringLiteral("caret_up_far"), QStringLiteral("ctrl+up")},
         {QStringLiteral("caret_down_far"), QStringLiteral("ctrl+down")},
+        {QStringLiteral("go_to_pixel"), QStringLiteral("g")},
 
         {QStringLiteral("paint"), QStringLiteral("[\"enter\", \"x\"]")},
         {QStringLiteral("erase"), QStringLiteral("[\"backspace\", \"delete\"]")},

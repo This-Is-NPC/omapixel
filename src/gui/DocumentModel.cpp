@@ -10,10 +10,16 @@
 #include "Strings.h"
 
 #include <QCoreApplication>
+#include <QClipboard>
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
+#include <QGuiApplication>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QVariantMap>
 
@@ -49,6 +55,33 @@ Document newDocument(int columns, int rows)
                                   QStringLiteral("document.fps")),
                            60));
     return document;
+}
+
+QString freeSlotIn(const Palette &palette)
+{
+    // Keep generated rows readable: letters first, then visible punctuation
+    // and extended Latin. Dot is transparency; digits belong to colour keys.
+    const auto usable = [](char16_t c) {
+        return c != u'.' && c != u'"' && c != u'\\'
+               && !(c >= u'0' && c <= u'9');
+    };
+
+    const QString preferred = QStringLiteral(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+    for (const QChar c : preferred) {
+        if (!palette.colour(c).isValid())
+            return QString(c);
+    }
+    for (char16_t c = u'!'; c <= u'~'; ++c) {
+        if (usable(c) && !palette.colour(QChar(c)).isValid())
+            return QString(QChar(c));
+    }
+    for (char16_t c = 0xA1; c <= 0x24F; ++c) {
+        // Soft hyphen is invisible, so it is no better as a slot than a space.
+        if (c != 0xAD && usable(c) && !palette.colour(QChar(c)).isValid())
+            return QString(QChar(c));
+    }
+    return QString();
 }
 
 } // namespace
@@ -199,6 +232,126 @@ void DocumentModel::clearSelection()
         return;
     m_selection = QRect();
     emit selectionChanged();
+}
+
+bool DocumentModel::copySelection()
+{
+    if (!m_selection.isValid())
+        return false;
+
+    const Grid grid = m_document.frame(m_clip, m_frame);
+    QJsonArray rows;
+    for (int y = m_selection.top(); y <= m_selection.bottom(); ++y) {
+        QJsonArray row;
+        for (int x = m_selection.left(); x <= m_selection.right(); ++x) {
+            const QChar slot = grid.at(x, y);
+            if (slot == Grid::Empty) {
+                row.append(QJsonValue::Null);
+            } else {
+                row.append(m_document.palette().colour(slot)
+                               .name(QColor::HexRgb).toUpper());
+            }
+        }
+        rows.append(row);
+    }
+
+    QGuiApplication::clipboard()->setText(
+        QString::fromUtf8(QJsonDocument(rows).toJson(QJsonDocument::Indented)));
+    say(Strings::shared().t(QStringLiteral("note.copiedPixels"))
+            .arg(m_selection.width()).arg(m_selection.height()));
+    return true;
+}
+
+bool DocumentModel::pastePixels(int x, int y)
+{
+    QJsonParseError parseError;
+    const QJsonDocument json = QJsonDocument::fromJson(
+        QGuiApplication::clipboard()->text().toUtf8(), &parseError);
+    const QJsonArray rows = json.array();
+    if (parseError.error != QJsonParseError::NoError || !json.isArray()
+        || rows.isEmpty() || !rows.first().isArray()
+        || rows.first().toArray().isEmpty()) {
+        say(Strings::shared().t(QStringLiteral("note.invalidPixelClipboard")));
+        return false;
+    }
+
+    const int width = rows.first().toArray().size();
+    const QRegularExpression hex(QStringLiteral("^#[0-9A-Fa-f]{6}$"));
+    QList<QList<QColor>> pixels;
+    pixels.reserve(rows.size());
+    for (const QJsonValue &rowValue : rows) {
+        if (!rowValue.isArray() || rowValue.toArray().size() != width) {
+            say(Strings::shared().t(QStringLiteral("note.invalidPixelClipboard")));
+            return false;
+        }
+        QList<QColor> row;
+        row.reserve(width);
+        for (const QJsonValue &pixel : rowValue.toArray()) {
+            if (pixel.isNull()) {
+                row.append(QColor());
+            } else if (pixel.isString() && hex.match(pixel.toString()).hasMatch()) {
+                row.append(QColor(pixel.toString()));
+            } else {
+                say(Strings::shared().t(QStringLiteral("note.invalidPixelClipboard")));
+                return false;
+            }
+        }
+        pixels.append(row);
+    }
+
+    const int left = qBound(0, x, m_document.columns() - 1);
+    const int top = qBound(0, y, m_document.rows() - 1);
+    const int pastedWidth = qMin(width, m_document.columns() - left);
+    const int pastedHeight = qMin(rows.size(), m_document.rows() - top);
+
+    Document next = m_document;
+    Grid grid = next.frame(m_clip, m_frame);
+    QHash<QRgb, QChar> slotsByColour;
+    for (const Palette::Slot &slot : next.palette().entries())
+        slotsByColour.insert(slot.colour.rgb(), slot.letter);
+
+    for (int py = 0; py < pastedHeight; ++py) {
+        for (int px = 0; px < pastedWidth; ++px) {
+            const QColor colour = pixels.at(py).at(px);
+            QChar slot = Grid::Empty;
+            if (colour.isValid()) {
+                const auto known = slotsByColour.constFind(colour.rgb());
+                if (known != slotsByColour.constEnd()) {
+                    slot = known.value();
+                } else {
+                    const QString fresh = freeSlotIn(next.palette());
+                    if (fresh.isEmpty()) {
+                        say(Strings::shared().t(QStringLiteral("note.paletteFull")));
+                        return false;
+                    }
+                    slot = fresh.at(0);
+                    next.palette().set(slot, colour);
+                    slotsByColour.insert(colour.rgb(), slot);
+                }
+            }
+            grid.set(left + px, top + py, slot);
+        }
+    }
+    next.setFrame(m_clip, m_frame, grid);
+
+    const Document before = m_document;
+    const bool paletteChanged = next.palette().size() != before.palette().size();
+    if (!(next == before)) {
+        remember(before);
+        m_document = next;
+        m_dirty = true;
+        if (paletteChanged)
+            paletteMoved();
+        emit changed();
+        emit renderChanged(m_clip, m_frame);
+        emit fileChanged();
+    }
+    setSelection(left, top, left + pastedWidth - 1, top + pastedHeight - 1);
+    const bool cropped = pastedWidth != width || pastedHeight != rows.size();
+    say(Strings::shared().t(cropped ? QStringLiteral("note.pastedPixelsCropped")
+                                   : QStringLiteral("note.pastedPixels"))
+            .arg(pastedWidth).arg(pastedHeight).arg(left).arg(top));
+    return true;
 }
 
 void DocumentModel::setPath(const QString &path)
@@ -475,42 +628,7 @@ void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex,
 
 QString DocumentModel::freeSlot() const
 {
-    const auto usable = [](char16_t c) {
-        // `.` is emptiness and can never be a slot. The quote and the backslash
-        // are legal in the file -- JSON escapes them -- but they turn a row of
-        // pixels into a row of escapes for anyone reading it, and this format
-        // is meant to be read.
-        //
-        // The digits are reserved for the studio's colour keys. A slot called
-        // `3` whose colour is not what pressing 3 draws is a contradiction
-        // sitting on screen, and one nobody can be talked out of reading. A
-        // document that already uses a digit still works -- the format allows
-        // any character -- this only declines to hand one out.
-        return c != u'.' && c != u'"' && c != u'\\' && !(c >= u'0' && c <= u'9');
-    };
-
-    // Letters first, so a palette that stays small stays legible.
-    const QString preferred = QStringLiteral(
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
-    for (const QChar c : preferred) {
-        if (!m_document.palette().colour(c).isValid())
-            return QString(c);
-    }
-    for (char16_t c = u'!'; c <= u'~'; ++c) {
-        if (usable(c) && !m_document.palette().colour(QChar(c)).isValid())
-            return QString(QChar(c));
-    }
-    // Latin-1 and Latin Extended-A after that: accented letters that still
-    // read as letters in a wall of pixels, unlike box-drawing or arrows.
-    // Soft hyphen and the non-breaking space are skipped -- a slot you cannot
-    // see is a slot you cannot edit by hand.
-    for (char16_t c = 0xA1; c <= 0x24F; ++c) {
-        if (c == 0xAD)
-            continue;
-        if (usable(c) && !m_document.palette().colour(QChar(c)).isValid())
-            return QString(QChar(c));
-    }
-    return QString();
+    return freeSlotIn(m_document.palette());
 }
 
 QString DocumentModel::randomColour() const

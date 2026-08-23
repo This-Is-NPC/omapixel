@@ -20,6 +20,8 @@ import QtQuick.Controls.Basic as C
 C.MenuItem {
     id: entry
 
+    property string shownShortcut: ""
+
     implicitWidth: 268
     implicitHeight: 26
     padding: 0
@@ -54,7 +56,9 @@ C.MenuItem {
             anchors.verticalCenter: parent.verticalCenter
             // An action without a shortcut has `shortcut` undefined, not empty,
             // and assigning undefined to a string is a warning per repaint.
-            text: entry.action && entry.action.shortcut ? entry.action.shortcut : ""
+            text: entry.shownShortcut !== ""
+                  ? entry.shownShortcut
+                  : (entry.action && entry.action.shortcut ? entry.action.shortcut : "")
             color: entry.enabled ? theme.dim : theme.fill(theme.foreground, 0.25)
             font.family: theme.fontFamily
             font.pixelSize: 11

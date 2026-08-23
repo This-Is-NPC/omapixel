@@ -8,6 +8,7 @@
 
 #include <QtTest>
 #include <QCommandLineParser>
+#include <QClipboard>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQuickItem>
@@ -1683,6 +1684,124 @@ private slots:
         QCOMPARE(doc.slotAt(2, 3), QStringLiteral("."));
     }
 
+    void copiedPixelsAreAColourMatrixIndependentOfPaletteSlots()
+    {
+        DocumentModel doc;
+        doc.reset(4, 3);
+        doc.setPaletteColour(QStringLiteral("Z"), QStringLiteral("#123456"));
+        doc.paint(1, 0, QStringLiteral("Z"));
+        doc.paint(2, 1, QStringLiteral("R"));
+        doc.setSelection(1, 0, 2, 1);
+
+        QVERIFY(doc.copySelection());
+        const QJsonDocument copied = QJsonDocument::fromJson(
+            QGuiApplication::clipboard()->text().toUtf8());
+        QVERIFY(copied.isArray());
+        const QJsonArray rows = copied.array();
+        QCOMPARE(rows.size(), 2);
+        QCOMPARE(rows.at(0).toArray(),
+                 QJsonArray({QStringLiteral("#123456"), QJsonValue::Null}));
+        QCOMPARE(rows.at(1).toArray(),
+                 QJsonArray({QJsonValue::Null, QStringLiteral("#F7768E")}));
+    }
+
+    void pastedPixelsReuseDestinationColoursAndNullErases()
+    {
+        DocumentModel doc;
+        doc.reset(4, 3);
+        doc.setPaletteColour(QStringLiteral("Q"), QStringLiteral("#123456"));
+        doc.paint(2, 1, QStringLiteral("I"));
+        const int paletteSize = doc.palette().size();
+        QGuiApplication::clipboard()->setText(QStringLiteral(
+            "[[\"#123456\",null],[\"#F7768E\",\"#123456\"]]"));
+
+        QVERIFY(doc.pastePixels(1, 1));
+        QCOMPARE(doc.slotAt(1, 1), QStringLiteral("Q"));
+        QCOMPARE(doc.slotAt(2, 1), QStringLiteral("."));
+        QCOMPARE(doc.slotAt(1, 2), QStringLiteral("R"));
+        QCOMPARE(doc.slotAt(2, 2), QStringLiteral("Q"));
+        QCOMPARE(doc.palette().size(), paletteSize);
+        QCOMPARE(doc.selectionX(), 1);
+        QCOMPARE(doc.selectionY(), 1);
+        QCOMPARE(doc.selectionWidth(), 2);
+        QCOMPARE(doc.selectionHeight(), 2);
+    }
+
+    void pasteAddsNewColoursInOneUndoStep()
+    {
+        DocumentModel doc;
+        const int paletteSize = doc.palette().size();
+        QGuiApplication::clipboard()->setText(QStringLiteral(
+            "[[\"#010203\",\"#010203\"]]"));
+
+        QVERIFY(doc.pastePixels(3, 4));
+        const QString newSlot = doc.slotAt(3, 4);
+        QVERIFY(newSlot != QStringLiteral("."));
+        QCOMPARE(doc.slotAt(4, 4), newSlot);
+        QCOMPARE(doc.colourOf(newSlot), QColor(QStringLiteral("#010203")));
+        QCOMPARE(doc.palette().size(), paletteSize + 1);
+
+        doc.undo();
+        QCOMPARE(doc.slotAt(3, 4), QStringLiteral("."));
+        QCOMPARE(doc.slotAt(4, 4), QStringLiteral("."));
+        QCOMPARE(doc.palette().size(), paletteSize);
+    }
+
+    void pasteRejectsInvalidMatricesWithoutEditing()
+    {
+        const QStringList invalid{
+            QStringLiteral("not json"),
+            QStringLiteral("[]"),
+            QStringLiteral("[[]]"),
+            QStringLiteral("[[\"#FFF\"]]"),
+            QStringLiteral("[[\"red\"]]"),
+            QStringLiteral("[[1]]"),
+            QStringLiteral("[[\"#123456\"],[null,null]]"),
+            QStringLiteral("{\"pixels\":[[\"#123456\"]]}")
+        };
+
+        for (const QString &text : invalid) {
+            DocumentModel doc;
+            QGuiApplication::clipboard()->setText(text);
+            QVERIFY2(!doc.pastePixels(0, 0), qPrintable(text));
+            QCOMPARE(doc.slotAt(0, 0), QStringLiteral("."));
+            QVERIFY(!doc.dirty());
+            QVERIFY(!doc.canUndo());
+        }
+    }
+
+    void pasteCropsAtTheCanvasEdge()
+    {
+        DocumentModel doc;
+        doc.reset(3, 2);
+        QGuiApplication::clipboard()->setText(QStringLiteral(
+            "[[\"#F7768E\",\"#7AA2F7\"],[\"#9ECE6A\",null]]"));
+
+        QVERIFY(doc.pastePixels(2, 1));
+        QCOMPARE(doc.slotAt(2, 1), QStringLiteral("R"));
+        QCOMPARE(doc.selectionX(), 2);
+        QCOMPARE(doc.selectionY(), 1);
+        QCOMPARE(doc.selectionWidth(), 1);
+        QCOMPARE(doc.selectionHeight(), 1);
+    }
+
+    void pasteIsAtomicWhenThePaletteHasNoFreeSlot()
+    {
+        DocumentModel doc;
+        QString free;
+        while (!(free = doc.freeSlot()).isEmpty())
+            doc.setPaletteColour(free, QStringLiteral("#010203"));
+        doc.paint(0, 0, QStringLiteral("I"));
+        const int paletteSize = doc.palette().size();
+        QGuiApplication::clipboard()->setText(QStringLiteral(
+            "[[\"#040506\",null]]"));
+
+        QVERIFY(!doc.pastePixels(0, 0));
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("I"));
+        QCOMPARE(doc.slotAt(1, 0), QStringLiteral("."));
+        QCOMPARE(doc.palette().size(), paletteSize);
+    }
+
     void aSessionSaysWhatTheStudioHoldsOpen()
     {
         // The agent-side half of the live loop: before writing, an agent can
@@ -2700,7 +2819,81 @@ private slots:
             return 0.2126 * c.redF() + 0.7152 * c.greenF() + 0.0722 * c.blueF();
         };
         QVERIFY2(qAbs(lum(against) - lum(QColor(QStringLiteral("#808080")))) > 0.28,
-                 "the cursor colour is as bright as the pixel it sits on");
+                  "the cursor colour is as bright as the pixel it sits on");
+    }
+
+    void goToPixelMovesByExactZeroBasedCoordinates()
+    {
+        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+
+        QQmlEngine engine;
+        DocumentModel document;
+        document.reset(32, 24);
+        Theme theme;
+        static InputLog mute(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &mute);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        window->resize(1000, 720);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        auto *sheet = root->findChild<QObject *>(QStringLiteral("goToSheet"));
+        auto *xField = root->findChild<QObject *>(QStringLiteral("goToX"));
+        auto *yField = root->findChild<QObject *>(QStringLiteral("goToY"));
+        QVERIFY(sheet);
+        QVERIFY(xField);
+        QVERIFY(yField);
+        auto *xInput = xField->property("input").value<QObject *>();
+        auto *yInput = yField->property("input").value<QObject *>();
+        QVERIFY(xInput);
+        QVERIFY(yInput);
+
+        document.setSelection(1, 1, 2, 2);
+        QTest::keyClick(window, Qt::Key_G);
+        QTRY_VERIFY(sheet->property("opened").toBool());
+        QTRY_VERIFY(xInput->property("activeFocus").toBool());
+        QTest::keyClick(window, Qt::Key_1);
+        QTest::keyClick(window, Qt::Key_7);
+        QTest::keyClick(window, Qt::Key_Return);
+        QTRY_VERIFY(yInput->property("activeFocus").toBool());
+        QTest::keyClick(window, Qt::Key_1);
+        QTest::keyClick(window, Qt::Key_3);
+        QTest::keyClick(window, Qt::Key_Return);
+
+        QTRY_VERIFY(!sheet->property("opened").toBool());
+        QCOMPARE(root->property("caretColumn").toInt(), 17);
+        QCOMPARE(root->property("caretRow").toInt(), 13);
+        QVERIFY(!document.hasSelection());
+
+        // An out-of-range coordinate leaves both the cursor and panel in place.
+        QTest::keyClick(window, Qt::Key_G);
+        QTRY_VERIFY(xInput->property("activeFocus").toBool());
+        QTest::keyClick(window, Qt::Key_3);
+        QTest::keyClick(window, Qt::Key_2);
+        QTest::keyClick(window, Qt::Key_Return);
+        QTRY_VERIFY(yInput->property("activeFocus").toBool());
+        QTest::keyClick(window, Qt::Key_0);
+        QTest::keyClick(window, Qt::Key_Return);
+        QVERIFY(sheet->property("opened").toBool());
+        QVERIFY(!sheet->property("problem").toString().isEmpty());
+        QCOMPARE(root->property("caretColumn").toInt(), 17);
+        QCOMPARE(root->property("caretRow").toInt(), 13);
+
+        QTest::keyClick(window, Qt::Key_Escape);
+        QTRY_VERIFY(!sheet->property("opened").toBool());
+        QCOMPARE(root->property("caretColumn").toInt(), 17);
+        QCOMPARE(root->property("caretRow").toInt(), 13);
     }
 
     void theArrowKeysWalkAPixelCursorOverTheDrawing()
@@ -2813,12 +3006,23 @@ private slots:
         for (int y = 13; y <= 14; ++y)
             for (int x = 9; x <= 10; ++x)
                 QCOMPARE(document.slotAt(x, y), selectedSlot);
+        QTest::keySequence(window, QKeySequence::Copy);
         QTest::keyClick(window, Qt::Key_Backspace);
         for (int y = 13; y <= 14; ++y)
             for (int x = 9; x <= 10; ++x)
                 QCOMPARE(document.slotAt(x, y), QStringLiteral("."));
         QTest::keyClick(window, Qt::Key_Escape);
         QVERIFY(!document.hasSelection());
+        root->setProperty("caretColumn", 20);
+        root->setProperty("caretRow", 2);
+        QTest::keySequence(window, QKeySequence::Paste);
+        for (int y = 2; y <= 3; ++y)
+            for (int x = 20; x <= 21; ++x)
+                QCOMPARE(document.slotAt(x, y), selectedSlot);
+        QCOMPARE(document.selectionX(), 20);
+        QCOMPARE(document.selectionY(), 2);
+        QTest::keySequence(window, QKeySequence::Undo);
+        document.clearSelection();
         root->setProperty("caretColumn", 9);
         root->setProperty("caretRow", 13);
 

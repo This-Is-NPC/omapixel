@@ -266,6 +266,7 @@ Window {
                     { key: cfg.keys.cancel, label: T.t("hint.putAway") }]
 
         return [{ key: "arrows", label: T.t("hint.drawWithKeyboard") },
+                { key: cfg.keys.go_to_pixel, label: T.t("hint.goToPixel") },
                 { key: [cfg.keys.tool_pencil, cfg.keys.tool_eraser, cfg.keys.tool_bucket,
                         cfg.keys.tool_picker, cfg.keys.tool_hand].join(" "),
                   label: T.t("hint.tools") },
@@ -312,6 +313,19 @@ Window {
 
     function focusCanvas() {
         keys.forceActiveFocus()
+    }
+
+    function pastePixels() {
+        var x = doc.hasSelection ? doc.selectionX
+                                 : (caretColumn >= 0 ? caretColumn : 0)
+        var y = doc.hasSelection ? doc.selectionY
+                                 : (caretRow >= 0 ? caretRow : 0)
+        if (doc.pastePixels(x, y)) {
+            caretColumn = x
+            caretRow = y
+            selectionAnchorColumn = x
+            selectionAnchorRow = y
+        }
     }
 
     function performPendingAction(action) {
@@ -541,6 +555,8 @@ Window {
             newSheet.open()
         else if (shotSheet === "export")
             exportSheet.open()
+        else if (shotSheet === "goto")
+            goToSheet.show()
     }
 
     Timer {
@@ -585,6 +601,10 @@ Window {
              enabled: doc.canUndo; onTriggered: doc.undo() }
     C.Action { id: actRedo; text: T.t("menu.redo"); shortcut: cfg.shortcuts.redo
              enabled: doc.canRedo; onTriggered: doc.redo() }
+    C.Action { id: actCopyPixels; text: T.t("menu.copyPixels"); shortcut: cfg.shortcuts.copy_pixels
+             enabled: doc.hasSelection; onTriggered: doc.copySelection() }
+    C.Action { id: actPastePixels; text: T.t("menu.pastePixels"); shortcut: cfg.shortcuts.paste_pixels
+             onTriggered: win.pastePixels() }
     C.Action { id: actClear; text: T.t("menu.clearFrame"); shortcut: cfg.shortcuts.clear_frame
              onTriggered: doc.clearFrame() }
     C.Action { id: actFlipX; text: T.t("menu.flipX"); onTriggered: doc.flip("x") }
@@ -617,6 +637,8 @@ Window {
              onTriggered: stage.zoomStep(stage.width / 2, stage.height / 2, false) }
     C.Action { id: actFit; text: T.t("menu.fit"); shortcut: cfg.shortcuts.zoom_fit
              onTriggered: { stage.touched = false; stage.fit() } }
+    C.Action { id: actGoToPixel; text: T.t("menu.goToPixel")
+             onTriggered: goToSheet.show() }
     C.Action { id: actOnion; text: T.t("menu.onion"); checkable: true; checked: win.onion
              onTriggered: win.onion = !win.onion }
     C.Action { id: actMesh; text: T.t("menu.grid"); checkable: true; checked: win.mesh
@@ -763,6 +785,7 @@ Window {
             case "caret_right_far": win.moveCaret(win.bigStep, 0); break
             case "caret_up_far":    win.moveCaret(0, -win.bigStep); break
             case "caret_down_far":  win.moveCaret(0, win.bigStep); break
+            case "go_to_pixel": goToSheet.show(); break
 
             case "frame_previous":  doc.frame = Math.max(0, doc.frame - 1); break
             case "frame_next":
@@ -996,6 +1019,9 @@ Window {
                     Cmd { action: actUndo }
                     Cmd { action: actRedo }
                     Rule {}
+                    Cmd { action: actCopyPixels }
+                    Cmd { action: actPastePixels }
+                    Rule {}
                     Cmd { action: actClear }
                     Cmd { action: actFlipX }
                     Cmd { action: actFlipY }
@@ -1030,6 +1056,7 @@ Window {
                     Cmd { action: actZoomIn }
                     Cmd { action: actZoomOut }
                     Cmd { action: actFit }
+                    Cmd { action: actGoToPixel; shownShortcut: cfg.keys.go_to_pixel }
                     Rule {}
                     Cmd { action: actOnion }
                     Cmd { action: actMesh }
@@ -1748,6 +1775,100 @@ Window {
     }
 
     // ---------------------------------------------------------------- dialogs
+
+    Sheet {
+        id: goToSheet
+        objectName: "goToSheet"
+        title: T.t("sheet.goToPixel")
+        onClosed: win.focusCanvas()
+
+        property string columnText: "0"
+        property string rowText: "0"
+        property string problem: ""
+
+        function show() {
+            columnText = String(win.caretColumn >= 0 ? win.caretColumn : 0)
+            rowText = String(win.caretRow >= 0 ? win.caretRow : 0)
+            problem = ""
+            open()
+            Qt.callLater(goToX.focusEntry)
+        }
+
+        function navigate() {
+            var digits = /^\d+$/
+            var column = digits.test(columnText) ? Number(columnText) : -1
+            var row = digits.test(rowText) ? Number(rowText) : -1
+            if (column < 0 || column >= doc.columns || row < 0 || row >= doc.rows) {
+                problem = T.t("sheet.goToPixel.outOfRange")
+                           .arg(doc.columns - 1).arg(doc.rows - 1)
+                return
+            }
+            doc.clearSelection()
+            win.selectionAnchorColumn = -1
+            win.selectionAnchorRow = -1
+            win.caretColumn = column
+            win.caretRow = row
+            stage.reveal(column, row)
+            close()
+        }
+
+        body: [
+            Label {
+                width: 300
+                wrapMode: Text.Wrap
+                text: T.t("sheet.goToPixel.range")
+                      .arg(doc.columns - 1).arg(doc.rows - 1)
+            },
+            Row {
+                spacing: 8
+                Field {
+                    id: goToX
+                    objectName: "goToX"
+                    label: T.t("field.x")
+                    boxWidth: 140
+                    value: goToSheet.columnText
+                    onEdited: function (text) {
+                        goToSheet.columnText = text
+                        goToSheet.problem = ""
+                    }
+                    onConfirmed: goToY.focusEntry()
+                    onEscaped: goToSheet.close()
+                }
+                Field {
+                    id: goToY
+                    objectName: "goToY"
+                    label: T.t("field.y")
+                    boxWidth: 140
+                    value: goToSheet.rowText
+                    onEdited: function (text) {
+                        goToSheet.rowText = text
+                        goToSheet.problem = ""
+                    }
+                    onConfirmed: goToSheet.navigate()
+                    onEscaped: goToSheet.close()
+                }
+            },
+            Label {
+                width: 300
+                wrapMode: Text.Wrap
+                visible: goToSheet.problem !== ""
+                color: theme.urgent
+                text: goToSheet.problem
+            },
+            Row {
+                spacing: 6
+                Chip {
+                    label: T.t("sheet.goToPixel.go")
+                    on: true
+                    onClicked: goToSheet.navigate()
+                }
+                Chip {
+                    label: T.t("action.cancel")
+                    onClicked: goToSheet.close()
+                }
+            }
+        ]
+    }
 
     Sheet {
         id: unsavedSheet

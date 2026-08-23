@@ -114,12 +114,14 @@ Every action, and what it comes bound to:
 |---|---|
 | `new` `open` `save` `save_as` | `ctrl+n` `ctrl+o` `ctrl+s` `ctrl+shift+s` |
 | `export_png` `export_sheet` `quit` | `ctrl+e` `ctrl+shift+e` `ctrl+q` |
-| `undo` `redo` `clear_frame` `trim` | `ctrl+z` `ctrl+shift+z` `ctrl+delete` `ctrl+shift+t` |
+| `undo` `redo` `copy_pixels` `paste_pixels` | `ctrl+z` `ctrl+shift+z` `ctrl+c` `ctrl+v` |
+| `clear_frame` `trim` | `ctrl+delete` `ctrl+shift+t` |
 | `tool_pencil` `tool_eraser` `tool_bucket` `tool_picker` `tool_hand` | `b` `e` `f` `i` `h` |
 | `caret_left` `caret_right` `caret_up` `caret_down` | the arrows |
 | `select_left` `select_right` `select_up` `select_down` | the arrows with shift, extending the selection |
 | `select_left_far` … | the arrows with ctrl+shift, extending by `canvas.big_step` |
 | `caret_left_far` … | the arrows with ctrl, jumping `canvas.big_step` |
+| `go_to_pixel` | `g`, opening exact X and Y fields |
 | `paint` `erase` `cancel` | `enter` or `x`, `backspace` or `delete`, `esc` |
 | `slot_leader` | `;`, after which the next key names a palette letter |
 | `choose_colour` `replace_colour` `roulette` | `c` `shift+c` `r` |

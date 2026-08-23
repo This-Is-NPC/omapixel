@@ -106,6 +106,8 @@
 # Undoing
 # undo = "ctrl+z"
 # redo = "ctrl+shift+z"
+# copy_pixels = "ctrl+c"
+# paste_pixels = "ctrl+v"
 # clear_frame = "ctrl+delete"
 # trim = "ctrl+shift+t"
 
@@ -133,6 +135,7 @@
 # caret_right_far = "ctrl+right"
 # caret_up_far = "ctrl+up"
 # caret_down_far = "ctrl+down"
+# go_to_pixel = "g"
 
 # Drawing where the cursor stands.
 # paint = ["enter", "x"]
