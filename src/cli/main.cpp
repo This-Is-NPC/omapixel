@@ -18,6 +18,7 @@
 #include "Codec.h"
 #include "Commands.h"
 #include "Config.h"
+#include "Differences.h"
 #include "Document.h"
 #include "Ops.h"
 #include "Strings.h"
@@ -678,7 +679,7 @@ int main(int argc, char *argv[])
         for (const QString &warning : other.warnings)
             err() << "warning: " << warning << "\n";
         const QStringList differences =
-            cli::documentDifferences(doc, other.document, path, words.first());
+            documentDifferences(doc, other.document, path, words.first());
         for (const QString &difference : differences)
             out() << difference << "\n";
         out() << differences.size() << " difference(s)\n";

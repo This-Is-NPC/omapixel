@@ -24,6 +24,7 @@ HEADERS += \
     Grid.h \
     Palette.h \
     Document.h \
+    Differences.h \
     Codec.h \
     Ops.h \
     Render.h \
@@ -36,6 +37,7 @@ SOURCES += \
     Grid.cpp \
     Palette.cpp \
     Document.cpp \
+    Differences.cpp \
     Codec.cpp \
     Ops.cpp \
     Render.cpp \
