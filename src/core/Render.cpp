@@ -1,18 +1,19 @@
 #include "Render.h"
 
-#include <QPainter>
-
+#include <algorithm>
+#include <cstring>
 #include <limits>
+#include <vector>
 
 namespace omapixel {
 namespace render {
 namespace {
 
-QColor checkerAt(int x, int y, const Options &options)
+QRgb checkerAt(int x, int y, QRgb dark, QRgb light)
 {
     // In blocks of four sprite pixels, so the pattern zooms with the drawing
     // instead of turning into moire over the art.
-    return ((x / 4) + (y / 4)) % 2 == 0 ? options.checkerDark : options.checkerLight;
+    return ((x / 4) + (y / 4)) % 2 == 0 ? dark : light;
 }
 
 bool multiply(qint64 left, qint64 right, qint64 *result)
@@ -82,7 +83,20 @@ QImage toImage(const Document &document, const QString &clip, int frame,
         return image;
     }
     image.fill(Qt::transparent);
-    QPainter painter(&image);
+
+    // A colour lookup and QPainter::fillRect per source pixel dominated large
+    // frames. Resolve the palette once, then write complete scanlines into the
+    // image's native ARGB storage.
+    constexpr int slotCount = 1 << 16;
+    std::vector<QRgb> colours(slotCount);
+    std::vector<unsigned char> known(slotCount);
+    for (const Palette::Slot &slot : document.palette().entries()) {
+        const ushort letter = slot.letter.unicode();
+        colours[letter] = slot.colour.rgba();
+        known[letter] = 1;
+    }
+    const QRgb checkerDark = options.checkerDark.rgba();
+    const QRgb checkerLight = options.checkerLight.rgba();
 
     const int firstFrame = options.sheet
                                ? 0
@@ -90,25 +104,32 @@ QImage toImage(const Document &document, const QString &clip, int frame,
     for (int index = 0; index < frameCount; ++index) {
         const Grid &grid = found->frames.at(firstFrame + index);
         const int originX = static_cast<int>(qint64(index) * stride);
+        const QChar *cells = grid.constData();
         for (int y = 0; y < grid.rows(); ++y) {
+            auto *line = reinterpret_cast<QRgb *>(image.scanLine(y * scale));
             for (int x = 0; x < grid.columns(); ++x) {
-                const QChar letter = grid.at(x, y);
-                const QRect cell(originX + x * scale, y * scale, scale, scale);
-                if (letter == Grid::Empty) {
-                    if (options.checker)
-                        painter.fillRect(cell, checkerAt(x, y, options));
-                    continue;
+                const QChar letter = cells[y * grid.columns() + x];
+                QRgb colour = 0;
+                bool paint = false;
+                if (letter != Grid::Empty && known[letter.unicode()]) {
+                    colour = colours[letter.unicode()];
+                    paint = true;
+                } else if (options.checker) {
+                    colour = checkerAt(x, y, checkerDark, checkerLight);
+                    paint = true;
                 }
-                const QColor colour = document.palette().colour(letter);
                 // An unknown slot is skipped rather than guessed at. It is the
                 // same thing every renderer in this family does, and the
                 // checker underneath is what shows you it happened.
-                if (!colour.isValid()) {
-                    if (options.checker)
-                        painter.fillRect(cell, checkerAt(x, y, options));
-                    continue;
-                }
-                painter.fillRect(cell, colour);
+                if (paint)
+                    std::fill_n(line + originX + x * scale, scale, colour);
+            }
+            for (int offset = 1; offset < scale; ++offset) {
+                std::memcpy(image.scanLine(y * scale + offset)
+                                + originX * qsizetype(sizeof(QRgb)),
+                            image.constScanLine(y * scale)
+                                + originX * qsizetype(sizeof(QRgb)),
+                            qsizetype(grid.columns()) * scale * sizeof(QRgb));
             }
         }
     }
@@ -124,6 +145,9 @@ QString toAnsi(const Document &document, const QString &clip, int frame,
     const Grid &grid = found->frames.at(qBound(0, frame, found->frames.size() - 1));
 
     const QString reset = QStringLiteral("\x1b[0m");
+    const Options checkerOptions;
+    const QRgb checkerDark = checkerOptions.checkerDark.rgba();
+    const QRgb checkerLight = checkerOptions.checkerLight.rgba();
     QString out;
     for (int y = 0; y < grid.rows(); y += 2) {
         for (int x = 0; x < grid.columns(); ++x) {
@@ -131,12 +155,19 @@ QString toAnsi(const Document &document, const QString &clip, int frame,
                 if (row >= grid.rows())
                     return QColor();
                 const QChar letter = grid.at(x, row);
-                if (letter == Grid::Empty)
-                    return checker ? checkerAt(x, row, Options()) : QColor();
+                if (letter == Grid::Empty) {
+                    return checker
+                               ? QColor::fromRgba(checkerAt(
+                                     x, row, checkerDark, checkerLight))
+                               : QColor();
+                }
                 const QColor colour = document.palette().colour(letter);
                 return colour.isValid()
                            ? colour
-                           : (checker ? checkerAt(x, row, Options()) : QColor());
+                           : (checker
+                                  ? QColor::fromRgba(checkerAt(
+                                        x, row, checkerDark, checkerLight))
+                                  : QColor());
             };
             const QColor upper = colourOf(y);
             const QColor lower = colourOf(y + 1);

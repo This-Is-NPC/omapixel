@@ -41,6 +41,10 @@ public:
     QChar at(int x, int y) const;
     void set(int x, int y, QChar slot);
 
+    /// Contiguous row-major storage for bulk readers such as the renderer.
+    /// Mutations still go through set(), so callers cannot bypass bounds.
+    const QChar *constData() const { return m_cells.constData(); }
+
     bool contains(int x, int y) const;
 
     QString row(int y) const;
