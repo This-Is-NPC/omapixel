@@ -4,6 +4,7 @@
 #include "Palette.h"
 
 #include <QList>
+#include <QRect>
 #include <QString>
 
 namespace omapixel {
@@ -30,6 +31,13 @@ struct Clip {
 class Document
 {
 public:
+    /// The largest grid a document may hold, per side. The real budget is
+    /// memory: a maximal square is ~4 MB per copy, and the undo stack holds
+    /// whole documents -- `history.depth` of them. 2048 keeps an 854x480
+    /// pixelization (or a 1080p frame) ordinary while keeping that stack
+    /// bounded on machines people actually own.
+    static constexpr int maxDimension = 2048;
+
     Document() = default;
     static Document blank(int columns, int rows);
 
@@ -88,6 +96,18 @@ public:
     /// clip left behind would produce a document with frames of two sizes,
     /// which is a file nothing can draw.
     void resize(int columns, int rows);
+
+    /// The smallest rectangle containing every drawn pixel in one frame. An
+    /// invalid rectangle means the frame is empty or does not exist.
+    QRect drawnBounds(const QString &clip, int frame) const;
+
+    /// How many drawn pixels across the document lie outside `kept`.
+    int wouldLoseOutside(const QRect &kept) const;
+
+    /// Keeps exactly this rectangle in every frame of every clip. The same
+    /// origin preserves animation alignment; false means invalid bounds or a
+    /// rectangle that already covers the whole document.
+    bool crop(const QRect &kept);
 
     /// Swaps one slot for another in every frame of every clip, and says how
     /// many pixels changed.

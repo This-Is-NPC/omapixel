@@ -66,7 +66,14 @@ Rectangle {
                   : (bar.column < 0 ? "—" : bar.column + ", " + bar.row)
             alarm: false
         }
-        StatusText { text: Math.round(win.zoom) + "×" }
+        StatusText {
+            visible: doc.hasSelection
+            text: T.t("status.selection")
+                   .arg(doc.selectionWidth).arg(doc.selectionHeight)
+                   .arg(doc.selectionCount)
+            alarm: true
+        }
+        StatusText { text: win.zoomLabel() }
         StatusText {
             text: T.t(doc.frameCount === 1 ? "status.oneFrame" : "status.frames")
                       .arg(doc.clip).arg(doc.frameCount).arg(doc.fps)

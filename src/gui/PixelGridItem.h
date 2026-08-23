@@ -3,20 +3,21 @@
 #include "DocumentModel.h"
 
 #include <QQmlEngine>
-#include <QQuickPaintedItem>
+#include <QQuickItem>
+
+class QSGNode;
 
 namespace omapixel {
 
 /// Draws one frame of a document.
 ///
 /// It paints through `render::toImage` rather than laying out rectangles of its
-/// own. That costs an image allocation per repaint -- nothing, at these sizes --
-/// and buys the property the whole project is built on: the studio and the PNG
-/// cannot disagree, because there is one renderer and this is a blit of it.
+/// own. The studio and PNG therefore cannot disagree: there is one renderer and
+/// this is a nearest-neighbour blit of its result.
 ///
 /// Everything that shows pixels goes through here: the drawing surface, the
 /// timeline thumbnails, the true-size strip, the onion skin.
-class PixelGridItem : public QQuickPaintedItem
+class PixelGridItem : public QQuickItem
 {
     Q_OBJECT
     QML_ELEMENT
@@ -54,14 +55,15 @@ public:
     QColor meshColour() const { return m_meshColour; }
     void setMeshColour(const QColor &colour);
 
-    void paint(QPainter *painter) override;
-
 signals:
     void modelChanged();
     void specChanged();
 
 private:
     void resize();
+    void invalidateTexture();
+    QSGNode *updatePaintNode(QSGNode *oldNode,
+                             UpdatePaintNodeData *data) override;
 
     DocumentModel *m_model = nullptr;
     QString m_clip;
@@ -72,6 +74,7 @@ private:
     QColor m_checkerDark{"#1B1C26"};
     QColor m_checkerLight{"#22242F"};
     QColor m_meshColour{255, 255, 255, 16};
+    bool m_textureDirty = true;
 };
 
 } // namespace omapixel

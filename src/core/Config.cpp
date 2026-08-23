@@ -1,5 +1,6 @@
 #include "Config.h"
 
+#include "Document.h"
 #include "Toml.h"
 
 #include <QCoreApplication>
@@ -133,8 +134,12 @@ const QList<QPair<QString, QVariant>> &Config::settings()
         {QStringLiteral("canvas.grid"), true},
         {QStringLiteral("canvas.onion"), false},
         {QStringLiteral("canvas.big_step"), 8},
+        {QStringLiteral("canvas.caret_margin_x"), 0},
+        {QStringLiteral("canvas.caret_margin_y"), 0},
 
         {QStringLiteral("playback.loop"), true},
+
+        {QStringLiteral("studio.scratch"), true},
 
         {QStringLiteral("document.width"), 32},
         {QStringLiteral("document.height"), 24},
@@ -169,7 +174,8 @@ const QList<QPair<QString, QString>> &Config::actions()
 
         {QStringLiteral("undo"), QStringLiteral("ctrl+z")},
         {QStringLiteral("redo"), QStringLiteral("ctrl+shift+z")},
-        {QStringLiteral("clear_frame"), QStringLiteral("delete")},
+        {QStringLiteral("clear_frame"), QStringLiteral("ctrl+delete")},
+        {QStringLiteral("trim"), QStringLiteral("ctrl+shift+t")},
 
         {QStringLiteral("tool_pencil"), QStringLiteral("b")},
         {QStringLiteral("tool_eraser"), QStringLiteral("e")},
@@ -181,13 +187,21 @@ const QList<QPair<QString, QString>> &Config::actions()
         {QStringLiteral("caret_right"), QStringLiteral("right")},
         {QStringLiteral("caret_up"), QStringLiteral("up")},
         {QStringLiteral("caret_down"), QStringLiteral("down")},
-        {QStringLiteral("caret_left_far"), QStringLiteral("shift+left")},
-        {QStringLiteral("caret_right_far"), QStringLiteral("shift+right")},
-        {QStringLiteral("caret_up_far"), QStringLiteral("shift+up")},
-        {QStringLiteral("caret_down_far"), QStringLiteral("shift+down")},
+        {QStringLiteral("select_left"), QStringLiteral("shift+left")},
+        {QStringLiteral("select_right"), QStringLiteral("shift+right")},
+        {QStringLiteral("select_up"), QStringLiteral("shift+up")},
+        {QStringLiteral("select_down"), QStringLiteral("shift+down")},
+        {QStringLiteral("select_left_far"), QStringLiteral("ctrl+shift+left")},
+        {QStringLiteral("select_right_far"), QStringLiteral("ctrl+shift+right")},
+        {QStringLiteral("select_up_far"), QStringLiteral("ctrl+shift+up")},
+        {QStringLiteral("select_down_far"), QStringLiteral("ctrl+shift+down")},
+        {QStringLiteral("caret_left_far"), QStringLiteral("ctrl+left")},
+        {QStringLiteral("caret_right_far"), QStringLiteral("ctrl+right")},
+        {QStringLiteral("caret_up_far"), QStringLiteral("ctrl+up")},
+        {QStringLiteral("caret_down_far"), QStringLiteral("ctrl+down")},
 
         {QStringLiteral("paint"), QStringLiteral("[\"enter\", \"x\"]")},
-        {QStringLiteral("erase"), QStringLiteral("backspace")},
+        {QStringLiteral("erase"), QStringLiteral("[\"backspace\", \"delete\"]")},
         {QStringLiteral("cancel"), QStringLiteral("esc")},
 
         {QStringLiteral("slot_leader"), QStringLiteral("semicolon")},
@@ -441,13 +455,15 @@ void Config::load()
                                || was.typeId() == QMetaType::LongLong
                                || was.typeId() == QMetaType::Double;
         const bool isNumber = now.typeId() == QMetaType::LongLong
-                              || now.typeId() == QMetaType::Double;
+                               || now.typeId() == QMetaType::Double;
+        const bool isCaretMargin = key == QLatin1String("canvas.caret_margin_x")
+                                   || key == QLatin1String("canvas.caret_margin_y");
         if (was.typeId() == QMetaType::Bool && now.typeId() != QMetaType::Bool) {
             m_problems.append(QStringLiteral("line %1: %2 — wants true or false")
                                   .arg(line).arg(key));
             continue;
         }
-        if (wasNumber && !isNumber) {
+        if (wasNumber && !isNumber && !isCaretMargin) {
             m_problems.append(
                 QStringLiteral("line %1: %2 — wants a number").arg(line).arg(key));
             continue;
@@ -481,7 +497,9 @@ void Config::load()
             continue;
         if ((key == QLatin1String("document.width")
              || key == QLatin1String("document.height"))
-            && !integerIn(1, 512, QStringLiteral("wants an integer from 1 to 512")))
+            && !integerIn(1, Document::maxDimension,
+                          QStringLiteral("wants an integer from 1 to %1")
+                              .arg(Document::maxDimension)))
             continue;
         if (key == QLatin1String("document.fps")
             && !integerIn(1, 60, QStringLiteral("wants an integer from 1 to 60")))
@@ -498,6 +516,22 @@ void Config::load()
             }
             if (!integerIn(1, 40,
                            QStringLiteral("wants `fit` or an integer from 1 to 40")))
+                continue;
+        }
+        if (isCaretMargin) {
+            const QString wanted = QStringLiteral(
+                "wants `center` or a non-negative integer");
+            if (now.typeId() == QMetaType::QString) {
+                if (now.toString() == QLatin1String("center")) {
+                    m_values.insert(key, now);
+                    continue;
+                }
+                m_problems.append(QStringLiteral("line %1: %2 — %3")
+                                      .arg(line).arg(key, wanted));
+                continue;
+            }
+            if (!isNumber
+                || !integerIn(0, std::numeric_limits<int>::max(), wanted))
                 continue;
         }
         m_values.insert(key, now);

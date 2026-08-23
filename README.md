@@ -71,7 +71,7 @@ New here? Start with [Getting started](docs/getting-started.md).
 | `edit` | `clear` `shift` `flip` `swap` over a whole frame |
 | `clip` `frame` | `add` `dup` `rm` `move` `rename` `fps` |
 | `palette` | `list` `set` `rm` |
-| `resize` | change the frame, keeping the drawing centred |
+| `resize` `trim` | resize around the centre, or remove empty outer borders |
 | `batch` | many commands over one document, read once and written once |
 | `diff` | what differs between two documents |
 | `import` `export` | read and write somebody else's sprite catalog |
@@ -126,6 +126,12 @@ keys under the canvas.
 - **It wears your omarchy theme**, live. `omarchy theme set` recolours it
   without a restart, corner rounding included. Your art never changes colour
   because your desktop did.
+- **It follows the file you have open**, live. An agent editing through the
+  command line lands in the window as it happens, the status line says what
+  changed, and if it replaced unsaved work one Ctrl+Z brings your version
+  back. `omapixel where` tells that agent which windows hold a document — and
+  whether they have unsaved work — before it writes. Even an untitled window
+  is backed by a runtime file, so "draw something" works before any save.
 - **Its settings and every keybinding are one TOML file** in the shape the rest
   of an omarchy machine uses, watched, so saving it rebinds the keys while the
   window is open.

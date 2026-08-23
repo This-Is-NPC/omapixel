@@ -28,7 +28,8 @@ HEADERS += \
     Codec.h \
     Ops.h \
     Render.h \
-    Bridge.h
+    Bridge.h \
+    Sessions.h
 
 SOURCES += \
     Strings.cpp \
@@ -41,4 +42,5 @@ SOURCES += \
     Codec.cpp \
     Ops.cpp \
     Render.cpp \
-    Bridge.cpp
+    Bridge.cpp \
+    Sessions.cpp

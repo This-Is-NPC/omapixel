@@ -17,8 +17,8 @@ include($$PWD/../../version.pri)
 
 INCLUDEPATH += $$PWD/../core
 
-HEADERS += DocumentModel.h PaletteModel.h PixelGridItem.h Theme.h InputLog.h
-SOURCES += main.cpp DocumentModel.cpp PaletteModel.cpp PixelGridItem.cpp Theme.cpp InputLog.cpp
+HEADERS += DocumentModel.h PaletteModel.h PixelGridItem.h Theme.h InputLog.h SessionPublisher.h ChangeLog.h
+SOURCES += main.cpp DocumentModel.cpp PaletteModel.cpp PixelGridItem.cpp Theme.cpp InputLog.cpp SessionPublisher.cpp ChangeLog.cpp
 RESOURCES += resources.qrc
 
 # The same static library the CLI links. One model, two front ends -- which is

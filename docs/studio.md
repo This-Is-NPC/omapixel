@@ -78,6 +78,10 @@ when a click seems to have done nothing.
 **Left button** draws with the selected slot. **Right button** erases, whatever
 tool is selected, so you rarely need to switch to the eraser and back.
 
+**Shift and the left button** selects a rectangle. Hold Shift, press one corner,
+and drag to the opposite corner. The status line reports its dimensions and
+pixel count; a normal drawing click or <kbd>Esc</kbd> clears it.
+
 Dragging paints the **path**, not the samples. At a fast drag the mouse skips
 cells; painting only where the events landed would leave a dotted line.
 
@@ -119,6 +123,8 @@ is the whole picture at once, which is the thing a zoomed pane stops being.
 **View → Fit** (<kbd>Ctrl</kbd>+<kbd>0</kbd>) fits the whole drawing in the
 pane, and hands the view back to the window: after that it re-fits when the
 window is resized, until the next time you zoom or pan.
+Fit may use a fractional scale, including less than 1× for a document larger
+than the pane; manual zoom remains pixel-sized from 1× to 40×.
 
 A document opens fitted, or at whatever `canvas.zoom` says in the
 [config file](configuration.md). A 160×90 picture does not fit a pane at 12×,
@@ -144,7 +150,7 @@ drawing shows whatever you bound, not what is printed here.
 | <kbd>Esc</kbd> | back to the drawing, from anywhere |
 | <kbd>[</kbd> <kbd>]</kbd> | previous and next clip |
 | <kbd>Shift</kbd>+<kbd>,</kbd> <kbd>Shift</kbd>+<kbd>.</kbd> | move this frame earlier or later |
-| <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> | move the cursor one pixel · <kbd>Shift</kbd> for `canvas.big_step`, eight by default |
+| <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> | move one pixel · <kbd>Shift</kbd> selects · <kbd>Ctrl</kbd> moves by `canvas.big_step` · <kbd>Ctrl</kbd>+<kbd>Shift</kbd> selects by that step |
 | <kbd>Return</kbd>, <kbd>x</kbd> | paint the one pixel under the cursor |
 | <kbd>d</kbd> | draw-as-you-move mode · hold <kbd>1</kbd>–<kbd>0</kbd> to paint |
 | <kbd>p</kbd> | pick-up-colours mode · a digit takes the colour under the cursor |
@@ -155,7 +161,8 @@ drawing shows whatever you bound, not what is printed here.
 | <kbd>Shift</kbd>+<kbd>c</kbd> | replace every pixel of the colour in focus |
 | <kbd>r</kbd> | Russian roulette: paint with a colour nobody chose |
 | <kbd>;</kbd> then a letter | choose that palette slot, and paint the cursor with it |
-| <kbd>Backspace</kbd> | erase at the cursor |
+| <kbd>Backspace</kbd>, <kbd>Delete</kbd> | erase the selection, or the pixel at the cursor |
+| <kbd>Ctrl</kbd>+<kbd>Delete</kbd> | clear the whole frame |
 | <kbd>Esc</kbd> | put the cursor away |
 | <kbd>,</kbd> <kbd>.</kbd> | previous and next frame |
 | <kbd>+</kbd> <kbd>−</kbd> | zoom, 1 to 40 screen pixels per sprite pixel |
@@ -163,13 +170,26 @@ drawing shows whatever you bound, not what is printed here.
 | <kbd>o</kbd> <kbd>m</kbd> | onion skin · the pixel mesh |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | undo · redo |
 | <kbd>Ctrl</kbd>+<kbd>S</kbd> · <kbd>Ctrl</kbd>+<kbd>E</kbd> | save · export a PNG |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> | trim empty borders around the current frame's content |
 | <kbd>Ctrl</kbd>+<kbd>Q</kbd> | quit |
 
 ## Drawing without a mouse
 
-The arrow keys walk a cursor across the drawing, one pixel at a time, eight with
-<kbd>Shift</kbd>, or whatever `canvas.big_step` says. <kbd>Return</kbd> or <kbd>x</kbd> draws at it with the selected
-slot, <kbd>Backspace</kbd> erases, <kbd>Esc</kbd> puts it away.
+The arrow keys walk a cursor across the drawing, one pixel at a time. Hold
+<kbd>Shift</kbd> to fix an anchor and extend a rectangular selection; use
+<kbd>Ctrl</kbd> to jump by `canvas.big_step`, eight pixels by default, or hold
+both modifiers to extend the selection by that step.
+`canvas.caret_margin_x` and `canvas.caret_margin_y` decide when that walk moves
+the viewport on each axis. Zero waits until the next pixel would be off-screen;
+a number recentres that axis within that many drawing pixels of its edge; and
+`center` keeps the cursor centred on that axis after every move.
+At manual zoom the viewport and pan are locked to the drawing's grid: an edge
+never cuts a pixel in half, including after wheel scrolling or dragging.
+<kbd>Return</kbd> or <kbd>x</kbd> draws at the cursor with the selected slot,
+and the number keys paint with their registered colours. While a range is
+selected, all of those paint the whole rectangle. <kbd>Backspace</kbd> and
+<kbd>Delete</kbd> erase that rectangle, and <kbd>Esc</kbd> clears the selection
+before it puts the cursor away.
 
 Nothing here needs a pointer. <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd>
 walk every control in the window (tools, colours, panel headers, the timeline,
@@ -219,7 +239,9 @@ colour.
 The digits stop choosing a colour and start collecting one. Point the cursor at
 a pixel, press a number, and that colour is on that number from now on. Most
 colour choices while drawing are "that one, there", not "the twenty-second
-slot". Nothing is painted while you are picking.
+slot". Nothing is painted while you are picking. Starting a rectangular
+selection leaves pickup mode automatically, so `p`, a digit, Shift+arrow and
+that digit again collects a colour and paints the selected range with it.
 
 ### <kbd>l</kbd> — straight lines
 
@@ -407,12 +429,21 @@ a zoomed pane stops being.
 **Sprite**: presets from 16×16 to 128×128, or type columns and rows. `resize`
 keeps the drawing centred and is greyed out when the numbers match what you
 already have; it warns before cropping drawn pixels, on the button, with the
-count.
+count. **Sprite → Trim to content** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>)
+uses the open frame's outermost drawn pixels as an asymmetric crop. It applies
+that rectangle to every frame to preserve alignment, and asks before pixels in
+another frame would be removed. Empty gaps inside the drawing are never removed.
 
 **Reference**: an image to trace over, a photo, a mockup, art you are matching.
 The row of `0% 25% 50% 75% 100%` sets its opacity, and one chip flips it between
 **behind** the drawing and **on top**. Behind is for copying a shape; on top is
 for checking one you have already drawn.
+
+**History**: what has changed this session — your strokes and outside writes
+alike, oldest last, each saying where it came from and what moved. It is a
+record and nothing more: entries cannot be clicked back into being, and
+<kbd>Ctrl</kbd>+<kbd>Z</kbd> remains the only way back. The log lives in
+memory, so closing the window is forgetting it.
 
 ## Bottom: the timeline
 
@@ -465,6 +496,34 @@ built-in defaults. The details are in [how it is built](design.md#the-theme).
 
 The desktop theme never touches the **document's** palette. Your art does not
 change colour because you changed themes.
+
+## It follows the file it has open
+
+The document itself is watched the way the theme and the keybindings are: an
+agent working through [the command line](cli.md) writes the file, and the
+change lands in the window with no action from you. The status line says what
+changed — which clip and frame, how many pixels, what moved in the palette —
+from the same comparison `omapixel diff` prints.
+
+If the file was rewritten while you had unsaved strokes, the note says so, and
+one <kbd>Ctrl</kbd>+<kbd>Z</kbd> brings your version back. An outside write
+never silently destroys work; neither does it ask permission first, so look at
+what it says before you save — saving writes what is on screen, which is now
+the file's own contents.
+
+Writes that change nothing cost nothing: saving your own document back to
+disk, a touch, a reformat — no undo step, no note. A whole run of outside
+writes files one undo step between yours, so an agent looping over the file
+cannot push your own history out from under you. A write that arrives while a
+stroke is still down waits for the stroke to end, and a broken or missing file
+leaves the canvas alone and says why.
+
+A window with **no document at all** is backed by a scratch file in the
+runtime directory (`studio.scratch` in the [config file](configuration.md)),
+so the flow above works before any save: open the studio, tell an agent to
+draw, watch it land. The backing is tmpfs and dies with the session — the
+window keeps saying unsaved and closing still asks — because an address is
+not a save.
 
 ## Looking at the window without a screen
 

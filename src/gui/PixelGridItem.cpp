@@ -2,16 +2,61 @@
 
 #include "Render.h"
 
-#include <QPainter>
+#include <QQuickWindow>
+#include <QSGGeometryNode>
+#include <QSGSimpleTextureNode>
+#include <QSGTexture>
+#include <QSGVertexColorMaterial>
 
 namespace omapixel {
 
-PixelGridItem::PixelGridItem(QQuickItem *parent) : QQuickPaintedItem(parent)
+namespace {
+
+class PixelGridNode : public QSGNode
 {
-    // Nearest-neighbour, always. Smoothing a pixel sprite is the one thing that
-    // cannot be allowed to happen anywhere in this program.
-    setSmooth(false);
-    setAntialiasing(false);
+public:
+    PixelGridNode()
+    {
+        image = new QSGSimpleTextureNode;
+        image->setFiltering(QSGTexture::Nearest);
+        appendChildNode(image);
+
+        mesh = new QSGGeometryNode;
+        auto *geometry = new QSGGeometry(
+            QSGGeometry::defaultAttributes_ColoredPoint2D(), 0);
+        geometry->setDrawingMode(QSGGeometry::DrawLines);
+        geometry->setLineWidth(1);
+        geometry->setVertexDataPattern(QSGGeometry::DynamicPattern);
+        mesh->setGeometry(geometry);
+        mesh->setFlag(QSGNode::OwnsGeometry);
+        mesh->setMaterial(new QSGVertexColorMaterial);
+        mesh->setFlag(QSGNode::OwnsMaterial);
+        appendChildNode(mesh);
+    }
+
+    ~PixelGridNode() override
+    {
+        delete texture;
+    }
+
+    void replaceTexture(QSGTexture *next)
+    {
+        QSGTexture *previous = texture;
+        texture = next;
+        image->setTexture(texture);
+        delete previous;
+    }
+
+    QSGSimpleTextureNode *image = nullptr;
+    QSGGeometryNode *mesh = nullptr;
+    QSGTexture *texture = nullptr;
+};
+
+} // namespace
+
+PixelGridItem::PixelGridItem(QQuickItem *parent) : QQuickItem(parent)
+{
+    setFlag(ItemHasContents);
     connect(this, &PixelGridItem::specChanged, this, [this] { resize(); update(); });
 }
 
@@ -22,9 +67,16 @@ void PixelGridItem::setModel(DocumentModel *model)
     if (m_model)
         m_model->disconnect(this);
     m_model = model;
+    m_textureDirty = true;
     if (m_model) {
-        connect(m_model, &DocumentModel::changed, this, [this] { resize(); update(); });
-        connect(m_model, &DocumentModel::viewChanged, this, [this] { update(); });
+        connect(m_model, &DocumentModel::changed, this, [this] { resize(); });
+        connect(m_model, &DocumentModel::renderChanged, this,
+                [this](const QString &clip, int frame) {
+                    if (clip.isEmpty() || (clip == m_clip && frame == m_frame))
+                        invalidateTexture();
+                });
+        connect(m_model, &DocumentModel::paletteChanged, this,
+                &PixelGridItem::invalidateTexture);
     }
     emit modelChanged();
     resize();
@@ -33,56 +85,69 @@ void PixelGridItem::setModel(DocumentModel *model)
 
 void PixelGridItem::setClip(const QString &clip)
 {
-    if (m_clip == clip) return;
+    if (m_clip == clip)
+        return;
     m_clip = clip;
+    m_textureDirty = true;
     emit specChanged();
 }
 
 void PixelGridItem::setFrame(int frame)
 {
-    if (m_frame == frame) return;
+    if (m_frame == frame)
+        return;
     m_frame = frame;
+    m_textureDirty = true;
     emit specChanged();
 }
 
 void PixelGridItem::setCell(qreal cell)
 {
-    if (qFuzzyCompare(m_cell, cell)) return;
+    if (qFuzzyCompare(m_cell, cell))
+        return;
     m_cell = cell;
     emit specChanged();
 }
 
 void PixelGridItem::setChecker(bool checker)
 {
-    if (m_checker == checker) return;
+    if (m_checker == checker)
+        return;
     m_checker = checker;
+    m_textureDirty = true;
     emit specChanged();
 }
 
 void PixelGridItem::setMesh(bool mesh)
 {
-    if (m_mesh == mesh) return;
+    if (m_mesh == mesh)
+        return;
     m_mesh = mesh;
     emit specChanged();
 }
 
 void PixelGridItem::setCheckerDark(const QColor &colour)
 {
-    if (m_checkerDark == colour) return;
+    if (m_checkerDark == colour)
+        return;
     m_checkerDark = colour;
+    m_textureDirty = true;
     emit specChanged();
 }
 
 void PixelGridItem::setCheckerLight(const QColor &colour)
 {
-    if (m_checkerLight == colour) return;
+    if (m_checkerLight == colour)
+        return;
     m_checkerLight = colour;
+    m_textureDirty = true;
     emit specChanged();
 }
 
 void PixelGridItem::setMeshColour(const QColor &colour)
 {
-    if (m_meshColour == colour) return;
+    if (m_meshColour == colour)
+        return;
     m_meshColour = colour;
     emit specChanged();
 }
@@ -95,39 +160,61 @@ void PixelGridItem::resize()
     setImplicitHeight(m_model->rows() * m_cell);
 }
 
-void PixelGridItem::paint(QPainter *painter)
+void PixelGridItem::invalidateTexture()
 {
-    if (!m_model)
-        return;
+    m_textureDirty = true;
+    update();
+}
 
-    // Rendered at one screen pixel per sprite pixel and then scaled up, rather
-    // than rendered at the final size. It keeps the image small whatever the
-    // zoom, and the scaling is a nearest-neighbour blit either way.
-    render::Options options;
-    options.scale = 1;
-    options.checker = m_checker;
-    options.checkerDark = m_checkerDark;
-    options.checkerLight = m_checkerLight;
-    const QImage image =
-        render::toImage(m_model->document(), m_clip, m_frame, options);
-    if (image.isNull())
-        return;
+QSGNode *PixelGridItem::updatePaintNode(QSGNode *oldNode,
+                                        UpdatePaintNodeData *)
+{
+    auto *node = static_cast<PixelGridNode *>(oldNode);
+    if (!node)
+        node = new PixelGridNode;
+    node->image->setRect(boundingRect());
 
-    painter->setRenderHint(QPainter::SmoothPixmapTransform, false);
-    painter->drawImage(QRectF(0, 0, image.width() * m_cell, image.height() * m_cell),
-                       image);
-
-    if (m_mesh && m_cell >= 4) {
-        // Fades out on its own once the pixels are too small to fit a line
-        // between them, where it would be noise rather than a ruler.
-        QPen pen(m_meshColour);
-        pen.setWidth(1);
-        painter->setPen(pen);
-        for (int x = 0; x <= image.width(); ++x)
-            painter->drawLine(QPointF(x * m_cell, 0), QPointF(x * m_cell, image.height() * m_cell));
-        for (int y = 0; y <= image.height(); ++y)
-            painter->drawLine(QPointF(0, y * m_cell), QPointF(image.width() * m_cell, y * m_cell));
+    if (m_model && (m_textureDirty || !node->texture)) {
+        render::Options options;
+        options.scale = 1;
+        options.checker = m_checker;
+        options.checkerDark = m_checkerDark;
+        options.checkerLight = m_checkerLight;
+        const QImage image =
+            render::toImage(m_model->document(), m_clip, m_frame, options);
+        if (!image.isNull() && window()) {
+            node->replaceTexture(window()->createTextureFromImage(
+                image, QQuickWindow::TextureHasAlphaChannel));
+        }
+        m_textureDirty = false;
     }
+
+    const int columns = m_model ? m_model->columns() : 0;
+    const int rows = m_model ? m_model->rows() : 0;
+    const bool drawMesh = m_mesh && m_cell >= 4 && columns > 0 && rows > 0;
+    QSGGeometry *geometry = node->mesh->geometry();
+    geometry->allocate(drawMesh ? (columns + rows + 2) * 2 : 0);
+    if (drawMesh) {
+        auto *vertices = geometry->vertexDataAsColoredPoint2D();
+        auto add = [&](qreal x, qreal y) {
+            vertices->set(float(x), float(y), uchar(m_meshColour.red()),
+                          uchar(m_meshColour.green()), uchar(m_meshColour.blue()),
+                          uchar(m_meshColour.alpha()));
+            ++vertices;
+        };
+        for (int x = 0; x <= columns; ++x) {
+            add(x * m_cell, 0);
+            add(x * m_cell, rows * m_cell);
+        }
+        for (int y = 0; y <= rows; ++y) {
+            add(0, y * m_cell);
+            add(columns * m_cell, y * m_cell);
+        }
+    }
+    geometry->markVertexDataDirty();
+    node->mesh->markDirty(QSGNode::DirtyGeometry);
+
+    return node;
 }
 
 } // namespace omapixel

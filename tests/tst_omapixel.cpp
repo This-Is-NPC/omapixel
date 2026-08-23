@@ -11,6 +11,7 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQuickItem>
+#include <QQuickPaintedItem>
 #include <QQuickView>
 #include <qpa/qwindowsysteminterface.h>
 #include <QProcess>
@@ -30,10 +31,12 @@
 #include "Bridge.h"
 #include "Codec.h"
 #include "Document.h"
+#include "Differences.h"
 #include "Grid.h"
 #include "Ops.h"
 #include "Palette.h"
 #include "Render.h"
+#include "Sessions.h"
 #include "Commands.h"
 #include "Config.h"
 #include "Strings.h"
@@ -41,6 +44,8 @@
 #include "DocumentModel.h"
 #include "InputLog.h"
 #include "PixelGridItem.h"
+#include "SessionPublisher.h"
+#include "ChangeLog.h"
 #include "Theme.h"
 
 using namespace omapixel;
@@ -54,6 +59,19 @@ Document sample()
     Grid grid = Grid::fromRows({QStringLiteral(".II."), QStringLiteral("IIII"),
                                 QStringLiteral(".II.")});
     doc.setFrame(QStringLiteral("idle"), 0, grid);
+    return doc;
+}
+
+/// A worst-case Full HD document: every cell is drawn, so opening validates
+/// every cell and rendering cannot skip transparent pixels. Extra frames are
+/// duplicates because their content is irrelevant to the amount of work.
+Document fullHdDocument(int frameCount)
+{
+    Document doc = Document::blank(1920, 1080);
+    Grid frame(1920, 1080, u'I');
+    doc.setFrame(QStringLiteral("idle"), 0, frame);
+    for (int index = 1; index < frameCount; ++index)
+        doc.addFrame(QStringLiteral("idle"), index - 1, true);
     return doc;
 }
 
@@ -118,6 +136,15 @@ void pointAt(const QString &state, const QString &name)
     const QString link = state + QStringLiteral("/omarchy/current/theme");
     QFile::remove(link);
     QFile::link(state + QStringLiteral("/omarchy/themes/") + name, link);
+}
+
+/// Writes a document straight to disk the way the CLI writes: through the same
+/// atomic rename. Watcher tests only mean something if the write shape is the
+/// real one.
+bool writeDocument(const QString &path, const Document &document)
+{
+    QString error;
+    return Codec::writeFile(path, document, &error);
 }
 
 } // namespace
@@ -294,6 +321,64 @@ private slots:
                 QCOMPARE(grid.rows(), 5);
             }
         }
+    }
+
+    void drawnBoundsIgnoreOuterEmptinessButKeepInternalGaps()
+    {
+        Document doc = Document::blank(8, 6);
+        doc.setFrame(QStringLiteral("idle"), 0,
+                     Grid::fromRows({QStringLiteral("........"),
+                                     QStringLiteral("..I....."),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("....I..."),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........")}));
+
+        QCOMPARE(doc.drawnBounds(QStringLiteral("idle"), 0), QRect(2, 1, 3, 3));
+        QVERIFY(doc.crop(QRect(2, 1, 3, 3)));
+        QCOMPARE(doc.frame(QStringLiteral("idle"), 0).toRows(),
+                 (QStringList{QStringLiteral("I.."), QStringLiteral("..."),
+                              QStringLiteral("..I")}));
+    }
+
+    void asymmetricCropReachesEveryFrameAndCountsOutsidePixels()
+    {
+        Document doc = Document::blank(8, 6);
+        doc.setFrame(QStringLiteral("idle"), 0,
+                     Grid::fromRows({QStringLiteral("........"),
+                                     QStringLiteral("..I.I..."),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........")}));
+        doc.addClip(QStringLiteral("walk"));
+        doc.setFrame(QStringLiteral("walk"), 0,
+                     Grid::fromRows({QStringLiteral(".......I"),
+                                     QStringLiteral("...I...."),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........")}));
+
+        const QRect kept = doc.drawnBounds(QStringLiteral("idle"), 0);
+        QCOMPARE(kept, QRect(2, 1, 3, 1));
+        QCOMPARE(doc.wouldLoseOutside(kept), 1);
+        QVERIFY(doc.crop(kept));
+        QCOMPARE(doc.columns(), 3);
+        QCOMPARE(doc.rows(), 1);
+        QCOMPARE(doc.frame(QStringLiteral("idle"), 0).toRows(),
+                 (QStringList{QStringLiteral("I.I")}));
+        QCOMPARE(doc.frame(QStringLiteral("walk"), 0).toRows(),
+                 (QStringList{QStringLiteral(".I.")}));
+    }
+
+    void anEmptyFrameHasNoTrimBounds()
+    {
+        Document doc = Document::blank(8, 6);
+        QVERIFY(!doc.drawnBounds(QStringLiteral("idle"), 0).isValid());
+        QVERIFY(!doc.crop(QRect()));
+        QCOMPARE(doc.columns(), 8);
+        QCOMPARE(doc.rows(), 6);
     }
 
     // -------------------------------------------------------------- problems
@@ -879,10 +964,97 @@ private slots:
 
         Document right = left;
         QVERIFY(right.setFps(QStringLiteral("bad\"name\\line"), 12));
-        QVERIFY(!cli::documentDifferences(left, right).isEmpty());
+        QVERIFY(!documentDifferences(left, right).isEmpty());
         right = left;
         QVERIFY(right.addClip(QStringLiteral("extra")));
-        QVERIFY(!cli::documentDifferences(left, right).isEmpty());
+        QVERIFY(!documentDifferences(left, right).isEmpty());
+    }
+
+    void diffOutputIsPinnedByteForByte()
+    {
+        // `omapixel diff` prints these sentences, and an agent reads them:
+        // published text is an interface. Every template the comparison can
+        // emit is pinned verbatim, so moving it between namespaces cannot
+        // quietly reword what a script depends on.
+        //
+        // The lines come from the catalogue now (`diff.*` in i18n/en.json),
+        // and the English floor is what the CLI has always printed, so the
+        // pin holds under every language.
+        Strings::shared().load(QStringLiteral("en"));
+        const QString before = QStringLiteral("before");
+        const QString after = QStringLiteral("after");
+
+        // Size, a recoloured slot, a speed, and resized frames -- one of each
+        // sentence the structural walk produces, in its own order.
+        Document sized = Document::blank(4, 3);
+        Document grown = sized;
+        grown.resize(6, 5);
+        grown.palette().set(u'I', QColor(QStringLiteral("#999999")));
+        QVERIFY(grown.setFps(QStringLiteral("idle"), 12));
+        QCOMPARE(documentDifferences(sized, grown, before, after),
+                 (QStringList{
+                     QStringLiteral("size: before is 4x3, after is 6x5"),
+                     QStringLiteral(
+                         "palette[0] I: colour is #1A1B26 in before, #999999 in after"),
+                     QStringLiteral("clip[0] (idle/idle): FPS is 8 in before, 12 in after"),
+                     QStringLiteral("clip[0] (idle/idle) frame 0: dimensions are "
+                                    "4x3 in before, 6x5 in after")}));
+
+        // Slot counts, slot order, slots on one side only, clip counts, and
+        // clips on one side only.
+        Document sparse = Document::empty(4, 3);
+        sparse.palette() = Palette();
+        sparse.palette().set(u'P', QColor(QStringLiteral("#010101")));
+        sparse.palette().set(u'Q', QColor(QStringLiteral("#020202")));
+        QVERIFY(sparse.addClip(QStringLiteral("n1")));
+        Document dense = Document::empty(4, 3);
+        dense.palette() = Palette();
+        dense.palette().set(u'P', QColor(QStringLiteral("#010101")));
+        dense.palette().set(u'R', QColor(QStringLiteral("#030303")));
+        dense.palette().set(u'S', QColor(QStringLiteral("#040404")));
+        QVERIFY(dense.addClip(QStringLiteral("n1")));
+        QVERIFY(dense.addClip(QStringLiteral("n2")));
+        QCOMPARE(documentDifferences(sparse, dense, before, after),
+                 (QStringList{
+                     QStringLiteral("palette: before has 2 slot(s), after has 3"),
+                     QStringLiteral(
+                         "palette[1]: slot is Q in before, R in after (order differs)"),
+                     QStringLiteral("palette[2]: only in after (slot S)"),
+                     QStringLiteral("clips: before has 1, after has 2 (count differs)"),
+                     QStringLiteral("clips[1]: only in after (n2)")}));
+
+        // A slot only on the left, and two clips whose names swapped places.
+        Document loneSlot = Document::empty(4, 3);
+        loneSlot.palette() = Palette();
+        loneSlot.palette().set(u'Z', QColor(QStringLiteral("#050505")));
+        QVERIFY(loneSlot.addClip(QStringLiteral("m")));
+        QVERIFY(loneSlot.addClip(QStringLiteral("n")));
+        Document swapped = Document::empty(4, 3);
+        swapped.palette() = Palette();
+        QVERIFY(swapped.addClip(QStringLiteral("n")));
+        QVERIFY(swapped.addClip(QStringLiteral("m")));
+        QCOMPARE(documentDifferences(loneSlot, swapped, before, after),
+                 (QStringList{
+                     QStringLiteral("palette: before has 1 slot(s), after has 0"),
+                     QStringLiteral("palette[0]: only in before (slot Z)"),
+                     QStringLiteral(
+                         "clips[0]: name is m in before, n in after (order differs)"),
+                     QStringLiteral(
+                         "clips[1]: name is n in before, m in after (order differs)")}));
+
+        // Drawn pixels, letter by letter, inside frames of one size.
+        Document drawn = sample();
+        Document touched = drawn;
+        QVERIFY(touched.setFrame(QStringLiteral("idle"), 0,
+                                 Grid::fromRows({QStringLiteral("...."),
+                                                 QStringLiteral("IIII"),
+                                                 QStringLiteral("....")})));
+        QCOMPARE(documentDifferences(drawn, touched, before, after),
+                 (QStringList{
+                     QStringLiteral("clip[0] (idle/idle) frame 0: 4 pixel(s) differ")}));
+
+        // And the empty answer, which is what `diff` exits zero on.
+        QVERIFY(documentDifferences(drawn, drawn, before, after).isEmpty());
     }
 
     void aWrongCommandIsTwoAndARefusalIsOne()
@@ -928,12 +1100,62 @@ private slots:
         QVERIFY(cli::isDocumentCommand(QStringLiteral("paint")));
         QVERIFY(cli::isDocumentCommand(QStringLiteral("palette")));
         QVERIFY(cli::isDocumentCommand(QStringLiteral("check")));
+        QVERIFY(cli::isDocumentCommand(QStringLiteral("trim")));
         QVERIFY(!cli::isDocumentCommand(QStringLiteral("render")));
         QVERIFY(!cli::isDocumentCommand(QStringLiteral("export")));
         QVERIFY(!cli::isDocumentCommand(QStringLiteral("import")));
         QVERIFY(!cli::isDocumentCommand(QStringLiteral("diff")));
         QVERIFY(!cli::isDocumentCommand(QStringLiteral("new")));
         QVERIFY(!cli::isDocumentCommand(QStringLiteral("batch")));
+    }
+
+    void trimCommandUsesTheNamedFrameAndProtectsTheOthers()
+    {
+        Document doc = Document::blank(8, 6);
+        doc.setFrame(QStringLiteral("idle"), 0,
+                     Grid::fromRows({QStringLiteral("........"),
+                                     QStringLiteral("..I.I..."),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........"),
+                                     QStringLiteral("........")}));
+        doc.addFrame(QStringLiteral("idle"), 0, false);
+        Grid other(8, 6);
+        other.set(7, 5, u'I');
+        doc.setFrame(QStringLiteral("idle"), 1, other);
+
+        const cli::Outcome refused = run(doc, QStringLiteral("trim --frame 0"));
+        QCOMPARE(refused.code, 1);
+        QVERIFY(!refused.changed);
+        QVERIFY(refused.error.contains(QStringLiteral("1 drawn pixel")));
+        QCOMPARE(doc.columns(), 8);
+
+        const cli::Outcome trimmed = run(doc, QStringLiteral("trim --frame 0 --anyway"));
+        QCOMPARE(trimmed.code, 0);
+        QVERIFY(trimmed.changed);
+        QCOMPARE(doc.columns(), 3);
+        QCOMPARE(doc.rows(), 1);
+        QCOMPARE(doc.frame(QStringLiteral("idle"), 0).toRows(),
+                 (QStringList{QStringLiteral("I.I")}));
+        QCOMPARE(doc.frame(QStringLiteral("idle"), 1).drawnCount(), 0);
+    }
+
+    void trimCommandRefusesEmptyAndDoesNotRewriteAlreadyTightArt()
+    {
+        Document empty = Document::blank(4, 3);
+        const cli::Outcome refused = run(empty, QStringLiteral("trim"));
+        QCOMPARE(refused.code, 1);
+        QVERIFY(!refused.changed);
+
+        Document tight = Document::blank(4, 3);
+        Grid grid(4, 3);
+        grid.set(0, 0, u'I');
+        grid.set(3, 2, u'I');
+        tight.setFrame(QStringLiteral("idle"), 0, grid);
+        const cli::Outcome unchanged = run(tight, QStringLiteral("trim"));
+        QCOMPARE(unchanged.code, 0);
+        QVERIFY(!unchanged.changed);
+        QCOMPARE(unchanged.output, QStringLiteral("already tight\n"));
     }
 
     // ----------------------------------------------------------- undo/redo
@@ -1023,6 +1245,53 @@ private slots:
                 != QStringLiteral("#010203"));
     }
 
+    void trimmingIsOneUndoStepAndClearsTheSelection()
+    {
+        DocumentModel doc;
+        doc.paint(10, 5, QStringLiteral("R"));
+        doc.paint(12, 7, QStringLiteral("R"));
+        doc.setSelection(9, 4, 13, 8);
+
+        const QVariantMap preview = doc.trimPreview();
+        QCOMPARE(preview.value(QStringLiteral("empty")).toBool(), false);
+        QCOMPARE(preview.value(QStringLiteral("x")).toInt(), 10);
+        QCOMPARE(preview.value(QStringLiteral("y")).toInt(), 5);
+        QCOMPARE(preview.value(QStringLiteral("columns")).toInt(), 3);
+        QCOMPARE(preview.value(QStringLiteral("rows")).toInt(), 3);
+        QCOMPARE(preview.value(QStringLiteral("lost")).toInt(), 0);
+
+        QVERIFY(doc.trim());
+        QCOMPARE(doc.columns(), 3);
+        QCOMPARE(doc.rows(), 3);
+        QVERIFY(!doc.hasSelection());
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("R"));
+        QCOMPARE(doc.slotAt(2, 2), QStringLiteral("R"));
+
+        doc.undo();
+        QCOMPARE(doc.columns(), 32);
+        QCOMPARE(doc.rows(), 24);
+        QCOMPARE(doc.slotAt(10, 5), QStringLiteral("R"));
+        doc.undo();
+        QCOMPARE(doc.slotAt(12, 7), QStringLiteral("."));
+    }
+
+    void studioTrimRequiresConfirmationBeforeCroppingAnotherFrame()
+    {
+        DocumentModel doc;
+        doc.paint(2, 2, QStringLiteral("R"));
+        doc.addFrame(false);
+        doc.paint(20, 20, QStringLiteral("R"));
+        doc.setFrame(0);
+
+        QCOMPARE(doc.trimPreview().value(QStringLiteral("lost")).toInt(), 1);
+        QVERIFY(!doc.trim());
+        QCOMPARE(doc.columns(), 32);
+        QVERIFY(doc.trim(true));
+        QCOMPARE(doc.columns(), 1);
+        QCOMPARE(doc.rows(), 1);
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("R"));
+    }
+
     void undoReseatsAClipItJustRemoved()
     {
         // Undoing back past the clip you are looking at must not leave the
@@ -1055,6 +1324,829 @@ private slots:
             steps += 1;
         }
         QCOMPARE(steps, 80);
+    }
+
+    // -------------------------------------------------- following the file
+
+    void theStudioFollowsAWriteFromTheCommandLine()
+    {
+        // The product thesis: an agent edits through the CLI and the change
+        // appears in the window with no user action. The rest of this section
+        // is guards around that sentence.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+
+        Document edited = sample();
+        QVERIFY(edited.setFrame(QStringLiteral("idle"), 0,
+                                Grid::fromRows({QStringLiteral("IIII"),
+                                                QStringLiteral("IIII"),
+                                                QStringLiteral("IIII")})));
+        QVERIFY(writeDocument(path, edited));
+
+        QVERIFY(doc.reloadFromDisk());
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("I"));   // the cross was empty there
+        // Memory equals disk now: not dirty. And the replaced version is
+        // recoverable, which is why adopting filed a step.
+        QVERIFY(!doc.dirty());
+        QVERIFY(doc.canUndo());
+    }
+
+    void aReloadKeepsTheViewInsideTheNewDocument()
+    {
+        // The CLI can delete the clip you are looking at, or shorten it below
+        // your frame. The view must land somewhere legal -- `reseat()`'s
+        // policy, not a second one invented for reloads.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        Document onDisk = Document::blank(4, 3);
+        QVERIFY(onDisk.addClip(QStringLiteral("walk")));
+        QVERIFY(onDisk.addFrame(QStringLiteral("walk"), 0, true));   // walk: two frames
+        QVERIFY(writeDocument(path, onDisk));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+        doc.setClip(QStringLiteral("walk"));
+        doc.setFrame(1);
+        QCOMPARE(doc.frame(), 1);
+
+        // The CLI deletes `walk`; the view falls back to the first clip and
+        // keeps the frame index while it still exists there.
+        Document withoutWalk = Document::blank(4, 3);
+        QVERIFY(withoutWalk.addFrame(QStringLiteral("idle"), 0, true));
+        QVERIFY(writeDocument(path, withoutWalk));
+        QVERIFY(doc.reloadFromDisk());
+        QCOMPARE(doc.clip(), QStringLiteral("idle"));
+        QCOMPARE(doc.frame(), 1);
+
+        // Then it shortens the clip past the open frame; the frame clamps.
+        Document shortened = Document::blank(4, 3);
+        QVERIFY(writeDocument(path, shortened));
+        QVERIFY(doc.reloadFromDisk());
+        QCOMPARE(doc.clip(), QStringLiteral("idle"));
+        QCOMPARE(doc.frame(), 0);
+    }
+
+    void ctrlZAfterAnExternalEditRestoresYourVersion()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+        doc.paint(0, 0, QStringLiteral("R"));
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("R"));
+
+        Document edited = sample();
+        QVERIFY(edited.setFrame(QStringLiteral("idle"), 0,
+                                Grid::fromRows({QStringLiteral(".I.."),
+                                                QStringLiteral(".I.."),
+                                                QStringLiteral(".I..")})));
+        QVERIFY(writeDocument(path, edited));
+        QVERIFY(doc.reloadFromDisk());
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("."));
+
+        // Your stroke is not gone; it is one step back.
+        doc.undo();
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("R"));
+        // ... and reaching for it is what makes the document dirty again.
+        QVERIFY(doc.dirty());
+        QVERIFY(doc.canRedo());
+    }
+
+    void reloadingEqualContentFilesNoStep()
+    {
+        // Saving from the studio fires the watcher with bytes we just wrote.
+        // If that landed an undo entry, every Ctrl+S would eat one step of
+        // history -- and arm the dirty bullet over an identical file.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+        QVERIFY(doc.save());
+        QVERIFY(!doc.canUndo());
+
+        // A second CLI write of identical content is also nothing: a touch or
+        // a reformat may not become somebody's undo step.
+        QVERIFY(writeDocument(path, sample()));
+        QVERIFY(!doc.reloadFromDisk());
+        QVERIFY(!doc.canUndo());
+        QVERIFY(!doc.dirty());
+    }
+
+    void aReloadLandingMidStrokeWaitsForTheStrokeToEnd()
+    {
+        // A stroke holds state across press-to-release. Applying a reload
+        // inside that window swaps the document under the pen and the rest of
+        // the drag paints onto the file's version with a stale remembered
+        // flag. So it waits -- then lands as exactly one more step.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+
+        doc.beginStroke();
+        doc.paint(3, 2, QStringLiteral("R"));
+        QCOMPARE(doc.slotAt(3, 2), QStringLiteral("R"));
+
+        Document edited = Document::blank(4, 3);
+        QVERIFY(writeDocument(path, edited));
+        QVERIFY(!doc.reloadFromDisk());            // queued, not applied
+        QCOMPARE(doc.slotAt(3, 2), QStringLiteral("R"));
+
+        doc.endStroke();                           // now it applies
+        QCOMPARE(doc.slotAt(3, 2), QStringLiteral("."));
+        QVERIFY(!doc.canRedo());
+
+        // One undo reaches YOUR last stroke, not the file's version again...
+        doc.undo();
+        QCOMPARE(doc.slotAt(3, 2), QStringLiteral("R"));
+        // ... and one more reaches the document as it was opened.
+        doc.undo();
+        QCOMPARE(doc.slotAt(0, 1), QStringLiteral("I"));
+    }
+
+    void aBrokenOrMissingFileLeavesTheCanvasAlone()
+    {
+        // The directory watch hears about neighbours too: an export elsewhere,
+        // an rm, an editor's swapfile, a half-written file. None of those may
+        // blank what is on screen; they get said instead.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+        doc.paint(1, 1, QStringLiteral("R"));
+
+        QFile broken(path);
+        QVERIFY(broken.open(QIODevice::WriteOnly));
+        broken.write("{ not a document");
+        broken.close();
+        QVERIFY(!doc.reloadFromDisk());
+        QCOMPARE(doc.slotAt(1, 1), QStringLiteral("R"));
+        QVERIFY(!doc.note().isEmpty());
+
+        QVERIFY(QFile::remove(path));
+        QVERIFY(!doc.reloadFromDisk());
+        QCOMPARE(doc.slotAt(1, 1), QStringLiteral("R"));
+        QVERIFY(!doc.note().isEmpty());
+    }
+
+    void theStudioPicksUpACommandLineWriteOnItsOwn()
+    {
+        // The wiring itself: nothing drives the model here, the write happens
+        // behind its back, and adoption arrives through the watcher. One
+        // atomic rename fires BOTH watched paths (the file's inode changed
+        // and the directory's contents did); content equality collapses them,
+        // so exactly ONE undo entry may exist afterwards.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+
+        Document edited = sample();
+        QVERIFY(edited.setFrame(QStringLiteral("idle"), 0,
+                                Grid::fromRows({QStringLiteral("IIII"),
+                                                QStringLiteral(".II."),
+                                                QStringLiteral(".II.")})));
+        QSignalSpy spy(&doc, &DocumentModel::changed);
+        QVERIFY(writeDocument(path, edited));
+        QVERIFY(spy.wait(4000));
+
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("I"));
+        // Let any second delivery land before counting. It cannot raise the
+        // count: the second fire finds the documents equal and emits
+        // nothing -- which is precisely the collapse being proven.
+        QTest::qWait(250);
+        QCOMPARE(spy.count(), 1);
+
+        // Exactly one step between what is on screen and what was opened.
+        doc.undo();
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("."));
+        QVERIFY(!doc.canUndo());
+    }
+
+    void aReloadSaysWhatChangedOnTheStatusBar()
+    {
+        // A document that changes under your hands with no signal is a trick.
+        // The note names the file and says WHAT changed, from the same core
+        // walk `omapixel diff` prints.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+
+        Document edited = sample();
+        QVERIFY(edited.setFrame(QStringLiteral("idle"), 0,
+                                Grid::fromRows({QStringLiteral("IIII"),
+                                                QStringLiteral("IIII"),
+                                                QStringLiteral("IIII")})));
+        QVERIFY(writeDocument(path, edited));
+        QVERIFY(doc.reloadFromDisk());
+
+        QCOMPARE(doc.note(),
+                 QStringLiteral("drawing.json changed on disk: ")
+                     + QStringLiteral(
+                         "clip[0] (idle/idle) frame 0: 4 pixel(s) differ"));
+    }
+
+    void aReloadThatReplacedUnsavedWorkSaysSo()
+    {
+        // The data-loss shape: agent writes over unsaved strokes. The note
+        // has to say what changed AND that Ctrl+Z brings yours back -- the
+        // next Ctrl+S would otherwise destroy the agent's edit with nobody
+        // the wiser.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+        doc.paint(0, 0, QStringLiteral("R"));
+
+        QVERIFY(writeDocument(path, Document::blank(4, 3)));
+        QVERIFY(doc.reloadFromDisk());
+        QCOMPARE(doc.note(),
+                 QStringLiteral("drawing.json changed on disk: ")
+                     + QStringLiteral("clip[0] (idle/idle) frame 0: 9 pixel(s) differ")
+                     + QStringLiteral(
+                         " — it replaced unsaved work, Ctrl+Z brings yours back"));
+
+        // ... and the promise holds.
+        doc.undo();
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("R"));
+    }
+
+    void anAgentLoopFilesOneUndoEntryNotEighty()
+    {
+        // `batch` or a looping agent can rewrite the file many times in a
+        // second. Every snapshot is a whole document and the stack is capped,
+        // so filing one per write evicts the user's own history within
+        // seconds. While nothing of theirs sits on top of an adopted state,
+        // ONE entry keeps standing for "your version".
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+
+        for (int i = 0; i < 100; ++i) {
+            const int x = i % 4;
+            const int y = i % 3;
+            QStringList rows{QStringLiteral("...."), QStringLiteral("...."),
+                             QStringLiteral("....")};
+            rows[y].replace(x, 1, QStringLiteral("R"));
+            Document edited = Document::blank(4, 3);
+            QVERIFY(edited.setFrame(QStringLiteral("idle"), 0,
+                                    Grid::fromRows(rows)));
+            QVERIFY(writeDocument(path, edited));
+            QVERIFY(doc.reloadFromDisk());
+        }
+
+        // The hundredth write moved the dot to (3, 0); it is on screen.
+        QCOMPARE(doc.slotAt(3, 0), QStringLiteral("R"));
+
+        int steps = 0;
+        while (doc.canUndo() && steps < 500) {
+            doc.undo();
+            steps += 1;
+        }
+        QCOMPARE(steps, 1);
+        QCOMPARE(doc.slotAt(0, 1), QStringLiteral("I"));   // back to what was opened
+    }
+
+    // ------------------------------------------------------------- sessions
+
+    void selectionIsViewStateAndNotADocumentEdit()
+    {
+        DocumentModel doc;
+        QSignalSpy changed(&doc, &DocumentModel::selectionChanged);
+
+        doc.setSelection(7, 6, 2, 3);
+        QVERIFY(doc.hasSelection());
+        QCOMPARE(doc.selectionX(), 2);
+        QCOMPARE(doc.selectionY(), 3);
+        QCOMPARE(doc.selectionWidth(), 6);
+        QCOMPARE(doc.selectionHeight(), 4);
+        QCOMPARE(doc.selectionCount(), 24);
+        QCOMPARE(changed.size(), 1);
+        QVERIFY(!doc.dirty());
+        QVERIFY(!doc.canUndo());
+
+        doc.setFrame(0); // no view change, so the rectangle remains
+        QVERIFY(doc.hasSelection());
+        doc.clearSelection();
+        QVERIFY(!doc.hasSelection());
+        QCOMPARE(changed.size(), 2);
+
+        doc.addFrame(false);
+        doc.setSelection(0, 0, 2, 2);
+        doc.setFrame(0);
+        QVERIFY(!doc.hasSelection());
+    }
+
+    void paintingTargetsTheSelectionBeforeTheCaret()
+    {
+        DocumentModel doc;
+        doc.setSelection(2, 3, 4, 5);
+
+        doc.paint(20, 20, QStringLiteral("R"));
+        QVERIFY(doc.hasSelection());
+        for (int y = 3; y <= 5; ++y)
+            for (int x = 2; x <= 4; ++x)
+                QCOMPARE(doc.slotAt(x, y), QStringLiteral("R"));
+        QCOMPARE(doc.slotAt(20, 20), QStringLiteral("."));
+
+        // The rectangle is one edit no matter how many cells it covers.
+        doc.undo();
+        for (int y = 3; y <= 5; ++y)
+            for (int x = 2; x <= 4; ++x)
+                QCOMPARE(doc.slotAt(x, y), QStringLiteral("."));
+
+        // Without a selection the same entry point falls back to one pixel.
+        doc.paint(20, 20, QStringLiteral("R"));
+        QCOMPARE(doc.slotAt(20, 20), QStringLiteral("R"));
+        QCOMPARE(doc.slotAt(2, 3), QStringLiteral("."));
+    }
+
+    void aSessionSaysWhatTheStudioHoldsOpen()
+    {
+        // The agent-side half of the live loop: before writing, an agent can
+        // ask whether a studio holds the file open and whether that studio
+        // has unsaved work. Asserted against the C++ object, which is where
+        // the behaviour lives -- there is no QML harness here and none needed.
+        QTemporaryDir runtime;
+        QVERIFY(runtime.isValid());
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        const QString drawing = runtime.path() + QStringLiteral("/heart.json");
+        QVERIFY(writeDocument(drawing, sample()));
+
+        DocumentModel doc;
+        SessionPublisher sessions;
+        sessions.follow(&doc);
+
+        const QString sessionPath =
+            sessions::directory() + QStringLiteral("/%1.json")
+                .arg(QCoreApplication::applicationPid());
+        const auto published = [&sessionPath] {
+            // A failed open parses to an empty object, and the comparisons
+            // below fail loudly enough.
+            QFile file(sessionPath);
+            file.open(QIODevice::ReadOnly);
+            return QJsonDocument::fromJson(file.readAll()).object();
+        };
+
+        // Untitled: `path` exists and names the scratch backing -- the
+        // whole point of the file is that the command line can reach a
+        // window nobody has saved yet.
+        QVERIFY(sessions::startTimeOf(QCoreApplication::applicationPid()) > 0);
+        const QString scratch =
+            sessions::scratchPath(QCoreApplication::applicationPid());
+        QVERIFY(!scratch.isEmpty());
+        QJsonObject session = published();
+        QCOMPARE(session.value(QStringLiteral("pid")).toDouble(),
+                 double(QCoreApplication::applicationPid()));
+        QCOMPARE(
+            session.value(QStringLiteral("started")).toDouble(),
+            double(sessions::startTimeOf(QCoreApplication::applicationPid())));
+        QCOMPARE(session.value(QStringLiteral("path")).toString(), scratch);
+        QCOMPARE(session.value(QStringLiteral("dirty")).toBool(), false);
+        QVERIFY(session.value(QStringLiteral("selection")).isNull());
+
+        QVERIFY(doc.open(drawing));
+        session = published();
+        QCOMPARE(session.value(QStringLiteral("path")).toString(), drawing);
+        QCOMPARE(session.value(QStringLiteral("dirty")).toBool(), false);
+        // A named document has no need of its scratch backing.
+        QVERIFY(!QFile::exists(scratch));
+
+        doc.paint(1, 1, QStringLiteral("R"));
+        session = published();
+        QCOMPARE(session.value(QStringLiteral("path")).toString(), drawing);
+        QCOMPARE(session.value(QStringLiteral("dirty")).toBool(), true);
+
+        doc.setSelection(0, 0, 3, 2);
+        session = published();
+        const QJsonObject selection =
+            session.value(QStringLiteral("selection")).toObject();
+        QCOMPARE(selection.value(QStringLiteral("clip")).toString(),
+                 QStringLiteral("idle"));
+        QCOMPARE(selection.value(QStringLiteral("frame")).toInt(), 0);
+        QCOMPARE(selection.value(QStringLiteral("x")).toInt(), 0);
+        QCOMPARE(selection.value(QStringLiteral("y")).toInt(), 0);
+        QCOMPARE(selection.value(QStringLiteral("width")).toInt(), 4);
+        QCOMPARE(selection.value(QStringLiteral("height")).toInt(), 3);
+        QCOMPARE(selection.value(QStringLiteral("count")).toInt(), 12);
+        const QList<sessions::Entry> live = sessions::live(drawing);
+        QCOMPARE(live.size(), 1);
+        QCOMPARE(live.first().clip, QStringLiteral("idle"));
+        QCOMPARE(live.first().frame, 0);
+        QCOMPARE(live.first().selection, QRect(0, 0, 4, 3));
+
+        QVERIFY(doc.save());
+        session = published();
+        QCOMPARE(session.value(QStringLiteral("dirty")).toBool(), false);
+    }
+
+    void retiringARemovesTheSessionFile()
+    {
+        // The file is a claim on "a studio is here". Left behind by a clean
+        // exit it would lie; retired it says only what is true.
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        DocumentModel doc;
+        SessionPublisher sessions;
+        sessions.follow(&doc);
+        const QString sessionPath =
+            sessions::directory() + QStringLiteral("/%1.json")
+                .arg(QCoreApplication::applicationPid());
+        QVERIFY(QFile::exists(sessionPath));
+
+        sessions.retire();
+        QVERIFY(!QFile::exists(sessionPath));
+    }
+
+    void twoStudiosPublishBesideEachOther()
+    {
+        // One file per process: two windows on two documents never merge and
+        // never overwrite each other.
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        DocumentModel doc;
+        SessionPublisher mine;
+        mine.follow(&doc);
+
+        const QString theirsPath =
+            sessions::directory() + QStringLiteral("/999999.json");
+        QFile theirs(theirsPath);
+        QVERIFY(theirs.open(QIODevice::WriteOnly));
+        theirs.write("{\"pid\": 999999}\n");
+        theirs.close();
+
+        doc.paint(2, 2, QStringLiteral("R"));   // rewrites ours, only ours
+
+        QFile after(theirsPath);
+        QVERIFY(after.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(after.readAll()),
+                 QStringLiteral("{\"pid\": 999999}\n"));
+        QFile ours(sessions::directory() + QStringLiteral("/%1.json")
+                                             .arg(QCoreApplication::applicationPid()));
+        QVERIFY(ours.open(QIODevice::ReadOnly));
+        QVERIFY(QJsonDocument::fromJson(ours.readAll())
+                    .object()
+                    .value(QStringLiteral("dirty"))
+                    .toBool());
+    }
+
+    // ------------------------------------------------------ scratch backing
+
+    void anUntitledWindowIsBackedByAScratchFile()
+    {
+        // The addressability contract: open the studio with nothing, and
+        // there is still somewhere for `omapixel where` to point and an
+        // agent to draw. The seed goes through the same atomic writer as
+        // everything else.
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        DocumentModel doc;
+        QCOMPARE(doc.followedPath(),
+                 sessions::scratchPath(QCoreApplication::applicationPid()));
+        QVERIFY(QFile::exists(doc.followedPath()));
+
+        // Drawing does NOT mirror into the file: once seeded, the file
+        // belongs to whoever writes it -- usually an agent -- and adoption
+        // flows the other way.
+        doc.paint(1, 1, QStringLiteral("R"));
+        const Codec::Result seeded =
+            Codec::readFile(doc.followedPath(), Codec::WarningLimits());
+        QVERIFY(seeded);
+        QVERIFY(!seeded.document.usesSlot(u'R'));
+    }
+
+    void anAgentDrawsIntoAnUntitledWindowLive()
+    {
+        // The flow that named the feature: a fresh studio, no file ever
+        // opened, and the command line still reaches the drawing.
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        DocumentModel doc;
+        QVERIFY(doc.isScratchBacked());
+
+        Document edited = Document::blank(32, 24);
+        QStringList rows;
+        for (int y = 0; y < 24; ++y) {
+            QString row(32, u'.');
+            row[1] = u'I';
+            rows << row;
+        }
+        QVERIFY(edited.setFrame(QStringLiteral("idle"), 0, Grid::fromRows(rows)));
+        QSignalSpy spy(&doc, &DocumentModel::changed);
+        QVERIFY(writeDocument(doc.followedPath(), edited));
+        QVERIFY(spy.wait(4000));
+        QCOMPARE(doc.slotAt(1, 0), QStringLiteral("I"));
+        // The window was pristine; adopting the agent's version is not
+        // unsaved work appearing from nowhere.
+        QVERIFY(!doc.dirty());
+
+        // Then the user draws, and a later adoption must not pretend their
+        // stroke was saved just because the disk changed underneath it.
+        doc.paint(0, 0, QStringLiteral("R"));
+        QVERIFY(doc.dirty());
+        QSignalSpy second(&doc, &DocumentModel::changed);
+        QVERIFY(writeDocument(doc.followedPath(), Document::blank(32, 24)));
+        QVERIFY(second.wait(4000));
+        QVERIFY(doc.isScratchBacked());
+        QVERIFY(doc.dirty());          // tmpfs is not a save
+        doc.undo();
+        QCOMPARE(doc.slotAt(0, 0), QStringLiteral("R"));   // theirs, one step back
+    }
+
+    void resettingAWindowReseedsItsScratch()
+    {
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        DocumentModel doc;
+        doc.paint(1, 1, QStringLiteral("R"));   // screen drifts from the seed
+        doc.reset(8, 8);
+
+        // Same address, describing the NEW document rather than the old one.
+        QCOMPARE(doc.followedPath(),
+                 sessions::scratchPath(QCoreApplication::applicationPid()));
+        const Codec::Result seeded =
+            Codec::readFile(doc.followedPath(), Codec::WarningLimits());
+        QVERIFY(seeded);
+        QCOMPARE(seeded.document.columns(), 8);
+        QCOMPARE(seeded.document.rows(), 8);
+        QVERIFY(!seeded.document.usesSlot(u'R'));
+    }
+
+    void turningScratchOffKeepsUntitledWindowsInvisible()
+    {
+        // The off switch restores yesterday exactly: no backing file, an
+        // empty advertised path, nothing for `where` to name.
+        QTemporaryDir cfg;
+        QFile config(cfg.path() + QStringLiteral("/config.toml"));
+        QVERIFY(config.open(QIODevice::WriteOnly));
+        config.write("[studio]\nscratch = false\n");
+        config.close();
+        qputenv("OMAPIXEL_CONFIG_PATH", config.fileName().toUtf8());
+        Config::shared().load();
+
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        DocumentModel doc;
+        SessionPublisher publisher;
+        publisher.follow(&doc);
+
+        QCOMPARE(doc.followedPath(), QString());
+        QVERIFY(!QFile::exists(
+            sessions::scratchPath(QCoreApplication::applicationPid())));
+        QFile session(sessions::directory() + QStringLiteral("/%1.json")
+                                                  .arg(QCoreApplication::applicationPid()));
+        QVERIFY(session.open(QIODevice::ReadOnly));
+        QCOMPARE(QJsonDocument::fromJson(session.readAll())
+                     .object()
+                     .value(QStringLiteral("path"))
+                     .toString(),
+                 QString());
+
+        // Put the suite's config back the way initTestCase found it.
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+        Config::shared().load();
+    }
+
+    // ---------------------------------------------------------------- where
+
+    void whereFindsTheStudioHoldingADocument()
+    {
+        // The read side of the session contract: `live()` reports the
+        // sessions whose pid-and-start-time still name a running process.
+        // This test IS that running process.
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        const QString drawing =
+            QDir(runtime.path()).absoluteFilePath(QStringLiteral("heart.json"));
+        QJsonObject body;
+        body.insert(QStringLiteral("pid"), QCoreApplication::applicationPid());
+        body.insert(
+            QStringLiteral("started"),
+            double(sessions::startTimeOf(QCoreApplication::applicationPid())));
+        body.insert(QStringLiteral("path"), drawing);
+        body.insert(QStringLiteral("dirty"), false);
+        body.insert(QStringLiteral("selection"), QJsonValue::Null);
+
+        QDir().mkpath(sessions::directory());
+        QFile file(sessions::directory() + QStringLiteral("/%1.json")
+                                              .arg(QCoreApplication::applicationPid()));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QJsonDocument(body).toJson(QJsonDocument::Compact));
+        file.close();
+
+        const QList<sessions::Entry> found = sessions::live(drawing);
+        QCOMPARE(found.size(), 1);
+        QCOMPARE(found.first().pid, qint64(QCoreApplication::applicationPid()));
+        QCOMPARE(found.first().path, drawing);
+        QVERIFY(!found.first().dirty);
+        QVERIFY(!found.first().selection.isValid());
+    }
+
+    void wherePrunesADeadSession()
+    {
+        // A session whose process is gone must not be reported -- and must
+        // not sit in the directory forever, either. The child here is reaped,
+        // so its /proc entry is gone and no start time can match.
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        QProcess dead;
+        dead.start(QStringLiteral("true"));
+        QVERIFY(dead.waitForStarted());
+        QVERIFY(dead.waitForFinished());
+
+        QDir().mkpath(sessions::directory());
+        QFile file(sessions::directory() + QStringLiteral("/%1.json").arg(dead.processId()));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QString("{\"pid\": %1, \"started\": 123456, \"path\": "
+                           "\"/tmp/x.json\", \"dirty\": false}")
+                       .arg(dead.processId())
+                       .toUtf8());
+        file.close();
+
+        QVERIFY(sessions::live().isEmpty());
+        QVERIFY(!QFile::exists(file.fileName()));
+    }
+
+    void wherePrunesARecycledSession()
+    {
+        // The case a name check alone would pass: the PID is alive, but it
+        // belongs to a different process than the one that wrote the file --
+        // which the recorded start time exposes. This test's own PID plays
+        // the impostor.
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        QJsonObject body;
+        body.insert(QStringLiteral("pid"), QCoreApplication::applicationPid());
+        body.insert(
+            QStringLiteral("started"),
+            double(sessions::startTimeOf(QCoreApplication::applicationPid()) + 1));
+        body.insert(QStringLiteral("path"), QStringLiteral("/tmp/someone.json"));
+        body.insert(QStringLiteral("dirty"), true);
+
+        QDir().mkpath(sessions::directory());
+        QFile file(sessions::directory() + QStringLiteral("/%1.json")
+                                              .arg(QCoreApplication::applicationPid()));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QJsonDocument(body).toJson(QJsonDocument::Compact));
+        file.close();
+
+        QVERIFY(sessions::live().isEmpty());
+        QVERIFY(!QFile::exists(file.fileName()));
+    }
+
+    void whereReportsBothStudiosOnOneDocument()
+    {
+        // Two windows on one document: two entries, because inventing a
+        // winner would be worse than making the caller choose. The second
+        // live process here is a real child, so both records validate.
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        QProcess other;
+        other.start(QStringLiteral("sleep"), {QStringLiteral("10")});
+        QVERIFY(other.waitForStarted());
+        const qint64 otherStarted = sessions::startTimeOf(other.processId());
+        QVERIFY(otherStarted > 0);
+
+        QDir().mkpath(sessions::directory());
+        const QString drawing = QStringLiteral("/tmp/shared.json");
+        const auto writeSession = [&](qint64 pid, qint64 started) {
+            QFile f(sessions::directory() + QStringLiteral("/%1.json").arg(pid));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QString("{\"pid\": %1, \"started\": %2, \"path\": \"%3\", "
+                            "\"dirty\": false, \"selection\": null}")
+                        .arg(pid)
+                        .arg(started)
+                        .arg(drawing)
+                        .toUtf8());
+        };
+        writeSession(QCoreApplication::applicationPid(),
+                     sessions::startTimeOf(QCoreApplication::applicationPid()));
+        writeSession(other.processId(), otherStarted);
+
+        QCOMPARE(sessions::live(drawing).size(), 2);
+
+        other.kill();
+        QVERIFY(other.waitForFinished());
+    }
+
+    // -------------------------------------------------------- change history
+
+    /// Reads one role out of the log's row.
+    static QVariant historyAt(const ChangeLog &log, int row, int role)
+    {
+        return log.index(row, 0).data(role);
+    }
+
+    void drawingFilesAStudioEntry()
+    {
+        // The session record: what changed, by whose hand. The user knows
+        // what they drew; the entry exists so the whole session reads as one
+        // story, studio hand and outside writes alike. Window zero, so every
+        // change is its own entry no matter how fast the machine runs.
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+        ChangeLog log(0);
+        log.follow(&doc);
+
+        doc.paint(1, 1, QStringLiteral("R"));
+        QCOMPARE(log.count(), 1);
+        QCOMPARE(historyAt(log, 0, ChangeLog::OriginRole).toString(),
+                 QStringLiteral("studio"));
+        QVERIFY(historyAt(log, 0, ChangeLog::DescriptionRole).toString()
+                    .contains(QStringLiteral("pixel(s) differ")));
+        QVERIFY(historyAt(log, 0, ChangeLog::WhenRole).toLongLong() > 0);
+    }
+
+    void anExternalWriteFilesACliEntry()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.path() + QStringLiteral("/drawing.json");
+        QVERIFY(writeDocument(path, sample()));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(path));
+        ChangeLog log(0);
+        log.follow(&doc);
+
+        QVERIFY(writeDocument(path, Document::blank(4, 3)));
+        QVERIFY(doc.reloadFromDisk());
+
+        QCOMPARE(log.count(), 1);
+        QCOMPARE(historyAt(log, 0, ChangeLog::OriginRole).toString(),
+                 QStringLiteral("cli"));
+        // Described by the same core walk `omapixel diff` prints.
+        QVERIFY(historyAt(log, 0, ChangeLog::DescriptionRole).toString()
+                    .contains(QStringLiteral("8 pixel(s) differ")));
+    }
+
+    void aDragReadsAsOneSentenceAndUndoAsAnother()
+    {
+        // The window's own log coalesces: a stroke is one sentence that
+        // swells, not one per pixel. And undo is itself something that
+        // happened, so it lands as its own entry -- while every earlier
+        // entry survives untouched, because this is a record and not a
+        // mechanism.
+        DocumentModel doc;
+        ChangeLog *log = doc.findChild<ChangeLog *>();
+        QVERIFY(log);
+
+        doc.beginStroke();
+        doc.paint(1, 1, QStringLiteral("R"));
+        doc.paint(2, 2, QStringLiteral("R"));
+        doc.endStroke();
+        QCOMPARE(log->count(), 1);
+        QVERIFY(historyAt(*log, 0, ChangeLog::OriginRole).toString()
+                    == QStringLiteral("studio"));
+        QVERIFY(historyAt(*log, 0, ChangeLog::DescriptionRole).toString()
+                    .contains(QStringLiteral("2 pixel(s) differ")));
+
+        // Outrun the coalescing window before undoing, so the undo cannot be
+        // mistaken for more drawing.
+        QTest::qWait(850);
+        doc.undo();
+        QCOMPARE(log->count(), 2);
+        QCOMPARE(historyAt(*log, 0, ChangeLog::DescriptionRole).toString()
+                     .contains(QStringLiteral("2 pixel(s) differ")),
+                 true);   // the old entry still reads as it did
+        QCOMPARE(historyAt(*log, 1, ChangeLog::OriginRole).toString(),
+                 QStringLiteral("studio"));
     }
 
     // --------------------------------------------------------------- wheel
@@ -1173,7 +2265,7 @@ private slots:
 
         QTest::failOnWarning();
         DocumentModel document;
-        document.reset(64, 64);
+        document.reset(854, 480);
         Theme theme;
         QQuickView view;
         // Surface.qml has no size of its own -- in the window it takes one from
@@ -1217,12 +2309,28 @@ private slots:
             QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Surface.qml")));
         QVERIFY2(surfaceComponent.isReady(), qPrintable(surfaceComponent.errorString()));
         view.setContent(QUrl(), &surfaceComponent, surfaceComponent.create());
-        view.resize(200, 200);
+        view.resize(1600, 900);
         view.show();
         QVERIFY(QTest::qWaitForWindowExposed(&view));
 
         QQuickItem *surface = view.rootObject();
         QVERIFY(surface);
+
+        // Fit uses the full available pane instead of throwing away the
+        // fractional part and leaving an 854px drawing at 1x in 1600px.
+        const qreal fitted = qMin((1600.0 - 24) / 854, (900.0 - 24) / 480);
+        QTRY_VERIFY(qAbs(win->property("zoom").toReal() - fitted) < 0.001);
+        QVERIFY(win->property("zoom").toReal() > 1);
+
+        // A document larger than the viewport still fits in full. The previous
+        // 1x floor made View > Fit unable to fit these documents at all.
+        document.reset(2048, 1080);
+        QTRY_VERIFY(win->property("zoom").toReal() < 1);
+        QVERIFY(surface->property("contentWidth").toReal() <= 1600 - 24 + 0.01);
+        QVERIFY(surface->property("contentHeight").toReal() <= 900 - 24 + 0.01);
+        document.reset(64, 64);
+        view.resize(200, 200);
+        QTRY_COMPARE(surface->width(), 200.0);
 
         // The surface fits the drawing to the pane on load, which for a 200px
         // viewport means a zoom with nothing to scroll to. Take the view over,
@@ -1247,6 +2355,97 @@ private slots:
         sendWheel(&view, Qt::AltModifier);
         QVERIFY2(!qFuzzyCompare(win->property("zoom").toReal(), thenZoom),
                  "alt and the wheel did not zoom");
+
+        // Deliberately give the pane dimensions that are not divisible by the
+        // cell size. Its inner viewport drops the remainders instead of showing
+        // half a pixel at an edge.
+        document.reset(100, 100);
+        view.resize(203, 207);
+        QTRY_COMPARE(surface->width(), 203.0);
+        QTRY_COMPARE(surface->height(), 207.0);
+        win->setProperty("zoom", 4.0);
+        surface->setProperty("touched", true);
+        surface->setProperty("caretMarginX", 0);
+        surface->setProperty("caretMarginY", 0);
+        surface->setProperty("requestedPanX", 0.0);
+        surface->setProperty("requestedPanY", 0.0);
+        QVERIFY(QMetaObject::invokeMethod(surface, "clampPan"));
+        QCOMPARE(surface->property("viewportWidth").toReal(), 200.0);
+        QCOMPARE(surface->property("viewportHeight").toReal(), 204.0);
+        QCOMPARE(surface->property("viewColumn").toReal(), 25.0);
+        QCOMPARE(surface->property("viewRow").toReal(), 24.0);
+        QCOMPARE(surface->property("viewColumns").toReal(), 50.0);
+        QCOMPARE(surface->property("viewRows").toReal(), 51.0);
+        auto *pixelViewport =
+            surface->findChild<QQuickItem *>(QStringLiteral("pixelViewport"));
+        auto *pixelStage =
+            surface->findChild<QQuickItem *>(QStringLiteral("pixelStage"));
+        QVERIFY(pixelViewport);
+        QVERIFY(pixelStage);
+        QCOMPARE(std::fmod(pixelViewport->width(), 4.0), 0.0);
+        QCOMPARE(std::fmod(pixelViewport->height(), 4.0), 0.0);
+        QCOMPARE(std::fmod(pixelStage->x(), 4.0), 0.0);
+        QCOMPARE(std::fmod(pixelStage->y(), 4.0), 0.0);
+        const auto reveal = [&](int column, int row) {
+            return QMetaObject::invokeMethod(surface, "reveal",
+                                             Q_ARG(QVariant, column),
+                                             Q_ARG(QVariant, row));
+        };
+        const qreal alignedY = surface->property("panY").toReal();
+
+        // Visible columns are [25, 75): 74 is the last one and may be used;
+        // trying to walk to 75 is what recentres X. Y stays exactly put.
+        QVERIFY(reveal(74, 50));
+        QCOMPARE(surface->property("panX").toReal(), 0.0);
+        QVERIFY(reveal(75, 50));
+        QCOMPARE(surface->property("panX").toReal(), -100.0);
+        QCOMPARE(surface->property("panY").toReal(), alignedY);
+
+        // Twenty pixels from the right edge starts at column 55.
+        surface->setProperty("requestedPanX", 0.0);
+        surface->setProperty("caretMarginX", 20);
+        QVERIFY(QMetaObject::invokeMethod(surface, "clampPan"));
+        QVERIFY(reveal(54, 50));
+        QCOMPARE(surface->property("panX").toReal(), 0.0);
+        QVERIFY(reveal(55, 50));
+        QCOMPARE(surface->property("panX").toReal(), -20.0);
+        QCOMPARE(surface->property("panY").toReal(), alignedY);
+
+        // Center can follow either axis without stealing the position chosen
+        // for the other one.
+        surface->setProperty("requestedPanX", 0.0);
+        surface->setProperty("requestedPanY", 0.0);
+        surface->setProperty("caretMarginX", QStringLiteral("center"));
+        surface->setProperty("caretMarginY", 0);
+        QVERIFY(QMetaObject::invokeMethod(surface, "clampPan"));
+        QCOMPARE(surface->property("viewportWidth").toReal(), 196.0);
+        QVERIFY(reveal(51, 50));
+        QCOMPARE(surface->property("panX").toReal(), -6.0);
+        QCOMPARE(surface->property("panY").toReal(), alignedY);
+
+        surface->setProperty("requestedPanX", 0.0);
+        surface->setProperty("requestedPanY", 0.0);
+        surface->setProperty("caretMarginX", 0);
+        surface->setProperty("caretMarginY", QStringLiteral("center"));
+        QVERIFY(QMetaObject::invokeMethod(surface, "clampPan"));
+        QVERIFY(reveal(50, 51));
+        QCOMPARE(surface->property("panX").toReal(), 0.0);
+        QCOMPARE(surface->property("panY").toReal(), -6.0);
+
+        // Smooth devices report sub-cell deltas. They accumulate in requested
+        // pan, while the stage shown on screen moves only at a grid boundary.
+        surface->setProperty("caretMarginY", 0);
+        surface->setProperty("requestedPanX", 0.0);
+        surface->setProperty("requestedPanY", 0.0);
+        QVERIFY(QMetaObject::invokeMethod(surface, "clampPan"));
+        for (int i = 0; i < 3; ++i)
+            QVERIFY(QMetaObject::invokeMethod(surface, "scrollBy",
+                                              Q_ARG(QVariant, 1),
+                                              Q_ARG(QVariant, 0)));
+        QVERIFY(qAbs(surface->property("requestedPanX").toReal() - 2.1) < 0.0001);
+        QCOMPARE(surface->property("panX").toReal(), 4.0);
+        QCOMPARE(std::fmod(pixelStage->x(), 4.0), 0.0);
+        QCOMPARE(std::fmod(pixelStage->y(), 4.0), 0.0);
     }
 
     void aWheelOverTheWholeWindowReachesTheSurface()
@@ -1300,6 +2499,22 @@ private slots:
         QCoreApplication::processEvents();
         QVERIFY2(!qFuzzyCompare(surface->property("panY").toReal(), restingY),
                   "a wheel over the drawing did not scroll it");
+
+        // Painting is a content change, not a request to reopen the view. In
+        // particular, applying a number key to a selection must preserve the
+        // zoom and pan the artist chose instead of silently running Fit.
+        document.setSelection(2, 3, 4, 5);
+        const qreal chosenZoom = root->property("zoom").toReal();
+        const qreal chosenPanX = surface->property("panX").toReal();
+        const qreal chosenPanY = surface->property("panY").toReal();
+        const QString first = root->property("registers").toStringList().value(0);
+        QTest::keyClick(window, Qt::Key_1);
+        QCOMPARE(document.slotAt(2, 3), first);
+        QCOMPARE(document.slotAt(4, 5), first);
+        QCOMPARE(root->property("zoom").toReal(), chosenZoom);
+        QCOMPARE(surface->property("panX").toReal(), chosenPanX);
+        QCOMPARE(surface->property("panY").toReal(), chosenPanY);
+        QCOMPARE(surface->property("touched").toBool(), true);
     }
 
     void dirtyDocumentsGateEveryDestructiveWindowAction()
@@ -1526,14 +2741,86 @@ private slots:
         QCOMPARE(root->property("caretColumn").toInt(), 16);
         QCOMPARE(root->property("caretRow").toInt(), 12);
 
+        // A document pixel can occupy less than one screen pixel after Fit.
+        // The keyboard cursor stays visible even though its logical movement
+        // remains exactly one document cell.
+        auto *keyboardCursor =
+            root->findChild<QQuickItem *>(QStringLiteral("keyboardCursor"));
+        QVERIFY(keyboardCursor);
+        const qreal initialZoom = root->property("zoom").toReal();
+        root->setProperty("zoom", 0.5);
+        QTRY_COMPARE(keyboardCursor->width(), 7.0);
+        root->setProperty("zoom", initialZoom);
+
         QTest::keyClick(window, Qt::Key_Right);
         QTest::keyClick(window, Qt::Key_Down);
         QCOMPARE(root->property("caretColumn").toInt(), 17);
         QCOMPARE(root->property("caretRow").toInt(), 13);
 
-        // Shift takes eight at a time.
+        // Shift fixes an anchor and extends an inclusive rectangle.
         QTest::keyClick(window, Qt::Key_Left, Qt::ShiftModifier);
-        QCOMPARE(root->property("caretColumn").toInt(), 9);
+        QCOMPARE(root->property("caretColumn").toInt(), 16);
+        QVERIFY(document.hasSelection());
+        QCOMPARE(document.selectionX(), 16);
+        QCOMPARE(document.selectionY(), 13);
+        QCOMPARE(document.selectionWidth(), 2);
+        QCOMPARE(document.selectionHeight(), 1);
+
+        QTest::keyClick(window, Qt::Key_Up, Qt::ShiftModifier);
+        QCOMPARE(document.selectionX(), 16);
+        QCOMPARE(document.selectionY(), 12);
+        QCOMPARE(document.selectionWidth(), 2);
+        QCOMPARE(document.selectionHeight(), 2);
+
+        // Both modifiers keep selecting, but by the configured big step.
+        QTest::keyClick(window, Qt::Key_Left,
+                        Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(root->property("caretColumn").toInt(), 8);
+        QCOMPARE(document.selectionX(), 8);
+        QCOMPARE(document.selectionWidth(), 10);
+
+        // Ctrl keeps the old big-step navigation and plain movement clears the
+        // range before it walks.
+        QTest::keyClick(window, Qt::Key_Right, Qt::ControlModifier);
+        QCOMPARE(root->property("caretColumn").toInt(), 16);
+        QVERIFY(!document.hasSelection());
+        root->setProperty("caretColumn", 9);
+        root->setProperty("caretRow", 13);
+
+        // Focus commands prefer the selected rectangle. A number paints every
+        // selected cell and Delete erases exactly those cells, without dropping
+        // the range.
+        QTest::keyClick(window, Qt::Key_Right, Qt::ShiftModifier);
+        QTest::keyClick(window, Qt::Key_Down, Qt::ShiftModifier);
+        QCOMPARE(document.selectionX(), 9);
+        QCOMPARE(document.selectionY(), 13);
+        QCOMPARE(document.selectionWidth(), 2);
+        QCOMPARE(document.selectionHeight(), 2);
+        const QString selectedSlot = root->property("registers").toStringList().value(0);
+        QTest::keyClick(window, Qt::Key_1);
+        for (int y = 13; y <= 14; ++y)
+            for (int x = 9; x <= 10; ++x)
+                QCOMPARE(document.slotAt(x, y), selectedSlot);
+        QVERIFY(document.hasSelection());
+
+        QTest::keyClick(window, Qt::Key_Delete);
+        for (int y = 13; y <= 14; ++y)
+            for (int x = 9; x <= 10; ++x)
+                QCOMPARE(document.slotAt(x, y), QStringLiteral("."));
+        QVERIFY(document.hasSelection());
+
+        QTest::keyClick(window, Qt::Key_Return);
+        for (int y = 13; y <= 14; ++y)
+            for (int x = 9; x <= 10; ++x)
+                QCOMPARE(document.slotAt(x, y), selectedSlot);
+        QTest::keyClick(window, Qt::Key_Backspace);
+        for (int y = 13; y <= 14; ++y)
+            for (int x = 9; x <= 10; ++x)
+                QCOMPARE(document.slotAt(x, y), QStringLiteral("."));
+        QTest::keyClick(window, Qt::Key_Escape);
+        QVERIFY(!document.hasSelection());
+        root->setProperty("caretColumn", 9);
+        root->setProperty("caretRow", 13);
 
         // And it draws where it stands.
         QCOMPARE(document.slotAt(9, 13), QStringLiteral("."));
@@ -1542,6 +2829,15 @@ private slots:
 
         QTest::keyClick(window, Qt::Key_Backspace);
         QCOMPARE(document.slotAt(9, 13), QStringLiteral("."));
+
+        // Clearing the whole frame moved to Ctrl+Delete.
+        QTest::keyClick(window, Qt::Key_Return);
+        root->setProperty("caretColumn", 5);
+        root->setProperty("caretRow", 5);
+        QTest::keyClick(window, Qt::Key_Return);
+        QTest::keyClick(window, Qt::Key_Delete, Qt::ControlModifier);
+        QCOMPARE(document.slotAt(9, 13), QStringLiteral("."));
+        QCOMPARE(document.slotAt(5, 5), QStringLiteral("."));
 
         // The cursor stays inside the drawing however long you lean on a key.
         for (int i = 0; i < 40; ++i)
@@ -1685,6 +2981,83 @@ private slots:
         const int before = root->property("caretColumn").toInt();
         QTest::keyClick(window, Qt::Key_Right);
         QCOMPARE(root->property("caretColumn").toInt(), before + 1);
+
+        // Holding Shift turns a left drag into a rectangle instead of a
+        // stroke. Coordinates are local pixels scaled by the current zoom.
+        auto *pointer = root->findChild<QQuickItem *>(QStringLiteral("canvasPointer"));
+        QVERIFY(pointer);
+        const qreal zoom = root->property("zoom").toReal();
+        const QPoint from = pointer->mapToScene(QPointF(2.5 * zoom, 3.5 * zoom)).toPoint();
+        const QPoint to = pointer->mapToScene(QPointF(5.5 * zoom, 7.5 * zoom)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::ShiftModifier, from);
+        QTest::mouseMove(window, to);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::ShiftModifier, to);
+        QVERIFY(document.hasSelection());
+        QCOMPARE(document.selectionX(), 2);
+        QCOMPARE(document.selectionY(), 3);
+        QCOMPARE(document.selectionWidth(), 4);
+        QCOMPARE(document.selectionHeight(), 5);
+    }
+
+    void pickupAndNumberShortcutsPaintASelectionWithTheCollectedColour()
+    {
+        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+
+        QQmlEngine engine;
+        DocumentModel document;
+        document.reset(12, 12);
+        Theme theme;
+        static InputLog mute(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(
+            QStringLiteral("T"), &Strings::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &mute);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        window->resize(1000, 720);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        root->setProperty("caretColumn", 4);
+        root->setProperty("caretRow", 4);
+        root->setProperty("slot", QStringLiteral("R"));
+        QTest::keyClick(window, Qt::Key_Return);
+        QCOMPARE(document.slotAt(4, 4), QStringLiteral("R"));
+
+        // P and 4 collect the focused colour. Navigation alone deliberately
+        // leaves pickup active.
+        QTest::keyClick(window, Qt::Key_P);
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(root->property("mode").toString(), QStringLiteral("pick"));
+        QTest::keyClick(window, Qt::Key_Left);
+        QTest::keyClick(window, Qt::Key_4);
+        QCOMPARE(root->property("registers").toStringList().value(3),
+                 QStringLiteral("R"));
+
+        // Starting a selection exits pickup, so 4 paints rather than replacing
+        // the register with the endpoint's colour.
+        QTest::keyClick(window, Qt::Key_Right, Qt::ShiftModifier);
+        QCOMPARE(root->property("mode").toString(), QString());
+        QCOMPARE(document.selectionX(), 4);
+        QCOMPARE(document.selectionWidth(), 2);
+        QTest::keyClick(window, Qt::Key_4);
+        QCOMPARE(document.slotAt(4, 4), QStringLiteral("R"));
+        QCOMPARE(document.slotAt(5, 4), QStringLiteral("R"));
+
+        // Painting emits fileChanged, but that must not refill the number keys.
+        QTest::keyClick(window, Qt::Key_Right);
+        QTest::keyClick(window, Qt::Key_4);
+        QCOMPARE(document.slotAt(6, 4), QStringLiteral("R"));
+        QCOMPARE(root->property("registers").toStringList().value(3),
+                 QStringLiteral("R"));
     }
 
     void everyControlIsReachableWithTab()
@@ -1937,6 +3310,110 @@ private slots:
                  "rendering slows down as the palette grows");
     }
 
+    void fullHdFilesOpenWithinBudget_data()
+    {
+        QTest::addColumn<int>("frameCount");
+        QTest::addColumn<qint64>("budgetMs");
+        QTest::newRow("single-frame") << 1 << qint64(500);
+        QTest::newRow("three-frame-animation") << 3 << qint64(1500);
+    }
+
+    void fullHdFilesOpenWithinBudget()
+    {
+        QFETCH(int, frameCount);
+        QFETCH(qint64, budgetMs);
+
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("full-hd.json"));
+        QVERIFY(Codec::writeFile(path, fullHdDocument(frameCount)));
+
+        DocumentModel document;
+        QElapsedTimer clock;
+        clock.start();
+        const bool opened = document.open(QUrl::fromLocalFile(path).toString());
+        const qint64 elapsed = clock.elapsed();
+
+        QVERIFY(opened);
+        QCOMPARE(document.columns(), 1920);
+        QCOMPARE(document.rows(), 1080);
+        QCOMPARE(document.frameCount(), frameCount);
+        qInfo("opened %lld KiB Full HD file with %d frame(s) in %lld ms",
+              QFileInfo(path).size() / 1024, frameCount, elapsed);
+        QVERIFY2(elapsed < budgetMs,
+                 qPrintable(QStringLiteral("opening took %1 ms; budget is %2 ms")
+                                .arg(elapsed)
+                                .arg(budgetMs)));
+    }
+
+    void fullHdStudioRasterStaysWithinBudget_data()
+    {
+        QTest::addColumn<int>("frameCount");
+        QTest::addColumn<qint64>("budgetMs");
+        QTest::newRow("single-frame") << 1 << qint64(250);
+        QTest::newRow("three-frame-animation") << 3 << qint64(500);
+    }
+
+    void fullHdStudioRasterStaysWithinBudget()
+    {
+        QFETCH(int, frameCount);
+        QFETCH(qint64, budgetMs);
+
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("full-hd-animation.json"));
+        QVERIFY(Codec::writeFile(path, fullHdDocument(frameCount)));
+        const Codec::Result read = Codec::readFile(path);
+        QVERIFY(read);
+
+        // A conservative upper bound for initial paint: one checker layer, one
+        // current-frame layer, and one thumbnail per supplied frame. The real
+        // timeline is virtualized, so longer animations do not create every
+        // thumbnail at once.
+        render::Options checker;
+        checker.checker = true;
+        QElapsedTimer clock;
+        clock.start();
+        QVERIFY(!render::toImage(read.document, QStringLiteral("idle"), 0,
+                                 checker).isNull());
+        QVERIFY(!render::toImage(read.document, QStringLiteral("idle"), 0, {})
+                     .isNull());
+        for (int frame = 0; frame < frameCount; ++frame) {
+            QVERIFY(!render::toImage(read.document, QStringLiteral("idle"), frame,
+                                     {})
+                         .isNull());
+        }
+        const qint64 elapsed = clock.elapsed();
+
+        qInfo("rasterized Full HD Studio layers for %d frame(s) in %lld ms",
+              frameCount, elapsed);
+        QVERIFY2(elapsed < budgetMs,
+                 qPrintable(QStringLiteral("initial raster took %1 ms; budget is %2 ms")
+                                .arg(elapsed)
+                                .arg(budgetMs)));
+    }
+
+    void fullHdSinglePixelEditStaysWithinBudget()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("full-hd-edit.json"));
+        QVERIFY(Codec::writeFile(path, fullHdDocument(1)));
+
+        DocumentModel document;
+        QVERIFY(document.open(path));
+        QElapsedTimer clock;
+        clock.start();
+        document.paint(1919, 1079, QStringLiteral("R"));
+        const qint64 elapsed = clock.elapsed();
+
+        QCOMPARE(document.slotAt(1919, 1079), QStringLiteral("R"));
+        qInfo("edited the last pixel of a Full HD frame in %lld ms", elapsed);
+        QVERIFY2(elapsed < 100,
+                 qPrintable(QStringLiteral("single-pixel edit took %1 ms; budget is 100 ms")
+                                .arg(elapsed)));
+    }
+
     void addingAColourTouchesOneRow()
     {
         // The deterministic half of the stutter. Wall-clock on a loaded
@@ -1971,6 +3448,14 @@ private slots:
         // Opening another document is a genuine reset, and says so once.
         doc.reset(8, 8);
         QCOMPARE(reset.size(), 1);
+    }
+
+    void zoomDoesNotAllocateAPaintedBackingStore()
+    {
+        // QQuickPaintedItem scales its backing texture with the item. At 40x,
+        // a Full HD canvas would ask the renderer for a 76800x43200 texture.
+        QVERIFY(!PixelGridItem::staticMetaObject.inherits(
+            &QQuickPaintedItem::staticMetaObject));
     }
 
     void repeatedPaintingDoesNotGetSlower()
@@ -2203,7 +3688,8 @@ private slots:
         QVERIFY(file.open(QIODevice::WriteOnly));
         file.write("[window]\nwidth = -1\n"
                    "[canvas]\nzoom = 41\nbig_step = 0\n"
-                   "[document]\nwidth = 513\nfps = 0\n"
+                   "[document]\nwidth = " + QByteArray::number(
+                       Document::maxDimension + 1) + "\nfps = 0\n"
                    "[history]\ndepth = -5\n"
                    "[warnings]\nclips = -1\n");
         file.close();
@@ -2213,6 +3699,43 @@ private slots:
         QCOMPARE(config.number(QStringLiteral("window.width")), 1280);
         QCOMPARE(config.text(QStringLiteral("canvas.zoom")), QStringLiteral("fit"));
         QCOMPARE(config.number(QStringLiteral("warnings.clips")), 256);
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+    }
+
+    void caretMarginsAcceptNumbersOrCenterPerAxis()
+    {
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        const QString path = home.path() + QStringLiteral("/config.toml");
+        qputenv("OMAPIXEL_CONFIG_PATH", path.toUtf8());
+
+        {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("[canvas]\ncaret_margin_x = \"center\"\n"
+                       "caret_margin_y = 20\n");
+            file.close();
+
+            Config config;
+            QVERIFY(config.problems().isEmpty());
+            QCOMPARE(config.text(QStringLiteral("canvas.caret_margin_x")),
+                     QStringLiteral("center"));
+            QCOMPARE(config.number(QStringLiteral("canvas.caret_margin_y")), 20);
+        }
+
+        {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            file.write("[canvas]\ncaret_margin_x = -1\n"
+                       "caret_margin_y = \"edge\"\n");
+            file.close();
+
+            Config config;
+            QCOMPARE(config.problems().size(), 2);
+            QCOMPARE(config.number(QStringLiteral("canvas.caret_margin_x")), 0);
+            QCOMPARE(config.number(QStringLiteral("canvas.caret_margin_y")), 0);
+        }
+
         qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
     }
 
@@ -2235,6 +3758,57 @@ private slots:
 
         qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
         Config::shared().load();
+    }
+
+    void studioScratchDefaultsOn()
+    {
+        // The default studio is addressable: an untitled window backs itself
+        // with a runtime file an agent can draw into. The off switch in the
+        // config file exists for whoever wants the old invisibility back.
+        QCOMPARE(Config::shared().flag(QStringLiteral("studio.scratch")), true);
+    }
+
+    void largeDimensionsRoundTripThroughTheCodec()
+    {
+        // High-resolution grids -- a pixelized photo at SD size -- are a
+        // legitimate document, not an abuse of the format. The ceiling is
+        // Document::maxDimension, and this sits comfortably inside it.
+        const QString path = QDir::temp().filePath(
+            QStringLiteral("omapixel-large-roundtrip.json"));
+        QVERIFY(Codec::writeFile(path, Document::blank(854, 480)));
+
+        const Codec::Result read =
+            Codec::readFile(path, Codec::WarningLimits());
+        QVERIFY(read);
+        QCOMPARE(read.document.columns(), 854);
+        QCOMPARE(read.document.rows(), 480);
+        QFile::remove(path);
+    }
+
+    void dimensionsPastTheCeilingAreRefused()
+    {
+        // The ceiling still exists: memory is the budget, and one over the
+        // line fails with a sentence rather than an allocation death.
+        QJsonObject size;
+        size.insert(QStringLiteral("w"), Document::maxDimension + 1);
+        size.insert(QStringLiteral("h"), 2);
+        QJsonArray frames{QJsonArray{QStringLiteral("..")}};
+        QJsonObject clip;
+        clip.insert(QStringLiteral("name"), QStringLiteral("idle"));
+        clip.insert(QStringLiteral("fps"), 8);
+        clip.insert(QStringLiteral("frames"), frames);
+        QJsonArray clips{clip};
+        QJsonObject palette;
+        QJsonObject root;
+        root.insert(QStringLiteral("size"), size);
+        root.insert(QStringLiteral("clips"), clips);
+        root.insert(QStringLiteral("palette"), palette);
+
+        const Codec::Result read = Codec::read(
+            QJsonDocument(root).toJson(), Codec::WarningLimits());
+        QVERIFY(!read);
+        QVERIFY(read.error.contains(
+            QString::number(Document::maxDimension)));
     }
 
     void theShippedConfigSaysWhatTheProgramActuallyDoes()

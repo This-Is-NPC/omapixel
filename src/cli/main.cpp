@@ -21,6 +21,7 @@
 #include "Differences.h"
 #include "Document.h"
 #include "Ops.h"
+#include "Sessions.h"
 #include "Strings.h"
 #include "Render.h"
 
@@ -30,6 +31,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
@@ -166,6 +168,64 @@ int runBatch(Document &doc, const QString &path, const QCommandLineParser &parse
         return 1;
     }
     out() << path << ": " << applied << " command(s), " << changes << " change(s)\n";
+    return 0;
+}
+
+/// `where` -- which live studios hold a document, their dirty state and range.
+///
+/// The read side of the session files the studio publishes. An explicit ask
+/// rather than a silent default: if `--frame` ever fell back to the session,
+/// the CLI would stop being a function of its arguments and the same script
+/// would hit different frames depending on whether a window happened to be
+/// open. Here the agent asks, then passes the number itself.
+///
+/// Exit codes are the contract: 0 when something is printed, 1 when the
+/// honest answer is "nobody" -- both for a named document nobody holds and
+/// for no live sessions at all, so "is anyone looking?" has one negative.
+int where(const QStringList &words)
+{
+    // Absolute, because the publisher writes absolute paths and a relative
+    // spelling from another directory must still match.
+    const QString wanted = words.isEmpty()
+                               ? QString()
+                               : QFileInfo(words.first()).absoluteFilePath();
+    const QList<sessions::Entry> found = sessions::live(wanted);
+
+    if (found.isEmpty()) {
+        err() << (wanted.isEmpty()
+                      ? Strings::shared().t(QStringLiteral("error.whereNoSessions"))
+                      : Strings::shared().t(QStringLiteral("error.whereNobody"))
+                            .arg(wanted))
+              << "\n";
+        return 1;
+    }
+
+    QJsonArray list;
+    for (const sessions::Entry &entry : found) {
+        QJsonObject one;
+        one.insert(QStringLiteral("pid"), entry.pid);
+        one.insert(QStringLiteral("started"), entry.started);
+        one.insert(QStringLiteral("path"), entry.path);
+        one.insert(QStringLiteral("dirty"), entry.dirty);
+        if (entry.selection.isValid()) {
+            QJsonObject selection;
+            selection.insert(QStringLiteral("clip"), entry.clip);
+            selection.insert(QStringLiteral("frame"), entry.frame);
+            selection.insert(QStringLiteral("x"), entry.selection.x());
+            selection.insert(QStringLiteral("y"), entry.selection.y());
+            selection.insert(QStringLiteral("width"), entry.selection.width());
+            selection.insert(QStringLiteral("height"), entry.selection.height());
+            selection.insert(QStringLiteral("count"),
+                             entry.selection.width() * entry.selection.height());
+            one.insert(QStringLiteral("selection"), selection);
+        } else {
+            one.insert(QStringLiteral("selection"), QJsonValue::Null);
+        }
+        list.append(one);
+    }
+    QJsonObject report;
+    report.insert(QStringLiteral("sessions"), list);
+    out() << QJsonDocument(report).toJson(QJsonDocument::Compact) << "\n";
     return 0;
 }
 
@@ -416,6 +476,7 @@ int main(int argc, char *argv[])
         "  text     the frame as letters, one per pixel\n"
         "  render   write a PNG\n"
         "  resize   change the frame, keeping the drawing centred\n"
+        "  trim     crop empty borders around one frame's content\n"
         "  clip     add | rm | rename | fps\n"
         "  frame    add | dup | rm | move\n"
         "  paint    one pixel\n"
@@ -427,6 +488,7 @@ int main(int argc, char *argv[])
         "  batch    many commands over one document, read once and written once\n"
         "  i18n     what a language catalogue is still missing\n"
         "  config   the settings file: check | write\n"
+        "  where    which live studios hold a document\n"
         "  diff     what differs between two documents\n"
         "  import   pull one sprite set out of a catalog\n"
         "  export   put the clips back into one\n"
@@ -453,6 +515,9 @@ int main(int argc, char *argv[])
 
     if (command == QLatin1String("i18n"))
         return checkCatalogues(words.value(0));
+
+    if (command == QLatin1String("where"))
+        return where(words);
 
     if (command == QLatin1String("config"))
         return inspectConfig(words.value(0));

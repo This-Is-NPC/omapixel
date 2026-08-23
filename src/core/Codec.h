@@ -56,8 +56,8 @@ public:
     static QByteArray write(const Document &document);
 
     /// Writes through a temporary and renames over the target. The studio
-    /// watches the file it has open, and it must not read half a document
-    /// because a CLI command is halfway through a write.
+    /// watches the file it has open, and the atomic rename means it never
+    /// reads half a document because a CLI command is halfway through a write.
     static bool writeFile(const QString &path, const Document &document,
                           QString *error = nullptr);
 };

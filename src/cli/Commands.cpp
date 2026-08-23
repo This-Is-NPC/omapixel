@@ -182,6 +182,49 @@ Outcome doResize(Document &doc, const QCommandLineParser &parser)
     return Outcome::edited(note + QLatin1Char('\n'));
 }
 
+Outcome doTrim(Document &doc, const QCommandLineParser &parser)
+{
+    Target target;
+    QString error;
+    if (!resolveTarget(doc, value(parser, "clip"), value(parser, "frame"), &target,
+                       &error))
+        return Outcome::wrong(error);
+
+    const QRect bounds = doc.drawnBounds(target.clip, target.frame);
+    if (!bounds.isValid()) {
+        return Outcome::refused(
+            QStringLiteral("trim: %1 frame %2 is empty").arg(target.clip).arg(target.frame));
+    }
+
+    const QRect whole(0, 0, doc.columns(), doc.rows());
+    if (bounds == whole)
+        return Outcome::ok(QStringLiteral("already tight\n"));
+
+    const int lost = doc.wouldLoseOutside(bounds);
+    if (lost > 0 && !isSet(parser, "anyway")) {
+        return Outcome::refused(
+            QStringLiteral("this would crop %1 drawn pixel(s) outside %2 frame %3's "
+                           "content bounds. Pass --anyway if that is what you want.")
+                .arg(lost)
+                .arg(target.clip)
+                .arg(target.frame));
+    }
+
+    const int wasColumns = doc.columns();
+    const int wasRows = doc.rows();
+    if (!doc.crop(bounds))
+        return Outcome::refused(QStringLiteral("trim: content bounds are outside the canvas"));
+
+    QString note = QStringLiteral("%1x%2 → %3x%4")
+                       .arg(wasColumns)
+                       .arg(wasRows)
+                       .arg(bounds.width())
+                       .arg(bounds.height());
+    if (lost > 0)
+        note += QStringLiteral(", %1 pixel(s) cropped").arg(lost);
+    return Outcome::edited(note + QLatin1Char('\n'));
+}
+
 Outcome doClip(Document &doc, QStringList &words, const QCommandLineParser &parser)
 {
     if (words.isEmpty())
@@ -438,6 +481,8 @@ Outcome applyCommand(Document &doc, const QString &command, QStringList words,
 
     if (command == QLatin1String("resize"))
         return doResize(doc, parser);
+    if (command == QLatin1String("trim"))
+        return doTrim(doc, parser);
     if (command == QLatin1String("clip"))
         return doClip(doc, words, parser);
     if (command == QLatin1String("frame"))

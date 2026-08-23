@@ -48,6 +48,9 @@ Window {
     property string tool: "pencil"
     property string slot: "I"
     property real zoom: 12
+    function zoomLabel() {
+        return (Math.round(zoom * 100) / 100) + "×"
+    }
     property bool onion: cfg.settings["canvas.onion"]
     property bool mesh: cfg.settings["canvas.grid"]
     property bool playing: false
@@ -98,6 +101,18 @@ Window {
         registers = next
     }
 
+    function reconcileRegisters() {
+        var known = doc.palette.map(function (entry) { return entry.slot })
+        var next = registers.map(function (entry) {
+            return entry === "." || known.indexOf(entry) >= 0 ? entry : ""
+        })
+        registers = next
+        if (slot !== "." && known.indexOf(slot) < 0) {
+            var usable = next.filter(function (entry) { return entry !== "" })
+            slot = usable.length > 0 ? usable[0] : "."
+        }
+    }
+
     /// The palette slot on a digit, or "" if that digit is empty.
     function registerAt(digit) {
         return digit < registers.length ? registers[digit] : ""
@@ -145,7 +160,7 @@ Window {
     }
 
     function russianRoulette() {
-        if (caretColumn < 0)
+        if (!doc.hasSelection && caretColumn < 0)
             moveCaret(0, 0)
         var letter = doc.freeSlot()
         if (letter === "") {
@@ -180,7 +195,7 @@ Window {
         if (which === "")
             return
         slot = which
-        if (paintIt && caretColumn >= 0) {
+        if (paintIt && (doc.hasSelection || caretColumn >= 0)) {
             doc.beginStroke()
             doc.paint(caretColumn, caretRow, which)
             doc.endStroke()
@@ -235,8 +250,11 @@ Window {
 
         if (caretColumn >= 0)
             return [{ key: "arrows", label: T.t("hint.move") },
-                    { key: "Shift", label: T.t("hint.byEight").arg(win.bigStep) },
-                    { key: cfg.keys.paint, label: T.t("hint.paintPixel") },
+                    { key: "Shift", label: T.t("hint.select") },
+                    { key: "Ctrl", label: T.t("hint.byEight").arg(win.bigStep) },
+                    { key: cfg.keys.paint,
+                      label: T.t(doc.hasSelection ? "hint.paintSelection"
+                                                  : "hint.paintPixel") },
                     { key: cfg.keys.erase, label: T.t("hint.eraseIt") },
                     { key: "1–0", label: T.t("hint.colours") },
                     { key: cfg.keys.draw_mode, label: T.t("hint.drawAsYouMove") },
@@ -272,6 +290,8 @@ Window {
 
     property int caretColumn: -1
     property int caretRow: -1
+    property int selectionAnchorColumn: -1
+    property int selectionAnchorRow: -1
 
     /// Gives the keyboard back to the drawing.
     ///
@@ -379,7 +399,8 @@ Window {
 
     /// Paints where the cursor stands, if a colour is being held down.
     function trail() {
-        if (mode !== "draw" || heldSlot === "" || caretColumn < 0)
+        if (mode !== "draw" || heldSlot === ""
+            || (!doc.hasSelection && caretColumn < 0))
             return
         doc.paint(caretColumn, caretRow, heldSlot)
     }
@@ -403,17 +424,35 @@ Window {
         linePoints = []
     }
 
-    function moveCaret(dx, dy) {
+    function moveCaret(dx, dy, selecting) {
+        var appeared = caretColumn < 0
         if (caretColumn < 0) {
             // First press lands it in the middle rather than a corner: the
             // middle is on average the shortest walk to anywhere.
             caretColumn = Math.floor(doc.columns / 2)
             caretRow = Math.floor(doc.rows / 2)
-        } else {
-            caretColumn = Math.max(0, Math.min(doc.columns - 1, caretColumn + dx))
-            caretRow = Math.max(0, Math.min(doc.rows - 1, caretRow + dy))
         }
-        trail()
+        if (selecting) {
+            if (selectionAnchorColumn < 0) {
+                selectionAnchorColumn = caretColumn
+                selectionAnchorRow = caretRow
+            }
+            if (!appeared) {
+                caretColumn = Math.max(0, Math.min(doc.columns - 1, caretColumn + dx))
+                caretRow = Math.max(0, Math.min(doc.rows - 1, caretRow + dy))
+            }
+            doc.setSelection(selectionAnchorColumn, selectionAnchorRow,
+                             caretColumn, caretRow)
+        } else {
+            doc.clearSelection()
+            selectionAnchorColumn = -1
+            selectionAnchorRow = -1
+            if (!appeared) {
+                caretColumn = Math.max(0, Math.min(doc.columns - 1, caretColumn + dx))
+                caretRow = Math.max(0, Math.min(doc.rows - 1, caretRow + dy))
+            }
+            trail()
+        }
         stage.reveal(caretColumn, caretRow)
     }
 
@@ -430,6 +469,47 @@ Window {
                                         || wantRows !== doc.rows
     readonly property int wouldLose: sizeChanged
                                      ? doc.wouldLose(wantColumns, wantRows) : 0
+    property var pendingTrim: ({})
+
+    function applyTrim(anyway) {
+        if (!doc.trim(anyway))
+            return
+
+        linePoints = []
+        caretColumn = -1
+        caretRow = -1
+        pendingTrim = ({})
+        focusCanvas()
+    }
+
+    function confirmTrim() {
+        var latest = doc.trimPreview()
+        if (latest.empty !== pendingTrim.empty
+            || latest.changed !== pendingTrim.changed
+            || latest.x !== pendingTrim.x || latest.y !== pendingTrim.y
+            || latest.columns !== pendingTrim.columns
+            || latest.rows !== pendingTrim.rows
+            || latest.lost !== pendingTrim.lost) {
+            trimSheet.close()
+            pendingTrim = ({})
+            Qt.callLater(win.requestTrim)
+            return
+        }
+        trimSheet.close()
+        applyTrim(true)
+    }
+
+    function requestTrim() {
+        pendingTrim = doc.trimPreview()
+        if (pendingTrim.empty || !pendingTrim.changed) {
+            doc.trim(false)
+            pendingTrim = ({})
+        } else if (pendingTrim.lost > 0) {
+            trimSheet.open()
+        } else {
+            applyTrim(false)
+        }
+    }
 
     Connections {
         target: doc
@@ -437,9 +517,16 @@ Window {
             win.wantColumns = doc.columns
             win.wantRows = doc.rows
         }
-        // A new document has a new palette, and digits pointing at slots that
-        // are no longer there are worse than digits pointing at nothing.
-        function onFileChanged() { win.fillRegisters() }
+        function onSelectionChanged() {
+            if (doc.hasSelection && win.mode === "pick")
+                win.mode = ""
+            if (!doc.hasSelection) {
+                win.selectionAnchorColumn = -1
+                win.selectionAnchorRow = -1
+            }
+        }
+        function onDocumentReplaced() { win.fillRegisters() }
+        function onPaletteChanged() { win.reconcileRegisters() }
     }
 
     Component.onCompleted: {
@@ -505,6 +592,8 @@ Window {
 
     C.Action { id: actResize; text: T.t("menu.canvasSize")
              onTriggered: { spriteSection.open = true; dock.contentY = spriteSection.y } }
+    C.Action { id: actTrim; text: T.t("menu.trim"); shortcut: cfg.shortcuts.trim
+             onTriggered: win.requestTrim() }
     C.Action { id: actAddClip; text: T.t("menu.addClip")
              onTriggered: doc.addClip("clip " + (doc.clipNames.length + 1)) }
     C.Action { id: actRemoveClip; text: T.t("menu.deleteClip")
@@ -632,7 +721,7 @@ Window {
                     return
                 }
                 win.slot = wanted
-                if (win.caretColumn >= 0) {
+                if (doc.hasSelection || win.caretColumn >= 0) {
                     doc.beginStroke()
                     doc.paint(win.caretColumn, win.caretRow, wanted)
                     doc.endStroke()
@@ -653,8 +742,8 @@ Window {
             case "toggle_grid": win.mesh = !win.mesh; break
             case "toggle_hints": win.showHints = !win.showHints; break
             case "toggle_loop": win.loop = !win.loop; break
-            // The arrows walk the drawing, a pixel at a time, further with
-            // shift. Frames moved to the comma and full stop, which is where
+            // The arrows walk the drawing, Shift extends a rectangle, and Ctrl
+            // jumps by canvas.big_step. Frames use comma and full stop, where
             // every other sprite editor puts them -- the arrows are worth more
             // here, and stepping through frames is not something you do while
             // your hand is on the canvas.
@@ -662,6 +751,14 @@ Window {
             case "caret_right": win.moveCaret(1, 0); break
             case "caret_up":    win.moveCaret(0, -1); break
             case "caret_down":  win.moveCaret(0, 1); break
+            case "select_left":  win.moveCaret(-1, 0, true); break
+            case "select_right": win.moveCaret(1, 0, true); break
+            case "select_up":    win.moveCaret(0, -1, true); break
+            case "select_down":  win.moveCaret(0, 1, true); break
+            case "select_left_far":  win.moveCaret(-win.bigStep, 0, true); break
+            case "select_right_far": win.moveCaret(win.bigStep, 0, true); break
+            case "select_up_far":    win.moveCaret(0, -win.bigStep, true); break
+            case "select_down_far":  win.moveCaret(0, win.bigStep, true); break
             case "caret_left_far":  win.moveCaret(-win.bigStep, 0); break
             case "caret_right_far": win.moveCaret(win.bigStep, 0); break
             case "caret_up_far":    win.moveCaret(0, -win.bigStep); break
@@ -676,7 +773,7 @@ Window {
             // Paint with the colour in hand: the pending line if there is one,
             // otherwise the pixel under the cursor.
             case "paint":
-                if (win.caretColumn < 0)
+                if (!doc.hasSelection && win.caretColumn < 0)
                     break
                 if (win.linePoints.length > 0) {
                     win.commitLine(win.slot)
@@ -687,7 +784,7 @@ Window {
                 }
                 break
             case "erase":
-                if (win.caretColumn >= 0) {
+                if (doc.hasSelection || win.caretColumn >= 0) {
                     doc.beginStroke()
                     doc.paint(win.caretColumn, win.caretRow, ".")
                     doc.endStroke()
@@ -706,7 +803,9 @@ Window {
                     event.accepted = true
                     return
                 }
-                if (win.linePoints.length > 0) {
+                if (doc.hasSelection) {
+                    doc.clearSelection()
+                } else if (win.linePoints.length > 0) {
                     win.linePoints = []
                 } else if (win.mode !== "") {
                     win.releaseHeld()
@@ -743,9 +842,14 @@ Window {
             // collecting one. Point at a pixel, press a number, and that
             // colour is on that number.
             case "pick_mode":
-                if (win.caretColumn < 0)
-                    win.moveCaret(0, 0)
-                win.mode = win.mode === "pick" ? "" : "pick"
+                if (win.mode === "pick") {
+                    win.mode = ""
+                } else {
+                    doc.clearSelection()
+                    if (win.caretColumn < 0)
+                        win.moveCaret(0, 0)
+                    win.mode = "pick"
+                }
                 break
 
             // A line: once to drop the anchor, again to draw from it. Between
@@ -818,7 +922,7 @@ Window {
                         break
                     }
 
-                    if (win.caretColumn >= 0) {
+                    if (doc.hasSelection || win.caretColumn >= 0) {
                         doc.beginStroke()
                         doc.paint(win.caretColumn, win.caretRow, which)
                         doc.endStroke()
@@ -900,6 +1004,7 @@ Window {
                 Drop {
                     title: T.t("menu.sprite")
                     Cmd { action: actResize }
+                    Cmd { action: actTrim }
                     Rule {}
                     Cmd { action: actAddClip }
                     Cmd { action: actRemoveClip }
@@ -1350,7 +1455,7 @@ Window {
 
                             Section {
                                 title: T.t("panel.preview")
-                                hint: Math.round(win.zoom) + "×"
+                                hint: win.zoomLabel()
 
                                 // The 1x tile doubles as the overview: it shows
                                 // the whole drawing, so the frame of what is on
@@ -1553,6 +1658,73 @@ Window {
                                     }
                                 }
                             }
+
+                            Section {
+                                title: T.t("panel.history")
+                                hint: doc.changes.count > 0
+                                      ? String(doc.changes.count)
+                                      : T.t("panel.history.none")
+                                open: false
+
+                                // A record, not a mechanism: the entries read,
+                                // and undo stays the only way back. Newest at
+                                // the bottom, like a log, and six rows tall
+                                // before it scrolls for the same reason the
+                                // palette stops at nine.
+                                ListView {
+                                    width: parent.width
+                                    height: Math.min(contentHeight, 6 * 40)
+                                    boundsBehavior: Flickable.StopAtBounds
+                                    clip: true
+                                    model: doc.changes
+
+                                    delegate: Item {
+                                        required property string origin
+                                        required property string description
+                                        required property double whenMs
+                                        width: ListView.view.width
+                                        height: historyRow.implicitHeight + 6
+
+                                        Column {
+                                            id: historyRow
+                                            width: parent.width
+                                            spacing: 1
+
+                                            Text {
+                                                // Descriptions carry clip names
+                                                // read from document JSON:
+                                                // plain text, always, so a
+                                                // name can never dress itself
+                                                // up as markup.
+                                                textFormat: Text.PlainText
+                                                text: origin + " · "
+                                                      + Qt.formatTime(
+                                                            new Date(whenMs),
+                                                            "hh:mm")
+                                                font.pixelSize: 10
+                                                color: theme.fill(theme.foreground, 0.55)
+                                            }
+                                            Text {
+                                                textFormat: Text.PlainText
+                                                width: parent.width
+                                                text: description
+                                                wrapMode: Text.Wrap
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                                maximumLineCount: 2
+                                                color: theme.foreground
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Label {
+                                    width: parent.width
+                                    wrapMode: Text.Wrap
+                                    visible: doc.changes.count === 0
+                                    text: T.t("panel.history.empty")
+                                }
+                            }
                         }
                     }
                 }
@@ -1617,11 +1789,45 @@ Window {
         ]
     }
 
+    Sheet {
+        id: trimSheet
+        title: T.t("sheet.trim")
+        onClosed: win.focusCanvas()
+
+        body: [
+            Label {
+                width: 320
+                wrapMode: Text.Wrap
+                text: T.t("sheet.trim.message")
+                      .arg(win.pendingTrim.columns)
+                      .arg(win.pendingTrim.rows)
+                      .arg(win.pendingTrim.lost)
+            },
+            Row {
+                spacing: 6
+                Chip {
+                    label: T.t("sheet.trim.confirm")
+                    on: true
+                    role: theme.urgent
+                    onClicked: win.confirmTrim()
+                }
+                Chip {
+                    label: T.t("action.cancel")
+                    onClicked: trimSheet.close()
+                }
+            }
+        ]
+    }
+
     FileDialog {
         id: openDialog
         title: T.t("dialog.open")
         nameFilters: ["omapixel documents (*.json)", "All files (*)"]
-        onAccepted: doc.open(selectedFile)
+        onAccepted: {
+            doc.open(selectedFile)
+            Qt.callLater(win.focusCanvas)
+        }
+        onRejected: Qt.callLater(win.focusCanvas)
     }
 
     FileDialog {
@@ -1636,8 +1842,15 @@ Window {
                 win.resumePendingAction()
             else if (!saved && win.pendingAction !== "")
                 unsavedSheet.open()
+            else
+                Qt.callLater(win.focusCanvas)
         }
-        onRejected: if (win.pendingAction !== "") unsavedSheet.open()
+        onRejected: {
+            if (win.pendingAction !== "")
+                unsavedSheet.open()
+            else
+                Qt.callLater(win.focusCanvas)
+        }
     }
 
     FileDialog {
@@ -1648,7 +1861,9 @@ Window {
             win.referencePath = selectedFile.toString().replace("file://", "")
             if (win.referenceAlpha === 0)
                 win.referenceAlpha = 0.5
+            Qt.callLater(win.focusCanvas)
         }
+        onRejected: Qt.callLater(win.focusCanvas)
     }
 
     FileDialog {
@@ -1657,8 +1872,12 @@ Window {
         fileMode: FileDialog.SaveFile
         defaultSuffix: "png"
         nameFilters: ["PNG images (*.png)", "All files (*)"]
-        onAccepted: doc.exportImage(selectedFile, exportSheet.factor,
-                                    exportSheet.asSheet, exportSheet.checker)
+        onAccepted: {
+            doc.exportImage(selectedFile, exportSheet.factor,
+                            exportSheet.asSheet, exportSheet.checker)
+            Qt.callLater(win.focusCanvas)
+        }
+        onRejected: Qt.callLater(win.focusCanvas)
     }
 
     Sheet {

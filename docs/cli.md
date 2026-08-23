@@ -27,7 +27,7 @@ in-place flag; a command that changes a document saves it.
 | | |
 |---|---|
 | `0` | it worked |
-| `1` | it ran and the answer was no: the file would not load, the resize would crop, `check` found problems, `diff` found differences |
+| `1` | it ran and the answer was no: the file would not load, a resize or trim would crop, `check` found problems, `diff` found differences |
 | `2` | the command was wrong: a missing flag, an unknown sub-command |
 
 The split matters for scripting: `2` means fix your command, `1` means fix your
@@ -126,6 +126,37 @@ omapixel diff mine.json theirs.json
 Compares the complete document: dimensions, palette values and order, clip names
 and order, FPS, frame counts, frame dimensions and pixels. Exit `1` if anything
 differs.
+
+### `where` — which live studios hold a document
+
+```bash
+omapixel where                # every live studio, as JSON
+omapixel where heart.json     # only studios holding that document
+```
+
+The studio publishes what it has open while it runs, and this is the read side:
+one JSON object per window, with the process id, the document's absolute path,
+whether that window holds unsaved work, and its selected rectangle or `null`.
+A selection carries its clip, frame, x, y, width, height, and pixel count, so an
+agent can address exactly what the user selected. Ask before you write: a write to a
+document a window holds will appear in that window, and unsaved strokes there
+move one Ctrl+Z away.
+
+```json
+{"sessions":[{"pid":1234,"started":987654,"path":"/work/heart.json","dirty":false,"selection":{"clip":"idle","frame":0,"x":2,"y":3,"width":6,"height":7,"count":42}}]}
+```
+
+Without a selected range, `selection` is `null`.
+
+An untitled window publishes a scratch path under the runtime directory
+(`studio.scratch`), so "draw on what I have open" works before any save — the
+file is tmpfs and dies with the session, which is why that window still reads
+as unsaved.
+
+Exit `0` when something was printed; exit `1` when the honest answer is nobody
+— both for a named document no window holds and for no live sessions at all.
+Sessions whose process has died or whose id was recycled are deleted on the way
+rather than reported, so the directory cleans itself.
 
 ---
 
@@ -233,6 +264,24 @@ Resizing to the size the document *already* claims is not a no-op: it rebuilds
 every frame at that size, which is how a hand-written file with an off-size
 frame gets repaired.
 
+### `trim` — remove empty borders around one frame
+
+```bash
+omapixel trim heart.json
+omapixel trim heart.json --clip walk --frame 3
+omapixel trim heart.json --clip walk --frame 3 --anyway
+```
+
+The named frame defines the smallest rectangle containing all its drawn pixels.
+Only empty borders outside that rectangle are removed; empty rows or columns
+between drawn pixels stay. The same rectangle is applied to every frame of every
+clip, preserving their alignment and the document's one shared size.
+
+If another frame has pixels outside that rectangle, `trim` refuses and reports
+how many would be lost. `--anyway` confirms the crop. An empty reference frame
+is also refused, while a frame that already touches all four canvas edges is a
+successful no-op and does not rewrite the file.
+
 ---
 
 ## Many commands at once
@@ -257,7 +306,7 @@ frame dup --clip walk
 ```
 
 Only commands that work on the open document are allowed: `info`, `check`,
-`show`, `text`, `resize`, `clip`, `frame`, `palette`, `paint`, `line`, `rect`,
+`show`, `text`, `resize`, `trim`, `clip`, `frame`, `palette`, `paint`, `line`, `rect`,
 `fill`, `edit`. Anything that names a second file (`render`, `diff`, `export`,
 `import`, `new`) stays outside, so a script cannot quietly write over something
 the person running it never mentioned.

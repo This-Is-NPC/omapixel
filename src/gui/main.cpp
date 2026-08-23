@@ -9,6 +9,7 @@
 #include "Config.h"
 #include "DocumentModel.h"
 #include "InputLog.h"
+#include "SessionPublisher.h"
 #include "Strings.h"
 #include "PixelGridItem.h"
 #include "Theme.h"
@@ -80,6 +81,17 @@ int main(int argc, char *argv[])
     // Follows omarchy's active theme, and keeps following it: switching theme
     // while the window is open recolours it without a restart.
     omapixel::Theme theme;
+
+    // What this studio holds, published for the command line's side of the
+    // live loop: an agent can see a window is on the file -- and whether it
+    // has unsaved work -- before it writes. Retired on the way out, so a
+    // leftover file means a studio that did not leave cleanly.
+    omapixel::SessionPublisher sessions;
+    sessions.follow(&document);
+    QObject::connect(&app, &QGuiApplication::aboutToQuit, &sessions,
+                     &omapixel::SessionPublisher::retire);
+    QObject::connect(&app, &QGuiApplication::aboutToQuit, &document,
+                     &omapixel::DocumentModel::retireScratch);
 
     // A file named on the command line, so `omapixel-studio drawing.json` works
     // the way every other editor does.

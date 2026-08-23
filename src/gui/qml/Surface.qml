@@ -32,6 +32,11 @@ Item {
     // viewport stays centred without any special case.
     property real panX: 0
     property real panY: 0
+    // The requested position stays smooth while the displayed position snaps
+    // to cell boundaries. Without the separate value, trackpad deltas smaller
+    // than one cell would be rounded away one event at a time and never add up.
+    property real requestedPanX: 0
+    property real requestedPanY: 0
 
     /// Puts the whole drawing on screen. What you want on opening a file, and
     /// what you want after losing yourself at 40x.
@@ -42,9 +47,11 @@ Item {
     /// window would lay itself out correctly and the drawing would still open
     /// at 1x, having been fitted to a pane that no longer existed.
     function fit() {
-        var byWidth = Math.floor((width - 24) / Math.max(1, doc.columns))
-        var byHeight = Math.floor((height - 24) / Math.max(1, doc.rows))
-        win.zoom = Math.max(1, Math.min(40, Math.min(byWidth, byHeight)))
+        var byWidth = (width - 24) / Math.max(1, doc.columns)
+        var byHeight = (height - 24) / Math.max(1, doc.rows)
+        win.zoom = Math.max(0.01, Math.min(40, Math.min(byWidth, byHeight)))
+        requestedPanX = 0
+        requestedPanY = 0
         panX = 0
         panY = 0
     }
@@ -53,7 +60,7 @@ Item {
     /// cursor stays under the cursor. Zooming about the centre instead means
     /// every zoom is followed by a hunt for what you were looking at.
     function zoomAt(px, py, next) {
-        next = Math.max(1, Math.min(40, next))
+        next = Math.max(0.01, Math.min(40, next))
         if (next === win.zoom)
             return
         touched = true
@@ -61,34 +68,72 @@ Item {
         // The offset from the viewport centre to the anchor, before and after.
         var ax = px - width / 2 - panX
         var ay = py - height / 2 - panY
-        panX -= ax * (ratio - 1)
-        panY -= ay * (ratio - 1)
+        requestedPanX = panX - ax * (ratio - 1)
+        requestedPanY = panY - ay * (ratio - 1)
         win.zoom = next
         clampPan()
     }
 
     readonly property real contentWidth: doc.columns * win.zoom
     readonly property real contentHeight: doc.rows * win.zoom
-    readonly property bool scrollsX: contentWidth > width
-    readonly property bool scrollsY: contentHeight > height
+    property var caretMarginX: cfg.settings["canvas.caret_margin_x"]
+    property var caretMarginY: cfg.settings["canvas.caret_margin_y"]
+
+    function cellsAcross(space, setting) {
+        var cells = Math.max(1, Math.floor(space / win.zoom))
+        // There is no central cell in an even-sized run. Giving up at most one
+        // edge cell makes `center` mean the literal centre rather than one of
+        // two almost-central choices.
+        if (String(setting) === "center" && cells > 1 && cells % 2 === 0)
+            cells -= 1
+        return cells
+    }
+
+    readonly property real viewportWidth: contentWidth > width
+                                          ? cellsAcross(width, caretMarginX) * win.zoom
+                                          : width
+    readonly property real viewportHeight: contentHeight > height
+                                           ? cellsAcross(height, caretMarginY) * win.zoom
+                                           : height
+    readonly property bool scrollsX: contentWidth > viewportWidth
+    readonly property bool scrollsY: contentHeight > viewportHeight
+    onViewportWidthChanged: clampPan()
+    onViewportHeightChanged: clampPan()
 
     // What part of the drawing is on screen, in columns and rows. Published so
     // the overview in the rail can draw the viewport and jump to a point
     // without knowing anything about pans and zooms.
-    readonly property real viewColumn: ((contentWidth - width) / 2 - panX) / win.zoom
-    readonly property real viewRow: ((contentHeight - height) / 2 - panY) / win.zoom
-    readonly property real viewColumns: width / win.zoom
-    readonly property real viewRows: height / win.zoom
+    readonly property real viewColumn:
+        ((contentWidth - viewportWidth) / 2 - panX) / win.zoom
+    readonly property real viewRow:
+        ((contentHeight - viewportHeight) / 2 - panY) / win.zoom
+    readonly property real viewColumns: viewportWidth / win.zoom
+    readonly property real viewRows: viewportHeight / win.zoom
 
     /// Keeps the drawing reachable. Once it is larger than the viewport it may
     /// not be dragged past its own edges -- scrolling into empty space and
     /// losing the drawing entirely is the thing that makes a zoomed view feel
     /// broken. While it still fits, a little slack is harmless.
     function clampPan() {
-        var slackX = scrollsX ? (contentWidth - width) / 2 : 24
-        var slackY = scrollsY ? (contentHeight - height) / 2 : 24
-        panX = Math.max(-slackX, Math.min(slackX, panX))
-        panY = Math.max(-slackY, Math.min(slackY, panY))
+        var slackX = Math.abs(contentWidth - viewportWidth) / 2
+        var slackY = Math.abs(contentHeight - viewportHeight) / 2
+        requestedPanX = Math.max(-slackX, Math.min(slackX, requestedPanX))
+        requestedPanY = Math.max(-slackY, Math.min(slackY, requestedPanY))
+
+        function aligned(requested, viewportSize, contentSize, scrolls) {
+            if (!scrolls)
+                return requested
+            // Align the stage origin, not pan in isolation. When the document
+            // and viewport have different parity their centred origins differ
+            // by half a cell; rounding pan alone preserves that half-cell cut.
+            var base = (viewportSize - contentSize) / 2
+            return Math.round((base + requested) / win.zoom) * win.zoom - base
+        }
+
+        panX = Math.max(-slackX, Math.min(slackX,
+                    aligned(requestedPanX, viewportWidth, contentWidth, scrollsX)))
+        panY = Math.max(-slackY, Math.min(slackY,
+                    aligned(requestedPanY, viewportHeight, contentHeight, scrollsY)))
     }
 
     /// Moves the view by a wheel's worth of delta.
@@ -96,30 +141,50 @@ Item {
         if (dx === 0 && dy === 0)
             return
         touched = true
-        panX += dx * 0.7
-        panY += dy * 0.7
+        requestedPanX += dx * 0.7
+        requestedPanY += dy * 0.7
         clampPan()
     }
 
-    /// Brings a pixel into view, without moving anything if it is already
-    /// there. Recentring on every keypress would make the drawing lurch under
-    /// a cursor that is walking calmly across it.
+    /// Keeps the keyboard cursor inside its configured safe area. Each axis is
+    /// independent: a horizontal edge must not disturb a vertical view the
+    /// artist positioned deliberately, and vice versa.
     function reveal(column, row) {
         if (!scrollsX && !scrollsY)
             return
-        const margin = 2
-        if (column >= viewColumn + margin && column <= viewColumn + viewColumns - margin
-            && row >= viewRow + margin && row <= viewRow + viewRows - margin)
+
+        function shouldMove(value, start, count, scrolls, setting) {
+            if (!scrolls)
+                return false
+            if (String(setting) === "center")
+                return true
+            // Leave at least one stable pixel when a requested margin is wider
+            // than half of the currently visible drawing.
+            var margin = Math.min(Math.max(0, Number(setting)),
+                                  Math.max(0, (count - 1) / 2))
+            return value < start + margin || value >= start + count - margin
+        }
+
+        var moveX = shouldMove(column, viewColumn, viewColumns,
+                               scrollsX, caretMarginX)
+        var moveY = shouldMove(row, viewRow, viewRows,
+                               scrollsY, caretMarginY)
+        if (!moveX && !moveY)
             return
-        centreOn(column, row)
+        if (moveX)
+            requestedPanX = (doc.columns / 2 - column - 0.5) * win.zoom
+        if (moveY)
+            requestedPanY = (doc.rows / 2 - row - 0.5) * win.zoom
+        touched = true
+        clampPan()
     }
 
     /// Puts a point of the DRAWING, in columns and rows, at the middle of the
     /// viewport. This is what "go to that bit over there" means, and what the
     /// scrollbars and the overview both end up calling.
     function centreOn(column, row) {
-        panX = (doc.columns / 2 - column) * win.zoom
-        panY = (doc.rows / 2 - row) * win.zoom
+        requestedPanX = (doc.columns / 2 - column - 0.5) * win.zoom
+        requestedPanY = (doc.rows / 2 - row - 0.5) * win.zoom
         touched = true
         clampPan()
     }
@@ -141,8 +206,11 @@ Item {
         var fixed = Number(asked)
         if (String(asked) !== "fit" && isFinite(fixed) && fixed > 0) {
             win.zoom = Math.max(1, Math.min(40, Math.round(fixed)))
+            requestedPanX = 0
+            requestedPanY = 0
             panX = 0
             panY = 0
+            clampPan()
             return
         }
         fit()
@@ -166,7 +234,7 @@ Item {
         target: doc
         // A different document is a different size; whatever pan suited the old
         // one is meaningless, and starting scrolled off the edge looks broken.
-        function onFileChanged() { surface.touched = false; surface.settle() }
+        function onDocumentReplaced() { surface.touched = false; surface.settle() }
         function onChanged() { surface.settle() }
     }
 
@@ -181,6 +249,8 @@ Item {
         z: 5
         property real fromX: 0
         property real fromY: 0
+        property real fromPanX: 0
+        property real fromPanY: 0
         cursorShape: pressed ? Qt.ClosedHandCursor
                              : (win.tool === "hand" ? Qt.OpenHandCursor : Qt.ArrowCursor)
         // MouseArea has a wheel signal of its own. If one of them is eating the
@@ -226,15 +296,25 @@ Item {
             else
                 surface.scrollBy(dx * 0.6, dy * 0.6)  // one notch of a wheel
         }
-        onPressed: function (mouse) { fromX = mouse.x; fromY = mouse.y }
+        onPressed: function (mouse) {
+            // Shift-left is selection even while the hand tool is active. Let
+            // the drawing's MouseArea below take that gesture instead of pan.
+            if (mouse.button === Qt.LeftButton
+                && (mouse.modifiers & Qt.ShiftModifier)) {
+                mouse.accepted = false
+                return
+            }
+            fromX = mouse.x
+            fromY = mouse.y
+            fromPanX = surface.requestedPanX
+            fromPanY = surface.requestedPanY
+        }
         onPositionChanged: function (mouse) {
             if (!pressed)
                 return
             surface.touched = true
-            surface.panX += mouse.x - fromX
-            surface.panY += mouse.y - fromY
-            fromX = mouse.x
-            fromY = mouse.y
+            surface.requestedPanX = fromPanX + mouse.x - fromX
+            surface.requestedPanY = fromPanY + mouse.y - fromY
             surface.clampPan()
         }
     }
@@ -255,6 +335,11 @@ Item {
 
     /// One wheel notch of zoom, about the cursor.
     function zoomStep(px, py, up) {
+        if (win.zoom < 1) {
+            zoomAt(px, py, up ? Math.min(1, win.zoom * 1.25)
+                              : win.zoom / 1.25)
+            return
+        }
         // Bigger steps once the pixels are large, so 12x to 40x is a flick
         // rather than a grind.
         var by = win.zoom >= 16 ? 4 : (win.zoom >= 8 ? 2 : 1)
@@ -271,7 +356,7 @@ Item {
             if (!active)
                 return
             surface.zoomAt(centroid.position.x, centroid.position.y,
-                           Math.round(fromZoom * activeScale))
+                           fromZoom * activeScale)
         }
     }
 
@@ -346,12 +431,14 @@ Item {
         height: 10
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom
                   leftMargin: 6; rightMargin: 16; bottomMargin: 6 }
-        portion: surface.scrollsX ? surface.width / surface.contentWidth : 1
+        portion: surface.scrollsX ? surface.viewportWidth / surface.contentWidth : 1
         fraction: surface.scrollsX
-                  ? 0.5 - surface.panX / (surface.contentWidth - surface.width) : 0
+                  ? 0.5 - surface.panX
+                          / (surface.contentWidth - surface.viewportWidth) : 0
         onMoved: function (f) {
             surface.touched = true
-            surface.panX = (0.5 - f) * (surface.contentWidth - surface.width)
+            surface.requestedPanX =
+                (0.5 - f) * (surface.contentWidth - surface.viewportWidth)
             surface.clampPan()
         }
     }
@@ -363,35 +450,47 @@ Item {
         width: 10
         anchors { top: parent.top; bottom: parent.bottom; right: parent.right
                   topMargin: 6; bottomMargin: 16; rightMargin: 6 }
-        portion: surface.scrollsY ? surface.height / surface.contentHeight : 1
+        portion: surface.scrollsY ? surface.viewportHeight / surface.contentHeight : 1
         fraction: surface.scrollsY
-                  ? 0.5 - surface.panY / (surface.contentHeight - surface.height) : 0
+                  ? 0.5 - surface.panY
+                          / (surface.contentHeight - surface.viewportHeight) : 0
         onMoved: function (f) {
             surface.touched = true
-            surface.panY = (0.5 - f) * (surface.contentHeight - surface.height)
+            surface.requestedPanY =
+                (0.5 - f) * (surface.contentHeight - surface.viewportHeight)
             surface.clampPan()
         }
     }
 
     Item {
-        id: stage
-        x: (surface.width - width) / 2 + surface.panX
-        y: (surface.height - height) / 2 + surface.panY
-        width: doc.columns * win.zoom
-        height: doc.rows * win.zoom
+        id: viewport
+        objectName: "pixelViewport"
+        x: (surface.width - width) / 2
+        y: (surface.height - height) / 2
+        width: surface.viewportWidth
+        height: surface.viewportHeight
+        clip: true
 
-        Rectangle {
+        Item {
+            id: stage
+            objectName: "pixelStage"
+            x: (viewport.width - width) / 2 + surface.panX
+            y: (viewport.height - height) / 2 + surface.panY
+            width: doc.columns * win.zoom
+            height: doc.rows * win.zoom
+
+            Rectangle {
             anchors.fill: parent
             anchors.margins: -1
             color: "transparent"
             border.width: 1
             border.color: theme.fill(theme.foreground, 0.18)
-        }
+            }
 
         // The checkerboard is its own layer rather than a background painted
         // inside the frame. Painted together it is opaque and covers the
         // reference -- which is precisely the layer that needs to be underneath.
-        PixelGridItem {
+            PixelGridItem {
             anchors.fill: parent
             model: doc
             clip: doc.clip
@@ -403,7 +502,7 @@ Item {
             z: -2
             opacity: 0
             Component.onCompleted: opacity = 1
-        }
+            }
 
         Image {
             anchors.fill: parent
@@ -444,6 +543,7 @@ Item {
 
         MouseArea {
             id: pointer
+            objectName: "canvasPointer"
             anchors.fill: parent
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -451,6 +551,17 @@ Item {
 
             property int lastColumn: -1
             property int lastRow: -1
+            property bool selecting: false
+
+            function columnAt(mx) {
+                return Math.max(0, Math.min(doc.columns - 1,
+                                            Math.floor(mx / win.zoom)))
+            }
+
+            function rowAt(my) {
+                return Math.max(0, Math.min(doc.rows - 1,
+                                            Math.floor(my / win.zoom)))
+            }
 
             function apply(mx, my, erase) {
                 var col = Math.floor(mx / win.zoom)
@@ -484,18 +595,66 @@ Item {
             onPressed: function (mouse) {
                 surface.pressedOnCanvas()
                 lastColumn = -1
+                lastRow = -1
+                if (mouse.button === Qt.LeftButton
+                    && (mouse.modifiers & Qt.ShiftModifier)) {
+                    selecting = true
+                    win.linePoints = []
+                    win.selectionAnchorColumn = columnAt(mouse.x)
+                    win.selectionAnchorRow = rowAt(mouse.y)
+                    win.caretColumn = win.selectionAnchorColumn
+                    win.caretRow = win.selectionAnchorRow
+                    doc.setSelection(win.selectionAnchorColumn,
+                                     win.selectionAnchorRow,
+                                     win.caretColumn, win.caretRow)
+                    return
+                }
+                selecting = false
+                doc.clearSelection()
                 doc.beginStroke()
                 apply(mouse.x, mouse.y, mouse.button === Qt.RightButton)
             }
-            onReleased: { doc.endStroke(); lastColumn = -1; lastRow = -1 }
-            onCanceled: { doc.endStroke(); lastColumn = -1; lastRow = -1 }
+            onReleased: {
+                if (!selecting)
+                    doc.endStroke()
+                selecting = false
+                lastColumn = -1
+                lastRow = -1
+            }
+            onCanceled: {
+                if (!selecting)
+                    doc.endStroke()
+                selecting = false
+                lastColumn = -1
+                lastRow = -1
+            }
             onPositionChanged: function (mouse) {
+                if (selecting) {
+                    win.caretColumn = columnAt(mouse.x)
+                    win.caretRow = rowAt(mouse.y)
+                    doc.setSelection(win.selectionAnchorColumn,
+                                     win.selectionAnchorRow,
+                                     win.caretColumn, win.caretRow)
+                    return
+                }
                 surface.hoverColumn = Math.floor(mouse.x / win.zoom)
                 surface.hoverRow = Math.floor(mouse.y / win.zoom)
                 if (pressed && win.tool !== "bucket" && win.tool !== "picker")
                     apply(mouse.x, mouse.y, pressedButtons & Qt.RightButton)
             }
             onExited: { surface.hoverColumn = -1; surface.hoverRow = -1 }
+        }
+
+        Rectangle {
+            visible: doc.hasSelection
+            x: doc.selectionX * win.zoom
+            y: doc.selectionY * win.zoom
+            width: doc.selectionWidth * win.zoom
+            height: doc.selectionHeight * win.zoom
+            color: theme.fill(theme.accent, 0.20)
+            border.width: 2
+            border.color: theme.accent
+            z: 2
         }
 
         // Where the line would go: every corner placed so far, and out to the
@@ -567,9 +726,9 @@ Item {
         // five-pixel squares: findable only if you already know where it is.
         Rectangle {
             visible: win.caretColumn >= 0
-            x: win.caretColumn * win.zoom
+            x: (win.caretColumn + 0.5) * win.zoom - width / 2
             y: 0
-            width: win.zoom
+            width: Math.max(2, win.zoom)
             height: parent.height
             color: theme.fill(theme.accent, 0.10)
             z: 4
@@ -577,9 +736,9 @@ Item {
         Rectangle {
             visible: win.caretColumn >= 0
             x: 0
-            y: win.caretRow * win.zoom
+            y: (win.caretRow + 0.5) * win.zoom - height / 2
             width: parent.width
-            height: win.zoom
+            height: Math.max(2, win.zoom)
             color: theme.fill(theme.accent, 0.10)
             z: 4
         }
@@ -588,11 +747,12 @@ Item {
         // mouse's outline, because it is a position the program is holding on
         // your behalf rather than one your hand is already on.
         Rectangle {
+            objectName: "keyboardCursor"
             visible: win.caretColumn >= 0
-            x: win.caretColumn * win.zoom
-            y: win.caretRow * win.zoom
-            width: win.zoom
-            height: win.zoom
+            x: (win.caretColumn + 0.5) * win.zoom - width / 2
+            y: (win.caretRow + 0.5) * win.zoom - height / 2
+            width: Math.max(7, win.zoom)
+            height: Math.max(7, win.zoom)
             // Against the pixel it sits on, not against the theme. An accent
             // that reads beautifully over the background is invisible over a
             // drawing that happens to use the accent's own family of colours --
@@ -635,4 +795,5 @@ Item {
             z: 4
         }
     }
+}
 }

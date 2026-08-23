@@ -19,10 +19,12 @@ SOURCES += \
     ../src/core/Grid.cpp \
     ../src/core/Palette.cpp \
     ../src/core/Document.cpp \
+    ../src/core/Differences.cpp \
     ../src/core/Codec.cpp \
     ../src/core/Ops.cpp \
     ../src/core/Render.cpp \
     ../src/core/Bridge.cpp \
+    ../src/core/Sessions.cpp \
     ../src/core/Strings.cpp \
     ../src/core/Toml.cpp \
     ../src/core/Config.cpp \
@@ -31,16 +33,20 @@ SOURCES += \
     ../src/gui/PaletteModel.cpp \
     ../src/gui/PixelGridItem.cpp \
     ../src/gui/InputLog.cpp \
+    ../src/gui/SessionPublisher.cpp \
+    ../src/gui/ChangeLog.cpp \
     ../src/cli/Commands.cpp
 
 HEADERS += \
     ../src/core/Grid.h \
     ../src/core/Palette.h \
     ../src/core/Document.h \
+    ../src/core/Differences.h \
     ../src/core/Codec.h \
     ../src/core/Ops.h \
     ../src/core/Render.h \
     ../src/core/Bridge.h \
+    ../src/core/Sessions.h \
     ../src/core/Strings.h \
     ../src/core/Toml.h \
     ../src/core/Config.h \
@@ -49,4 +55,6 @@ HEADERS += \
     ../src/gui/PaletteModel.h \
     ../src/gui/PixelGridItem.h \
     ../src/gui/InputLog.h \
+    ../src/gui/SessionPublisher.h \
+    ../src/gui/ChangeLog.h \
     ../src/cli/Commands.h

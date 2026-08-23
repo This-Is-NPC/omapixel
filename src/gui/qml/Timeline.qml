@@ -95,7 +95,7 @@ Item {
                onClicked: doc.removeFrame() }
     }
 
-    Flickable {
+    ListView {
         anchors.left: transport.right
         anchors.leftMargin: 16
         anchors.right: parent.right
@@ -103,52 +103,45 @@ Item {
         anchors.top: clips.bottom
         anchors.topMargin: 8
         height: 72
-        contentWidth: strip.width
+        orientation: ListView.Horizontal
+        spacing: 6
+        model: doc.frameCount
         boundsBehavior: Flickable.StopAtBounds
         clip: true
 
-        Row {
-            id: strip
-            spacing: 6
+        delegate: Rectangle {
+            id: cellBox
+            required property int index
 
-            Repeater {
-                model: doc.frameCount
+            width: 60
+            height: 72
+            radius: theme.rounding
+            color: index === doc.frame ? theme.sunken : "transparent"
+            border.width: 1
+            border.color: index === doc.frame ? theme.accent
+                                              : theme.fill(theme.foreground, 0.18)
 
-                Rectangle {
-                    id: cellBox
-                    required property int index
+            PixelGridItem {
+                anchors.centerIn: parent
+                anchors.verticalCenterOffset: -6
+                model: doc
+                clip: doc.clip
+                frame: cellBox.index
+                cell: Math.min(46 / doc.columns, 46 / doc.rows)
+            }
 
-                    width: 60
-                    height: 72
-                    radius: theme.rounding
-                    color: index === doc.frame ? theme.sunken : "transparent"
-                    border.width: 1
-                    border.color: index === doc.frame ? theme.accent
-                                                      : theme.fill(theme.foreground, 0.18)
+            Label {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 3
+                text: String(cellBox.index + 1)
+                quiet: cellBox.index !== doc.frame
+            }
 
-                    PixelGridItem {
-                        anchors.centerIn: parent
-                        anchors.verticalCenterOffset: -6
-                        model: doc
-                        clip: doc.clip
-                        frame: cellBox.index
-                        cell: Math.min(46 / doc.columns, 46 / doc.rows)
-                    }
-
-                    Label {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 3
-                        text: String(cellBox.index + 1)
-                        quiet: cellBox.index !== doc.frame
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: doc.frame = cellBox.index
-                    }
-                }
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: doc.frame = cellBox.index
             }
         }
     }

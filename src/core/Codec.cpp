@@ -506,10 +506,10 @@ Codec::Result Codec::read(const QByteArray &json, const WarningLimits &limits)
 
     int columns = 0;
     int rows = 0;
-    if (!integerValue(size.value(QStringLiteral("w")), 1, 512, &columns,
-                      QStringLiteral("$.size.w"), &error)
-        || !integerValue(size.value(QStringLiteral("h")), 1, 512, &rows,
-                         QStringLiteral("$.size.h"), &error)) {
+    if (!integerValue(size.value(QStringLiteral("w")), 1, Document::maxDimension,
+                      &columns, QStringLiteral("$.size.w"), &error)
+        || !integerValue(size.value(QStringLiteral("h")), 1, Document::maxDimension,
+                         &rows, QStringLiteral("$.size.h"), &error)) {
         result.error = error;
         return result;
     }

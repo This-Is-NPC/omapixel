@@ -7,8 +7,8 @@ namespace omapixel {
 Document Document::blank(int columns, int rows)
 {
     Document doc;
-    doc.m_columns = qBound(1, columns, 512);
-    doc.m_rows = qBound(1, rows, 512);
+    doc.m_columns = qBound(1, columns, maxDimension);
+    doc.m_rows = qBound(1, rows, maxDimension);
     doc.m_palette = Palette::standard();
     doc.addClip(QStringLiteral("idle"));
     return doc;
@@ -17,8 +17,8 @@ Document Document::blank(int columns, int rows)
 Document Document::empty(int columns, int rows)
 {
     Document doc;
-    doc.m_columns = qBound(1, columns, 512);
-    doc.m_rows = qBound(1, rows, 512);
+    doc.m_columns = qBound(1, columns, maxDimension);
+    doc.m_rows = qBound(1, rows, maxDimension);
     doc.m_palette = Palette::standard();
     return doc;
 }
@@ -181,8 +181,8 @@ int Document::wouldLose(int columns, int rows) const
 
 void Document::resize(int columns, int rows)
 {
-    columns = qBound(1, columns, 512);
-    rows = qBound(1, rows, 512);
+    columns = qBound(1, columns, maxDimension);
+    rows = qBound(1, rows, maxDimension);
 
     // No early return when the size already matches. A hand-written file can
     // hold a frame whose rows are not the size the document declares, and this
@@ -210,6 +210,68 @@ void Document::resize(int columns, int rows)
 
     m_columns = columns;
     m_rows = rows;
+}
+
+QRect Document::drawnBounds(const QString &clipName, int frameIndex) const
+{
+    const Clip *found = clip(clipName);
+    if (!found || frameIndex < 0 || frameIndex >= found->frames.size())
+        return QRect();
+
+    const Grid &grid = found->frames.at(frameIndex);
+    int left = grid.columns();
+    int top = grid.rows();
+    int right = -1;
+    int bottom = -1;
+    for (int y = 0; y < grid.rows(); ++y) {
+        for (int x = 0; x < grid.columns(); ++x) {
+            if (grid.at(x, y) == Grid::Empty)
+                continue;
+            left = qMin(left, x);
+            top = qMin(top, y);
+            right = qMax(right, x);
+            bottom = qMax(bottom, y);
+        }
+    }
+    return right < left ? QRect()
+                        : QRect(left, top, right - left + 1, bottom - top + 1);
+}
+
+int Document::wouldLoseOutside(const QRect &kept) const
+{
+    int lost = 0;
+    for (const Clip &clip : m_clips) {
+        for (const Grid &grid : clip.frames) {
+            for (int y = 0; y < grid.rows(); ++y) {
+                for (int x = 0; x < grid.columns(); ++x) {
+                    if (grid.at(x, y) != Grid::Empty && !kept.contains(x, y))
+                        ++lost;
+                }
+            }
+        }
+    }
+    return lost;
+}
+
+bool Document::crop(const QRect &kept)
+{
+    const QRect whole(0, 0, m_columns, m_rows);
+    if (!kept.isValid() || !whole.contains(kept) || kept == whole)
+        return false;
+
+    for (Clip &clip : m_clips) {
+        for (Grid &grid : clip.frames) {
+            Grid next(kept.width(), kept.height());
+            for (int y = 0; y < kept.height(); ++y) {
+                for (int x = 0; x < kept.width(); ++x)
+                    next.set(x, y, grid.at(x + kept.x(), y + kept.y()));
+            }
+            grid = next;
+        }
+    }
+    m_columns = kept.width();
+    m_rows = kept.height();
+    return true;
 }
 
 int Document::replaceSlot(QChar from, QChar to)

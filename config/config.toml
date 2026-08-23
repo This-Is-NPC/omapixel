@@ -35,11 +35,27 @@
 # How far shift and an arrow jumps, in pixels.
 # big_step = 8
 
+# How many drawing pixels the keyboard cursor keeps clear of each viewport
+# edge before that axis recentres. 0 waits until the next pixel is off-screen;
+# "center" follows every move and keeps the cursor centred on that axis.
+# caret_margin_x = 0
+# caret_margin_y = 0
+
 [playback]
 # Whether ▶ starts the clip over when it reaches the last frame. Off plays it
 # once and stops on the end, which is what you want when the last frame is the
 # thing you are judging and a loop keeps snatching it away.
 # loop = true
+
+[studio]
+# Backs an untitled window with a real file under the runtime directory
+# (/run/user/<uid>/omapixel/scratch), so an agent on the command line can see
+# the window -- `omapixel where` -- and draw into it live. The file lives on
+# tmpfs and dies with the session: it is an ADDRESS, not a save. The window
+# keeps saying unsaved, Ctrl+S keeps asking where, and closing still asks.
+# Turn it off and an untitled window is invisible to the command line again,
+# exactly as it has always been. Read when the studio starts.
+# scratch = true
 
 [document]
 # What File > New starts with.
@@ -90,7 +106,8 @@
 # Undoing
 # undo = "ctrl+z"
 # redo = "ctrl+shift+z"
-# clear_frame = "delete"
+# clear_frame = "ctrl+delete"
+# trim = "ctrl+shift+t"
 
 # Tools
 # tool_pencil = "b"
@@ -99,19 +116,27 @@
 # tool_picker = "i"
 # tool_hand = "h"
 
-# The keyboard cursor on the drawing. The far ones jump by canvas.big_step.
+# The keyboard cursor. Shift selects, Ctrl jumps, and both select by big_step.
 # caret_left = "left"
 # caret_right = "right"
 # caret_up = "up"
 # caret_down = "down"
-# caret_left_far = "shift+left"
-# caret_right_far = "shift+right"
-# caret_up_far = "shift+up"
-# caret_down_far = "shift+down"
+# select_left = "shift+left"
+# select_right = "shift+right"
+# select_up = "shift+up"
+# select_down = "shift+down"
+# select_left_far = "ctrl+shift+left"
+# select_right_far = "ctrl+shift+right"
+# select_up_far = "ctrl+shift+up"
+# select_down_far = "ctrl+shift+down"
+# caret_left_far = "ctrl+left"
+# caret_right_far = "ctrl+right"
+# caret_up_far = "ctrl+up"
+# caret_down_far = "ctrl+down"
 
 # Drawing where the cursor stands.
 # paint = ["enter", "x"]
-# erase = "backspace"
+# erase = ["backspace", "delete"]
 
 # Out of whatever you are in: a pending line, then a mode, then the cursor.
 # cancel = "esc"

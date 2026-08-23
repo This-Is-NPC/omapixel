@@ -3,11 +3,16 @@
 #include "Document.h"
 #include "PaletteModel.h"
 
+#include <QFileSystemWatcher>
+#include <QRect>
 #include <QObject>
 #include <QStringList>
 #include <QVariantList>
+#include <QVariantMap>
 
 namespace omapixel {
+
+class ChangeLog;
 
 /// The core's Document, made visible to QML.
 ///
@@ -40,11 +45,22 @@ class DocumentModel : public QObject
     /// slot. Constant, because it is the same object throughout: what changes
     /// is its contents, row by row.
     Q_PROPERTY(QAbstractListModel *paletteModel READ paletteModel CONSTANT)
+    /// What changed this session, studio hand and outside writes alike. A
+    /// record, not a mechanism: restoring is undo's job alone. Constant for
+    /// the same reason the palette model is; its rows change underneath.
+    Q_PROPERTY(QAbstractListModel *changes READ changes CONSTANT)
 
     Q_PROPERTY(QString clip READ clip WRITE setClip NOTIFY viewChanged)
     Q_PROPERTY(int frame READ frame WRITE setFrame NOTIFY viewChanged)
     Q_PROPERTY(int frameCount READ frameCount NOTIFY changed)
     Q_PROPERTY(int fps READ fps NOTIFY changed)
+
+    Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
+    Q_PROPERTY(int selectionX READ selectionX NOTIFY selectionChanged)
+    Q_PROPERTY(int selectionY READ selectionY NOTIFY selectionChanged)
+    Q_PROPERTY(int selectionWidth READ selectionWidth NOTIFY selectionChanged)
+    Q_PROPERTY(int selectionHeight READ selectionHeight NOTIFY selectionChanged)
+    Q_PROPERTY(int selectionCount READ selectionCount NOTIFY selectionChanged)
 
     Q_PROPERTY(QString path READ path WRITE setPath NOTIFY fileChanged)
     Q_PROPERTY(bool dirty READ dirty NOTIFY fileChanged)
@@ -66,6 +82,12 @@ public:
     QVariantList palette() const;
     int paletteRevision() const { return m_paletteRevision; }
     QAbstractListModel *paletteModel() { return &m_paletteRows; }
+    QAbstractListModel *changes() const;
+    /// Whether the change that just landed came from outside -- a CLI write
+    /// adopted from disk rather than the user's own hand. The change log
+    /// reads this to label its entries; it is true only between an external
+    /// adoption and the next `changed()` after it.
+    bool lastChangeWasExternal() const { return m_lastChangeExternal; }
 
     QString clip() const { return m_clip; }
     void setClip(const QString &clip);
@@ -74,10 +96,40 @@ public:
     int frameCount() const;
     int fps() const;
 
+    bool hasSelection() const { return m_selection.isValid(); }
+    int selectionX() const { return m_selection.x(); }
+    int selectionY() const { return m_selection.y(); }
+    int selectionWidth() const { return hasSelection() ? m_selection.width() : 0; }
+    int selectionHeight() const { return hasSelection() ? m_selection.height() : 0; }
+    int selectionCount() const
+    {
+        return selectionWidth() * selectionHeight();
+    }
+    Q_INVOKABLE void setSelection(int x0, int y0, int x1, int y1);
+    Q_INVOKABLE void clearSelection();
+
     QString path() const { return m_path; }
     void setPath(const QString &path);
     bool dirty() const { return m_dirty; }
     QString note() const { return m_note; }
+
+    /// What the watcher follows and the session advertises: the open file,
+    /// or -- for an untitled window -- its scratch backing file under the
+    /// runtime directory. Empty when neither exists (scratch disabled, no
+    /// sane runtime directory).
+    ///
+    /// A scratch backing is an ADDRESS, not a save: the window keeps saying
+    /// unsaved, Ctrl+S keeps asking where, closing keeps asking. It exists
+    /// so `omapixel where` can find the window and an agent can draw into
+    /// it live.
+    QString followedPath() const;
+    /// True while the followed path is a scratch backing rather than a file
+    /// the user named. Adoptions from disk never clear dirty in that state:
+    /// tmpfs dying at logout is exactly the loss "unsaved" warns about.
+    bool isScratchBacked() const;
+
+    /// Removes the scratch backing file, if one exists. Called on clean exit.
+    void retireScratch();
 
     // ------------------------------------------------------------- history
     //
@@ -168,6 +220,7 @@ public:
     /// mistake and a quieter one.
     Q_INVOKABLE void replaceColour(const QString &fromSlot, const QString &hex,
                                    bool everywhere);
+    /// Paints the selected rectangle, or (x, y) when no range is selected.
     Q_INVOKABLE void paint(int x, int y, const QString &slot);
     Q_INVOKABLE void line(int x0, int y0, int x1, int y1, const QString &slot);
     Q_INVOKABLE void rect(int x0, int y0, int x1, int y1, const QString &slot,
@@ -190,6 +243,8 @@ public:
 
     Q_INVOKABLE int wouldLose(int columns, int rows) const;
     Q_INVOKABLE void resize(int columns, int rows);
+    Q_INVOKABLE QVariantMap trimPreview() const;
+    Q_INVOKABLE bool trim(bool anyway = false);
     Q_INVOKABLE void reset(int columns, int rows);
 
     Q_INVOKABLE void setPaletteColour(const QString &slot, const QString &colour);
@@ -204,6 +259,19 @@ public:
 
     Q_INVOKABLE bool open(const QString &path);
     Q_INVOKABLE bool save(const QString &path = QString());
+
+    /// Re-reads the file this model has open and adopts what is on disk.
+    ///
+    /// This is the half of the live loop the agent drives: a CLI write lands
+    /// in the window with no user action. The decision is synchronous and
+    /// public so tests can drive it directly; only the watcher wiring around
+    /// it needs an async test.
+    ///
+    /// False means nothing was adopted -- the file failed to read (what is on
+    /// screen stays, and `say` reports why), the content equals what is
+    /// already here (our own save, a touch, the second half of a double
+    /// fire), or a reload arrived mid-stroke and is queued for `endStroke`.
+    Q_INVOKABLE bool reloadFromDisk();
 
     /// Writes a PNG of the open clip. `sheet` lays every frame side by side
     /// rather than writing the one on screen.
@@ -222,12 +290,19 @@ public:
 signals:
     /// The document's contents changed: repaint, relist, everything.
     void changed();
+    /// Raster content changed. An empty clip or negative frame invalidates all
+    /// renderers; otherwise only items showing that frame need repainting.
+    void renderChanged(const QString &clip, int frame);
     /// Only which clip or frame is being looked at changed.
     void viewChanged();
     void fileChanged();
     void noteChanged();
     void historyChanged();
     void paletteChanged();
+    void selectionChanged();
+    /// A different document was created or opened. Unlike fileChanged, this
+    /// does not fire for edits, saves, or dirty-state changes.
+    void documentReplaced();
 
 private:
     /// Fetches the open frame, hands it to `edit`, stores it back. Every
@@ -244,6 +319,29 @@ private:
     /// underneath them, which undo can do in one step.
     void reseat();
 
+    /// Points the watcher at the open file AND its directory. The directory
+    /// half is not paranoia: a CLI write renames over the target, the inode
+    /// changes, and without re-arming only the first external write would
+    /// ever be seen.
+    void watch();
+
+    /// Creates and seeds the scratch backing for an untitled window, when
+    /// the config allows it and there is somewhere sane to put it. Failure
+    /// falls back quietly to the old invisibility rather than blocking
+    /// startup over a convenience.
+    void openScratch();
+
+    /// Rewrites the scratch file with the current document. Used at seed
+    /// time and after File > New; afterwards the file belongs to whoever
+    /// writes it -- usually an agent -- and the watcher brings their writes
+    /// back here.
+    void writeScratchSeed();
+
+    /// What an external write changed, as one status-bar line. The full walk
+    /// comes from core's `documentDifferences`; the first few sentences are
+    /// kept and the rest counted.
+    QString describeDifferences(const Document &before) const;
+
     /// How far back undo goes. `history.depth` in the config file, because a
     /// snapshot is a whole document: deep enough to cover a session's worth of
     /// mistakes on a 32x24 sprite is not the same number as on a 512x512 one,
@@ -255,6 +353,7 @@ private:
 
     int m_paletteRevision = 0;
     PaletteModel m_paletteRows;
+    ChangeLog *m_changes = nullptr;
     Document m_document;
     QList<Document> m_undo;
     QList<Document> m_redo;
@@ -262,9 +361,22 @@ private:
     bool m_strokeRemembered = false;
     QString m_clip;
     int m_frame = 0;
+    QRect m_selection;
     QString m_path;
+    /// The untitled window's backing file under the runtime directory, when
+    /// scratch is enabled and possible. Cleared the moment the document
+    /// gains a real name.
+    QString m_scratch;
     bool m_dirty = false;
     QString m_note;
+    /// A reload that arrived while a stroke was live, waiting for
+    /// `endStroke` to apply it. Swapping the document under a drag corrupts;
+    /// deferring only surprises.
+    bool m_reloadPending = false;
+    QFileSystemWatcher m_watcher;
+    /// True from the moment an external write is adopted until the change
+    /// log has seen it. Every user-driven path clears it first.
+    bool m_lastChangeExternal = false;
 };
 
 } // namespace omapixel

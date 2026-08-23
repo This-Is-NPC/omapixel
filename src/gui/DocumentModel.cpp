@@ -1,11 +1,16 @@
 #include "DocumentModel.h"
 
+#include "ChangeLog.h"
 #include "Codec.h"
 #include "Config.h"
+#include "Differences.h"
 #include "Ops.h"
 #include "Render.h"
+#include "Sessions.h"
 #include "Strings.h"
 
+#include <QCoreApplication>
+#include <QFile>
 #include <QFileInfo>
 #include <QDir>
 #include <QRandomGenerator>
@@ -54,14 +59,84 @@ DocumentModel::DocumentModel(QObject *parent)
       // with nothing to open gives you the canvas you usually work on.
       m_document(newDocument(
           qBound(1, Config::shared().number(QStringLiteral("document.width")), 512),
-          qBound(1, Config::shared().number(QStringLiteral("document.height")), 512)))
+          qBound(1, Config::shared().number(QStringLiteral("document.height")), 512))),
+      m_changes(new ChangeLog(this))
 {
     m_paletteRows.sync(m_document.palette());
     m_clip = m_document.clipNames().value(0);
     m_note = QStringLiteral("new document · %1×%2")
                  .arg(m_document.columns())
                  .arg(m_document.rows());
+    m_changes->follow(this);
+    connect(this, &DocumentModel::viewChanged, this,
+            &DocumentModel::clearSelection);
+
+    // The live loop, watched the way Config and Theme watch their own files:
+    // both the file and its directory. A CLI write renames over the target,
+    // which drops a file-only watch -- the directory signal is what re-arms
+    // us for every write after the first.
+    connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] {
+        // Re-arm here as well, even though the directory signal usually
+        // arrives to do it: a rename-over drops our watch on the file, and
+        // on backends where the directory signal is lost or late (FUSE,
+        // network mounts) this is the only chance to stay alive. Idempotent.
+        watch();
+        reloadFromDisk();
+    });
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] {
+        // Re-arm BEFORE reading: the rename is why this fired, and the path
+        // we were watching is no longer the file on disk.
+        watch();
+        reloadFromDisk();
+    });
+
+    // An untitled window still gets a real address on disk, so the command
+    // line can find it and draw into it.
+    openScratch();
 }
+
+QString DocumentModel::followedPath() const
+{
+    return m_path.isEmpty() ? m_scratch : m_path;
+}
+
+bool DocumentModel::isScratchBacked() const
+{
+    return !m_scratch.isEmpty() && m_path.isEmpty();
+}
+
+void DocumentModel::retireScratch()
+{
+    if (!m_scratch.isEmpty())
+        QFile::remove(m_scratch);
+    m_scratch.clear();
+}
+
+void DocumentModel::openScratch()
+{
+    if (!Config::shared().flag(QStringLiteral("studio.scratch")))
+        return;
+    m_scratch = sessions::scratchPath(QCoreApplication::applicationPid());
+    if (m_scratch.isEmpty()) {
+        // Nowhere sane to put it: fall back to the old invisibility rather
+        // than pretending to be addressable.
+        return;
+    }
+    writeScratchSeed();
+    watch();
+}
+
+void DocumentModel::writeScratchSeed()
+{
+    QDir().mkpath(sessions::scratchDirectory());
+    QString error;
+    if (!Codec::writeFile(m_scratch, m_document, &error)) {
+        // Unwritable is as good as absent: the window falls back quietly.
+        m_scratch.clear();
+    }
+}
+
+QAbstractListModel *DocumentModel::changes() const { return m_changes; }
 
 QVariantList DocumentModel::palette() const
 {
@@ -105,11 +180,33 @@ int DocumentModel::fps() const
     return clip ? clip->fps : 8;
 }
 
+void DocumentModel::setSelection(int x0, int y0, int x1, int y1)
+{
+    const int left = qBound(0, qMin(x0, x1), m_document.columns() - 1);
+    const int right = qBound(0, qMax(x0, x1), m_document.columns() - 1);
+    const int top = qBound(0, qMin(y0, y1), m_document.rows() - 1);
+    const int bottom = qBound(0, qMax(y0, y1), m_document.rows() - 1);
+    const QRect next(QPoint(left, top), QPoint(right, bottom));
+    if (m_selection == next)
+        return;
+    m_selection = next;
+    emit selectionChanged();
+}
+
+void DocumentModel::clearSelection()
+{
+    if (!m_selection.isValid())
+        return;
+    m_selection = QRect();
+    emit selectionChanged();
+}
+
 void DocumentModel::setPath(const QString &path)
 {
     if (m_path == path)
         return;
     m_path = path;
+    watch();
     emit fileChanged();
 }
 
@@ -128,6 +225,8 @@ void DocumentModel::paletteMoved()
 
 void DocumentModel::remember(const Document &before)
 {
+    // Whatever happens next came from the user's hand, not from disk.
+    m_lastChangeExternal = false;
     // Inside a stroke only the first change is filed. It is what makes a drag
     // one undo step, and it is also what lets an operation built from two
     // edits -- a colour added and then painted with -- cost one snapshot
@@ -165,6 +264,7 @@ void DocumentModel::undo()
         say(Strings::shared().t(QStringLiteral("note.nothingToUndo")));
         return;
     }
+    m_lastChangeExternal = false;
     m_redo.append(m_document);
     m_document = m_undo.takeLast();
     reseat();
@@ -172,6 +272,7 @@ void DocumentModel::undo()
     say(Strings::shared().t(QStringLiteral("note.undone")).arg(m_undo.size()));
     paletteMoved();
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
     emit historyChanged();
@@ -183,6 +284,7 @@ void DocumentModel::redo()
         say(Strings::shared().t(QStringLiteral("note.nothingToRedo")));
         return;
     }
+    m_lastChangeExternal = false;
     m_undo.append(m_document);
     m_document = m_redo.takeLast();
     reseat();
@@ -190,6 +292,7 @@ void DocumentModel::redo()
     say(Strings::shared().t(QStringLiteral("note.redone")));
     paletteMoved();
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
     emit historyChanged();
@@ -204,6 +307,10 @@ void DocumentModel::beginStroke()
 void DocumentModel::endStroke()
 {
     m_stroke = false;
+    if (m_reloadPending) {
+        m_reloadPending = false;
+        reloadFromDisk();
+    }
 }
 
 QChar DocumentModel::slotOf(const QString &text) const
@@ -229,6 +336,7 @@ void DocumentModel::editFrame(const std::function<void(Grid &)> &edit)
     m_document.setFrame(m_clip, m_frame, grid);
     m_dirty = true;
     emit changed();
+    emit renderChanged(m_clip, m_frame);
     emit fileChanged();
 }
 
@@ -360,6 +468,7 @@ void DocumentModel::replaceColour(const QString &fromSlot, const QString &hex,
             .arg(everywhere ? Strings::shared().t(QStringLiteral("note.everywhere"))
                             : Strings::shared().t(QStringLiteral("note.thisFrame"))));
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
 }
@@ -435,7 +544,14 @@ QColor DocumentModel::contrastAt(int x, int y) const
 
 void DocumentModel::paint(int x, int y, const QString &slot)
 {
-    editFrame([&](Grid &grid) { ops::paint(grid, x, y, slotOf(slot)); });
+    editFrame([&](Grid &grid) {
+        if (m_selection.isValid()) {
+            ops::rect(grid, m_selection.topLeft(), m_selection.bottomRight(),
+                      slotOf(slot), true);
+        } else {
+            ops::paint(grid, x, y, slotOf(slot));
+        }
+    });
 }
 
 void DocumentModel::line(int x0, int y0, int x1, int y1, const QString &slot)
@@ -492,6 +608,7 @@ void DocumentModel::addClip(const QString &name)
     m_frame = 0;
     m_dirty = true;
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
 }
@@ -511,6 +628,7 @@ void DocumentModel::removeClip(const QString &name)
     }
     m_dirty = true;
     emit changed();
+    emit renderChanged(QString(), -1);
     emit fileChanged();
 }
 
@@ -524,6 +642,7 @@ void DocumentModel::renameClip(const QString &from, const QString &to)
         m_clip = to;
     m_dirty = true;
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
 }
@@ -548,6 +667,7 @@ void DocumentModel::addFrame(bool duplicate)
     m_frame += 1;
     m_dirty = true;
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
 }
@@ -561,6 +681,7 @@ void DocumentModel::removeFrame()
     m_frame = qBound(0, m_frame, frameCount() - 1);
     m_dirty = true;
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
 }
@@ -574,6 +695,7 @@ void DocumentModel::moveFrame(int step)
     m_frame += step;
     m_dirty = true;
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
 }
@@ -585,12 +707,67 @@ int DocumentModel::wouldLose(int columns, int rows) const
 
 void DocumentModel::resize(int columns, int rows)
 {
+    clearSelection();
     remember(m_document);
     m_document.resize(columns, rows);
     m_dirty = true;
     say(Strings::shared().t(QStringLiteral("note.resized")).arg(columns).arg(rows));
     emit changed();
+    emit renderChanged(QString(), -1);
     emit fileChanged();
+}
+
+QVariantMap DocumentModel::trimPreview() const
+{
+    const QRect bounds = m_document.drawnBounds(m_clip, m_frame);
+    if (!bounds.isValid())
+        return {{QStringLiteral("empty"), true}};
+
+    const QRect whole(0, 0, m_document.columns(), m_document.rows());
+    return {{QStringLiteral("empty"), false},
+            {QStringLiteral("changed"), bounds != whole && whole.contains(bounds)},
+            {QStringLiteral("x"), bounds.x()},
+            {QStringLiteral("y"), bounds.y()},
+            {QStringLiteral("columns"), bounds.width()},
+            {QStringLiteral("rows"), bounds.height()},
+            {QStringLiteral("lost"), m_document.wouldLoseOutside(bounds)}};
+}
+
+bool DocumentModel::trim(bool anyway)
+{
+    const QRect bounds = m_document.drawnBounds(m_clip, m_frame);
+    if (!bounds.isValid()) {
+        say(Strings::shared().t(QStringLiteral("note.nothingToTrim")));
+        return false;
+    }
+
+    const QRect whole(0, 0, m_document.columns(), m_document.rows());
+    if (bounds == whole) {
+        say(Strings::shared().t(QStringLiteral("note.alreadyTight")));
+        return false;
+    }
+
+    const int lost = m_document.wouldLoseOutside(bounds);
+    if (lost > 0 && !anyway) {
+        say(Strings::shared().t(QStringLiteral("note.trimWouldCrop")).arg(lost));
+        return false;
+    }
+
+    const Document before = m_document;
+    if (!m_document.crop(bounds)) {
+        say(Strings::shared().t(QStringLiteral("note.nothingToTrim")));
+        return false;
+    }
+    clearSelection();
+    remember(before);
+    m_dirty = true;
+    say(Strings::shared().t(QStringLiteral("note.trimmed"))
+            .arg(bounds.width())
+            .arg(bounds.height()));
+    emit changed();
+    emit renderChanged(QString(), -1);
+    emit fileChanged();
+    return true;
 }
 
 void DocumentModel::reset(int columns, int rows)
@@ -601,11 +778,18 @@ void DocumentModel::reset(int columns, int rows)
     m_frame = 0;
     m_path.clear();
     m_dirty = false;
+    watch();
     say(Strings::shared().t(QStringLiteral("note.newDocument")).arg(columns).arg(rows));
     paletteMoved();
+    m_changes->sync();
+    // A new untitled document: fresh backing, so the command line can reach
+    // this one too.
+    openScratch();
     emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
+    emit documentReplaced();
 }
 
 void DocumentModel::setPaletteColour(const QString &slot, const QString &colour)
@@ -661,6 +845,9 @@ bool DocumentModel::open(const QString &path)
         say(read.error);
         return false;
     }
+    // The document has a name now; its scratch backing is a liability, not
+    // an address.
+    retireScratch();
     m_document = read.document;
     m_undo.clear();
     m_redo.clear();
@@ -669,6 +856,7 @@ bool DocumentModel::open(const QString &path)
     m_frame = 0;
     m_path = where;
     m_dirty = false;
+    watch();
     paletteMoved();
     QString note = Strings::shared().t(QStringLiteral("note.opened"))
                        .arg(QFileInfo(where).fileName())
@@ -676,10 +864,127 @@ bool DocumentModel::open(const QString &path)
     if (!read.warnings.isEmpty())
         note += QStringLiteral(" · warning: ") + read.warnings.join(QStringLiteral("; "));
     say(note);
+    // A whole-document swap, not a change to a drawing: the log rebases
+    // rather than filing a diff between two different documents.
+    m_changes->sync();
     emit changed();
+    emit renderChanged(QString(), -1);
+    emit viewChanged();
+    emit fileChanged();
+    emit documentReplaced();
+    return true;
+}
+
+void DocumentModel::watch()
+{
+    if (!m_watcher.files().isEmpty())
+        m_watcher.removePaths(m_watcher.files());
+    if (!m_watcher.directories().isEmpty())
+        m_watcher.removePaths(m_watcher.directories());
+    const QString followed = followedPath();
+    if (followed.isEmpty())
+        return;
+    m_watcher.addPath(followed);
+    const QString directory = QFileInfo(followed).absolutePath();
+    if (!directory.isEmpty())
+        m_watcher.addPath(directory);
+}
+
+bool DocumentModel::reloadFromDisk()
+{
+    if (followedPath().isEmpty())
+        return false;
+
+    // A stroke spans the whole press-to-release drag (`beginStroke` to
+    // `endStroke`). Swapping `m_document` under a live drag makes the rest of
+    // the stroke paint onto the file's document with a stale remembered flag
+    // -- that corrupts rather than surprises. Queue it; `endStroke` applies.
+    if (m_stroke) {
+        m_reloadPending = true;
+        return false;
+    }
+
+    const Codec::Result read = Codec::readFile(followedPath(), warningLimits());
+    if (!read) {
+        // The directory re-arm means sibling noise -- an export elsewhere, an
+        // rm, an editor's swapfile -- can knock here with a missing or
+        // half-written file. What is on screen is the only copy the user
+        // has; it stays, and the failure is said out loud.
+        say(read.error);
+        return false;
+    }
+
+    // Content is the only test that counts. A written-flag would race the
+    // writer; equality makes our own save, a touch and a reformat all
+    // correctly nothing -- and collapses the double fire one atomic rename
+    // produces from watching both the file and its directory.
+    //
+    // Note what this makes true: Document::operator== now defines what counts
+    // as an external change. A field added to Document but left out of that
+    // operator is an edit the studio will never show.
+    if (read.document == m_document)
+        return false;
+
+    const Document before = m_document;
+    // Captured before the flag falls, because it is about to: this boolean is
+    // the data-loss guard. The reload replaces whatever the user had not
+    // saved, and the note has to say so while there is still something to
+    // describe.
+    const bool replacedUnsaved = m_dirty;
+    m_document = read.document;
+    reseat();
+    // Memory equals disk after a clean reload, so adopting does not set
+    // dirty. Whether it CLEARS dirty depends on what the disk is: a file the
+    // user named is a save, and the flag falls. A scratch backing is tmpfs
+    // that dies at logout -- adopting from it is not saving either, so the
+    // unsaved truth stands and the close guard keeps doing its job.
+    if (!isScratchBacked())
+        m_dirty = false;
+
+    // An agent loop can rewrite the file dozens of times a second, and every
+    // snapshot here is a whole document on a stack capped at history.depth.
+    // Filing one per write evicts the user's own history within seconds and
+    // clears their redo with it. So while the document on screen IS the state
+    // some earlier external write left -- nothing of theirs drawn on top
+    // since -- the single entry standing for "your version" keeps standing,
+    // however many writes land. The first user edit dirties the document and
+    // the next outside write snapshots again. Redo goes either way: what it
+    // held was undone into a world that no longer exists.
+    if (!replacedUnsaved && !m_undo.isEmpty()) {
+        m_redo.clear();
+        emit historyChanged();
+    } else {
+        remember(before);
+    }
+    // The change log reads this when `changed()` reaches it, which with a
+    // direct connection is inside the emit below.
+    m_lastChangeExternal = true;
+
+    paletteMoved();
+    // Two notes, not one. The ordinary case says what changed; when unsaved
+    // work was replaced, the note also says how to get it back -- without
+    // that sentence the next Ctrl+S destroys the agent's edit and the work
+    // with it.
+    say(Strings::shared()
+            .t(replacedUnsaved ? QStringLiteral("note.reloadedDirty")
+                               : QStringLiteral("note.reloaded"))
+            .arg(QFileInfo(m_path).fileName())
+            .arg(describeDifferences(before)));
+    emit changed();
+    emit renderChanged(QString(), -1);
     emit viewChanged();
     emit fileChanged();
     return true;
+}
+
+QString DocumentModel::describeDifferences(const Document &before) const
+{
+    // One summarizer, shared with the change log: a sentence that claims
+    // more behind it means it everywhere it is shown.
+    return summarizeDifferences(documentDifferences(before, m_document,
+                                                   QStringLiteral("before"),
+                                                   QStringLiteral("after")))
+        .join(QStringLiteral("; "));
 }
 
 bool DocumentModel::save(const QString &path)
@@ -698,6 +1003,10 @@ bool DocumentModel::save(const QString &path)
     }
     m_path = where;
     m_dirty = false;
+    watch();
+    // The document has a home; the scratch backing would only be a second,
+    // stale copy of it.
+    retireScratch();
     say(Strings::shared().t(QStringLiteral("note.savedTo")).arg(where));
     emit fileChanged();
     return true;

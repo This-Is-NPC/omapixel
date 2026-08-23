@@ -41,9 +41,14 @@ zoom     = "fit"       # "fit", or screen pixels per drawing pixel
 grid     = true
 onion    = false
 big_step = 8           # how far shift and an arrow jumps
+caret_margin_x = 0      # edge warning in drawing pixels, or "center"
+caret_margin_y = 0
 
 [playback]
 loop = true            # ▶ starts the clip over at the end; off stops on it
+
+[studio]
+scratch = true         # back untitled windows with a runtime file the CLI can address
 
 [document]
 width  = 32            # what File ▸ New starts with
@@ -67,9 +72,19 @@ warning and the operation continues. Set a value to `0` to disable that warning.
 Only arithmetic overflow, impossible image dimensions and actual allocation
 failure stop an operation.
 
-Numeric settings are checked by domain: document dimensions are `1..512`, FPS
-is `1..60`, zoom is `fit` or `1..40`, and window dimensions, big step and undo
-depth must be positive integers.
+`studio.scratch` gives every untitled window a backing file under the runtime
+directory, so `omapixel where` can find it and an agent can draw into it live.
+It is an address, not a save: the file lives on tmpfs and dies with the
+session, the window keeps saying unsaved, and closing still asks. Off, an
+untitled window is invisible to the command line. Read when the studio starts.
+
+Numeric settings are checked by domain: document dimensions are `1..2048`
+(the format's own ceiling), FPS is `1..60`, zoom is `fit` or `1..40`, and
+window dimensions, big step and undo depth must be positive integers.
+`canvas.caret_margin_x` and `canvas.caret_margin_y` accept zero or a positive
+integer measured in drawing pixels, or `center` to keep the keyboard cursor
+centred on that axis after every move. A numeric axis only recentres when the
+cursor reaches its margin, without moving the other axis.
 
 `OMAPIXEL_LANG` in the environment beats `language` in the file, so one run can
 be in another language without editing anything.
@@ -99,11 +114,13 @@ Every action, and what it comes bound to:
 |---|---|
 | `new` `open` `save` `save_as` | `ctrl+n` `ctrl+o` `ctrl+s` `ctrl+shift+s` |
 | `export_png` `export_sheet` `quit` | `ctrl+e` `ctrl+shift+e` `ctrl+q` |
-| `undo` `redo` `clear_frame` | `ctrl+z` `ctrl+shift+z` `delete` |
+| `undo` `redo` `clear_frame` `trim` | `ctrl+z` `ctrl+shift+z` `ctrl+delete` `ctrl+shift+t` |
 | `tool_pencil` `tool_eraser` `tool_bucket` `tool_picker` `tool_hand` | `b` `e` `f` `i` `h` |
 | `caret_left` `caret_right` `caret_up` `caret_down` | the arrows |
-| `caret_left_far` … | the arrows with shift, jumping `canvas.big_step` |
-| `paint` `erase` `cancel` | `enter` or `x`, `backspace`, `esc` |
+| `select_left` `select_right` `select_up` `select_down` | the arrows with shift, extending the selection |
+| `select_left_far` … | the arrows with ctrl+shift, extending by `canvas.big_step` |
+| `caret_left_far` … | the arrows with ctrl, jumping `canvas.big_step` |
+| `paint` `erase` `cancel` | `enter` or `x`, `backspace` or `delete`, `esc` |
 | `slot_leader` | `;`, after which the next key names a palette letter |
 | `choose_colour` `replace_colour` `roulette` | `c` `shift+c` `r` |
 | `draw_mode` `pick_mode` `line_point` | `d` `p` `l` |

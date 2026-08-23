@@ -9,3 +9,4 @@ Makefile
 version.h
 dist/
 .temp/
+opencode.json
