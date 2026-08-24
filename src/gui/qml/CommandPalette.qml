@@ -13,10 +13,11 @@ Sheet {
     property var hostWindow: null
     property var previousFocusItem: null
     property string pendingCommand: ""
+    property var pendingArgs: ({})
     readonly property string query: search.input.text
     readonly property int resultCount: matches.length
 
-    signal commandRequested(string commandId)
+    signal commandRequested(string commandId, var args)
 
     Shortcut {
         sequence: "Esc"
@@ -56,6 +57,7 @@ Sheet {
     function show() {
         previousFocusItem = hostWindow ? hostWindow.activeFocusItem : null
         pendingCommand = ""
+        pendingArgs = ({})
         search.input.text = ""
         refine("")
         open()
@@ -74,16 +76,19 @@ Sheet {
         if (index < 0 || index >= matches.length || matches[index].enabled === false)
             return
         pendingCommand = matches[index].id
+        pendingArgs = matches[index].args || ({})
         close()
     }
 
     onClosed: {
         var command = pendingCommand
+        var args = pendingArgs
         pendingCommand = ""
+        pendingArgs = ({})
         if (previousFocusItem)
             previousFocusItem.forceActiveFocus()
         if (command !== "")
-            Qt.callLater(function () { palette.commandRequested(command) })
+            Qt.callLater(function () { palette.commandRequested(command, args) })
     }
 
     body: [
@@ -133,11 +138,21 @@ Sheet {
                               ? theme.fill(theme.foreground, 0.07) : "transparent")
                     opacity: modelData.enabled === false ? 0.42 : 1
 
-                    Column {
+                    Text {
                         anchors.left: parent.left
                         anchors.leftMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 140
+                        text: result.modelData.checkable && result.modelData.checked ? "✓" : ""
+                        color: theme.accent
+                        font.family: theme.fontFamily
+                        font.pixelSize: 11
+                    }
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 28
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 158
                         spacing: 1
                         Text {
                             width: parent.width
@@ -173,6 +188,7 @@ Sheet {
                     }
 
                     HoverHandler { id: resultHover }
+                    // keyboard-equivalent: search owns Up/Down and Enter calls choose().
                     TapHandler {
                         onTapped: {
                             results.currentIndex = result.index

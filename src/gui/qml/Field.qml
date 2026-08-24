@@ -65,7 +65,10 @@ Column {
             // Escape leaves the field. Without it, a text box is a trap: the
             // arrows belong to it for as long as it holds focus, and nothing
             // says so.
-            Keys.onEscapePressed: field.escaped()
+            Keys.onEscapePressed: function (event) {
+                field.escaped()
+                event.accepted = true
+            }
             // Not accepted, so TextInput still sees it and `committed` fires
             // for the callers that only want the text.
             Keys.onReturnPressed: function (event) {
@@ -76,8 +79,14 @@ Column {
                 field.confirmed(text, event.modifiers)
                 event.accepted = false
             }
-            Keys.onUpPressed: field.stepped(-1)
-            Keys.onDownPressed: field.stepped(1)
+            Keys.onUpPressed: function (event) {
+                field.stepped(-1)
+                event.accepted = true
+            }
+            Keys.onDownPressed: function (event) {
+                field.stepped(1)
+                event.accepted = true
+            }
         }
     }
 }

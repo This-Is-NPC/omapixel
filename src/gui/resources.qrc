@@ -21,6 +21,15 @@
         <file>qml/LayerDock.qml</file>
         <file>qml/LayerToolWindow.qml</file>
         <file>qml/CommandPalette.qml</file>
+        <file>qml/CommandAction.qml</file>
+        <file>qml/CommandProvider.qml</file>
+        <file>qml/CommandRegistry.qml</file>
+        <file>qml/NavigationCommands.qml</file>
+        <file>qml/FileEditCommands.qml</file>
+        <file>qml/CanvasViewCommands.qml</file>
+        <file>qml/LayerCommands.qml</file>
+        <file>qml/InspectorCommands.qml</file>
+        <file>qml/TimelineCommands.qml</file>
         <file>qml/qmldir</file>
     </qresource>
 </RCC>

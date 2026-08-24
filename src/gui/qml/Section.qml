@@ -15,11 +15,20 @@ Item {
     property string title: ""
     property bool open: true
     property string hint: ""          // a word on the right, e.g. the size
+    property var commandRegistry: null
+    property string sectionId: ""
     default property alias content: body.data
 
     function focusHeader() {
         open = true
         header.forceActiveFocus()
+    }
+
+    function toggle() {
+        if (commandRegistry && sectionId !== "")
+            commandRegistry.invoke("inspector.toggleSection", { sectionId: sectionId })
+        else
+            open = !open
     }
 
     width: parent ? parent.width : 0
@@ -33,6 +42,8 @@ Item {
 
     Rectangle {
         id: header
+        objectName: section.sectionId === "" ? "sectionHeader"
+                                              : section.sectionId + "SectionHeader"
         width: parent.width
         height: 30
         radius: theme.rounding
@@ -72,15 +83,19 @@ Item {
         }
 
         HoverHandler { id: hover }
-        TapHandler { onTapped: section.open = !section.open }
+        TapHandler { onTapped: section.toggle() }
 
         activeFocusOnTab: true
         Keys.onSpacePressed: function (event) {
-            section.open = !section.open
+            section.toggle()
             event.accepted = true
         }
         Keys.onReturnPressed: function (event) {
-            section.open = !section.open
+            section.toggle()
+            event.accepted = true
+        }
+        Keys.onEnterPressed: function (event) {
+            section.toggle()
             event.accepted = true
         }
 

@@ -31,6 +31,7 @@
   "command.group.view": "View",
   "command.inspector.referenceOpacity": "Set reference opacity to %1%",
   "command.inspector.size": "Set pending canvas size to %1×%2",
+  "command.inspector.toggleSection": "Toggle %1 section",
   "command.layers.select": "Open layer %1",
   "command.layers.toggleSelection": "Toggle structural selection for %1",
   "command.navigate": "Navigate…",

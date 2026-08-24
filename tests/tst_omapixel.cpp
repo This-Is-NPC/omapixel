@@ -200,6 +200,70 @@ struct ScopedProcessCleanup
     }
 };
 
+struct StudioHarness
+{
+    DocumentModel document;
+    Theme theme;
+    InputLog log{false};
+    QQmlEngine engine;
+    QScopedPointer<QObject> root;
+    QQuickWindow *window = nullptr;
+    QString error;
+
+    bool open(const QSize &size = QSize(1100, 800))
+    {
+        registerQmlTypes();
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &log);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent component(
+            &engine,
+            QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        if (!component.isReady()) {
+            error = component.errorString();
+            return false;
+        }
+        root.reset(component.create());
+        if (!root) {
+            error = component.errorString();
+            return false;
+        }
+        window = qobject_cast<QQuickWindow *>(root.data());
+        if (!window) {
+            error = QStringLiteral("Main.qml did not create a QQuickWindow");
+            return false;
+        }
+        window->resize(size);
+        window->show();
+        if (!QTest::qWaitForWindowExposed(window)) {
+            error = QStringLiteral("Studio window was not exposed");
+            return false;
+        }
+        return true;
+    }
+
+    QObject *named(const QString &name) const
+    {
+        return window ? window->findChild<QObject *>(name) : nullptr;
+    }
+
+    bool invoke(const QString &commandId, const QVariantMap &args = {}) const
+    {
+        QObject *registry = named(QStringLiteral("commandRegistry"));
+        QVariant executed;
+        return registry
+               && QMetaObject::invokeMethod(registry, "invoke",
+                                            Q_RETURN_ARG(QVariant, executed),
+                                            Q_ARG(QVariant, commandId),
+                                            Q_ARG(QVariant, args))
+               && executed.toBool();
+    }
+};
+
 } // namespace
 
 /// `undo` is a slot on the model; calling it from a test needs no ceremony,
@@ -3217,6 +3281,7 @@ private slots:
         QVERIFY(!root->findChild<QQuickItem *>(QStringLiteral("opacitySlider")));
 
         QSignalSpy activated(root.data(), SIGNAL(layerActivated(QString)));
+        QSignalSpy requested(root.data(), SIGNAL(commandRequested(QString,QVariant)));
         QVERIFY(QMetaObject::invokeMethod(root.data(), "toggleStructural",
                                           Q_ARG(QVariant, QStringLiteral("overlay"))));
         const QVariantList selected = root->property("selectedIds").toList();
@@ -3226,6 +3291,14 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(root.data(), "focusList"));
         QVERIFY(QMetaObject::invokeMethod(list, "step", Q_ARG(QVariant, 1)));
         QVERIFY(QMetaObject::invokeMethod(list, "activateCurrent"));
+        QCOMPARE(requested.count(), 1);
+        QCOMPARE(requested.first().at(0).toString(), QStringLiteral("layers.select"));
+        QCOMPARE(requested.first().at(1).toMap().value(QStringLiteral("layerId")).toString(),
+                 QStringLiteral("overlay"));
+        QCOMPARE(document.activeLayerId(), QStringLiteral("layer"));
+
+        QVERIFY(QMetaObject::invokeMethod(root.data(), "activate",
+                                          Q_ARG(QVariant, QStringLiteral("overlay"))));
         QCOMPARE(activated.count(), 1);
         QCOMPARE(activated.first().first().toString(), QStringLiteral("overlay"));
         QCOMPARE(document.activeLayerId(), QStringLiteral("overlay"));
@@ -5168,68 +5241,134 @@ private slots:
 
     void everyControlIsReachableWithTab()
     {
-        // The audit this came from: nothing but the text fields accepted focus,
-        // and Tab was intercepted to jump back to the drawing -- which answered
-        // one complaint by making every button in the window unreachable.
-        registerQmlTypes();
+        StudioHarness studio;
+        studio.document.reset(16, 16);
+        QVERIFY2(studio.open(QSize(1200, 860)), qPrintable(studio.error));
 
-        QQmlEngine engine;
-        DocumentModel document;
-        Theme theme;
-        static InputLog still(false);
-        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
-        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
-        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
-        engine.rootContext()->setContextProperty(
-            QStringLiteral("T"), &Strings::shared());
-        engine.rootContext()->setContextProperty(QStringLiteral("log"), &still);
-        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
-
-        QQmlComponent main(&engine,
-                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
-        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
-        QScopedPointer<QObject> root(main.create());
-        auto *window = qobject_cast<QQuickWindow *>(root.data());
-        QVERIFY(window);
-        window->resize(1200, 860);
-        window->show();
-        QVERIFY(QTest::qWaitForWindowExposed(window));
-
-        // Walk the window with Tab and collect what the focus lands on.
-        QSet<QQuickItem *> visited;
-        QStringList kinds;
-        for (int i = 0; i < 60; ++i) {
-            QTest::keyClick(window, Qt::Key_Tab);
-            QQuickItem *here = window->activeFocusItem();
-            if (!here)
-                continue;
-            if (!visited.contains(here)) {
+        auto *canvas = qobject_cast<QQuickItem *>(studio.named(QStringLiteral("canvas keys")));
+        QVERIFY(canvas);
+        const auto walk = [&](bool reverse, bool *complete, QStringList *invalid) {
+            QSet<QQuickItem *> visited;
+            canvas->forceActiveFocus();
+            QTest::keyClick(studio.window, reverse ? Qt::Key_Backtab : Qt::Key_Tab);
+            QQuickItem *first = studio.window->activeFocusItem();
+            if (!first)
+                return visited;
+            visited.insert(first);
+            for (int step = 0; step < 200; ++step) {
+                QTest::keyClick(studio.window,
+                                reverse ? Qt::Key_Backtab : Qt::Key_Tab);
+                QQuickItem *here = studio.window->activeFocusItem();
+                if (!here)
+                    continue;
+                if (!here->isVisible() || !here->isEnabled())
+                    invalid->append(here->objectName().isEmpty()
+                                        ? QString::fromUtf8(here->metaObject()->className())
+                                        : here->objectName());
+                if (here == first) {
+                    *complete = true;
+                    break;
+                }
                 visited.insert(here);
-                kinds << QString::fromUtf8(here->metaObject()->className());
             }
-        }
-        qInfo("tab reached %lld controls", qint64(visited.size()));
+            return visited;
+        };
 
-        QVERIFY2(visited.size() > 12,
-                 "Tab walks past almost everything: the controls do not take focus");
+        bool forwardComplete = false;
+        QStringList invalidForward;
+        const QSet<QQuickItem *> forward = walk(false, &forwardComplete, &invalidForward);
+        bool reverseComplete = false;
+        QStringList invalidReverse;
+        const QSet<QQuickItem *> reverse = walk(true, &reverseComplete, &invalidReverse);
+        QVERIFY2(forwardComplete, "Tab did not complete a focus cycle");
+        QVERIFY2(reverseComplete, "Shift+Tab did not complete a focus cycle");
+        QVERIFY2(invalidForward.isEmpty(), qPrintable(invalidForward.join(QStringLiteral(", "))));
+        QVERIFY2(invalidReverse.isEmpty(), qPrintable(invalidReverse.join(QStringLiteral(", "))));
+        const auto labels = [](const QSet<QQuickItem *> &items) {
+            QStringList result;
+            for (QQuickItem *item : items)
+                result << (item->objectName().isEmpty()
+                               ? QString::fromUtf8(item->metaObject()->className())
+                               : item->objectName());
+            result.sort();
+            return result;
+        };
+        const auto withoutFocusProxies = [](QSet<QQuickItem *> items) {
+            for (auto it = items.begin(); it != items.end();) {
+                if ((*it)->objectName().startsWith(QLatin1String("layerRow_")))
+                    it = items.erase(it);
+                else
+                    ++it;
+            }
+            return items;
+        };
+        const QSet<QQuickItem *> logicalForward = withoutFocusProxies(forward);
+        const QSet<QQuickItem *> logicalReverse = withoutFocusProxies(reverse);
+        const QStringList onlyForward = labels(logicalForward - logicalReverse);
+        const QStringList onlyReverse = labels(logicalReverse - logicalForward);
+        QVERIFY2(onlyForward.isEmpty() && onlyReverse.isEmpty(),
+                 qPrintable(QStringLiteral("focus order is asymmetric; forward-only: %1; reverse-only: %2")
+                                .arg(onlyForward.join(QStringLiteral(", ")),
+                                     onlyReverse.join(QStringLiteral(", ")))));
+
+        const QStringList required{
+            QStringLiteral("toolsFirstControl"), QStringLiteral("dockSplitter"),
+            QStringLiteral("layerList"), QStringLiteral("timelineAddFrameControl"),
+            QStringLiteral("paletteSectionHeader"), QStringLiteral("previewSectionHeader"),
+            QStringLiteral("spriteSectionHeader"), QStringLiteral("referenceSectionHeader"),
+            QStringLiteral("historySectionHeader")};
+        const auto reaches = [](const QSet<QQuickItem *> &items, QQuickItem *target) {
+            for (QQuickItem *item : items) {
+                for (QQuickItem *at = item; at; at = at->parentItem()) {
+                    if (at == target)
+                        return true;
+                }
+            }
+            return false;
+        };
+        for (const QString &name : required) {
+            auto *item = qobject_cast<QQuickItem *>(studio.named(name));
+            QVERIFY2(item, qPrintable(name));
+            QVERIFY2(reaches(forward, item), qPrintable(name + QStringLiteral(" is outside Tab order")));
+        }
+
+        studio.window->resize(900, 560);
+        QCoreApplication::processEvents();
+        bool compactComplete = false;
+        QStringList invalidCompact;
+        const QSet<QQuickItem *> compact = walk(false, &compactComplete, &invalidCompact);
+        QVERIFY2(compactComplete, "Tab did not complete at the minimum window size");
+        QVERIFY2(invalidCompact.isEmpty(), qPrintable(invalidCompact.join(QStringLiteral(", "))));
+        for (const QString &name : required)
+            QVERIFY2(reaches(compact, qobject_cast<QQuickItem *>(studio.named(name))), qPrintable(name));
 
         // The menu bar answers to the keyboard too. Nothing in the window
         // should need a pointer, and a menu you can only open by clicking is
         // the whole command set behind one.
-        QTest::keyClick(window, Qt::Key_F10);
+        QTest::keyClick(studio.window, Qt::Key_F10);
         QTest::qWait(30);
-        QQuickItem *onMenus = window->activeFocusItem();
+        QQuickItem *onMenus = studio.window->activeFocusItem();
         QVERIFY2(onMenus && (onMenus->inherits("QQuickMenuBar")
                              || onMenus->inherits("QQuickMenuBarItem")
                              || (onMenus->parentItem()
-                                 && onMenus->parentItem()->inherits("QQuickMenuBar"))),
+                                  && onMenus->parentItem()->inherits("QQuickMenuBar"))),
                  "F10 did not put the keyboard on the menu bar");
+
+        QObject *fileMenu = studio.named(QStringLiteral("fileMenu"));
+        QObject *newSheet = studio.named(QStringLiteral("newSheet"));
+        QVERIFY(fileMenu);
+        QVERIFY(newSheet);
+        QTest::keyClick(studio.window, Qt::Key_Return);
+        QTRY_VERIFY_WITH_TIMEOUT(fileMenu->property("opened").toBool(), 1000);
+        QTest::keyClick(studio.window, Qt::Key_Return);
+        QTRY_VERIFY_WITH_TIMEOUT(newSheet->property("opened").toBool(), 1000);
+        QTest::keyClick(studio.window, Qt::Key_Escape);
+        QTRY_VERIFY_WITH_TIMEOUT(!newSheet->property("opened").toBool(), 1000);
 
         // Escape brings the keyboard back to the drawing from wherever Tab
         // left it, so getting lost is one key rather than a hunt.
-        QTest::keyClick(window, Qt::Key_Escape);
-        QTest::keyClick(window, Qt::Key_Right);
-        QVERIFY2(root->property("caretColumn").toInt() >= 0,
+        QTest::keyClick(studio.window, Qt::Key_Right);
+        QVERIFY2(studio.root->property("caretColumn").toInt() >= 0,
                  "escape did not hand the keyboard back to the drawing");
     }
 
@@ -5260,16 +5399,20 @@ private slots:
         QVERIFY(QTest::qWaitForWindowExposed(window));
 
         auto *palette = window->findChild<QObject *>(QStringLiteral("commandPalette"));
+        auto *registry = window->findChild<QObject *>(QStringLiteral("commandRegistry"));
         auto *search = window->findChild<QQuickItem *>(QStringLiteral("commandPaletteSearch"));
         auto *overlay = window->findChild<QQuickItem *>(QStringLiteral("navigationOverlay"));
         auto *layerList = window->findChild<QQuickItem *>(QStringLiteral("layerList"));
+        auto *layerTool = window->findChild<QQuickWindow *>(QStringLiteral("layerToolWindow"));
         auto *timelineFirst = window->findChild<QQuickItem *>(
             QStringLiteral("timelineFirstControl"));
         auto *canvasKeys = window->findChild<QQuickItem *>(QStringLiteral("canvas keys"));
         QVERIFY(palette);
+        QVERIFY(registry);
         QVERIFY(search);
         QVERIFY(overlay);
         QVERIFY(layerList);
+        QVERIFY(layerTool);
         QVERIFY(timelineFirst);
         QVERIFY(canvasKeys);
 
@@ -5285,9 +5428,49 @@ private slots:
             QStringLiteral("canvas.tool.pencil"), QStringLiteral("layers.addAnimated"),
             QStringLiteral("layers.flatten"), QStringLiteral("inspector.reference.choose"),
             QStringLiteral("inspector.canvasSize"), QStringLiteral("timeline.addFrame"),
-            QStringLiteral("timeline.frame.0")};
+            QStringLiteral("timeline.selectFrame")};
         for (const QString &id : required)
             QVERIFY2(ids.contains(id), qPrintable(id));
+        QDirIterator providers(QStringLiteral(SOURCE_DIR "/src/gui/qml"),
+                               {QStringLiteral("*Commands.qml")}, QDir::Files);
+        const QRegularExpression commandDefinition(
+            QStringLiteral("commandId\\s*:\\s*\"([^\"]+)\""));
+        while (providers.hasNext()) {
+            QFile provider(providers.next());
+            QVERIFY(provider.open(QIODevice::ReadOnly));
+            auto definitions = commandDefinition.globalMatch(
+                QString::fromUtf8(provider.readAll()));
+            while (definitions.hasNext()) {
+                const QString id = definitions.next().captured(1);
+                QVERIFY2(ids.contains(id),
+                         qPrintable(id + QStringLiteral(" is absent from the keyboard palette")));
+            }
+        }
+        int selectableLayers = 0;
+        int selectableClips = 0;
+        int selectableFrames = 0;
+        int selectableSlots = 0;
+        for (const QVariant &value : commands) {
+            const QString id = value.toMap().value(QStringLiteral("id")).toString();
+            selectableLayers += id == QLatin1String("layers.select");
+            selectableClips += id == QLatin1String("timeline.selectClip");
+            selectableFrames += id == QLatin1String("timeline.selectFrame");
+            selectableSlots += id == QLatin1String("palette.select");
+        }
+        QCOMPARE(selectableLayers, document.layers().size());
+        QCOMPARE(selectableClips, document.clips().size());
+        QCOMPARE(selectableFrames, document.frameCount());
+        QCOMPARE(selectableSlots, document.palette().size());
+        for (const QVariant &value : commands) {
+            const QVariantMap descriptor = value.toMap();
+            const QStringList fields{QStringLiteral("id"), QStringLiteral("args"),
+                                     QStringLiteral("label"), QStringLiteral("group"),
+                                     QStringLiteral("keywords"), QStringLiteral("shortcut"),
+                                     QStringLiteral("enabled"), QStringLiteral("checkable"),
+                                     QStringLiteral("checked")};
+            for (const QString &field : fields)
+                QVERIFY2(descriptor.contains(field), qPrintable(field));
+        }
         QTest::keyClick(window, Qt::Key_Escape);
         QTRY_VERIFY_WITH_TIMEOUT(!root->property("commandPaletteOpen").toBool(), 1000);
 
@@ -5326,24 +5509,189 @@ private slots:
         QTest::keyClick(window, Qt::Key_Return);
         QTRY_COMPARE(document.layers().size(), layersBefore + 1);
 
+        const auto invokeCommand = [registry](const QString &id,
+                                               const QVariantMap &args = QVariantMap{}) {
+            return QMetaObject::invokeMethod(registry, "invoke",
+                                              Q_ARG(QVariant, id),
+                                              Q_ARG(QVariant, args));
+        };
+
+        QVariant executed;
+        QVERIFY(QMetaObject::invokeMethod(registry, "invoke",
+                                          Q_RETURN_ARG(QVariant, executed),
+                                          Q_ARG(QVariant, QStringLiteral("edit.copy")),
+                                          Q_ARG(QVariant, QVariantMap{})));
+        QVERIFY(!executed.toBool());
+        QVERIFY(QMetaObject::invokeMethod(registry, "invoke",
+                                          Q_RETURN_ARG(QVariant, executed),
+                                          Q_ARG(QVariant, QStringLiteral("unknown.command")),
+                                          Q_ARG(QVariant, QVariantMap{})));
+        QVERIFY(!executed.toBool());
+
         root->setProperty("tool", QStringLiteral("eraser"));
-        QVERIFY(QMetaObject::invokeMethod(root.data(), "runCommand",
-                                          Q_ARG(QVariant, QStringLiteral("palette.select.1"))));
+        const QString paletteSlot = document.palette().value(1).toMap()
+                                        .value(QStringLiteral("slot")).toString();
+        QVERIFY(invokeCommand(QStringLiteral("palette.select"),
+                              {{QStringLiteral("slot"), paletteSlot}}));
         QCOMPARE(root->property("tool").toString(), QStringLiteral("pencil"));
 
         document.setFrame(0);
-        QVERIFY(QMetaObject::invokeMethod(root.data(), "runCommand",
-            Q_ARG(QVariant, QStringLiteral("timeline.frame.1junk"))));
+        QVERIFY(invokeCommand(QStringLiteral("timeline.selectFrame"),
+                              {{QStringLiteral("frame"), QStringLiteral("1junk")}}));
         QCOMPARE(document.frame(), 0);
         root->setProperty("referenceAlpha", 0.5);
-        QVERIFY(QMetaObject::invokeMethod(root.data(), "runCommand",
-            Q_ARG(QVariant, QStringLiteral("inspector.reference.alpha.125"))));
+        QVERIFY(invokeCommand(QStringLiteral("inspector.reference.setOpacity"),
+                              {{QStringLiteral("percent"), 125}}));
         QCOMPARE(root->property("referenceAlpha").toDouble(), 0.5);
+
+        const QString originalLayerId = document.layers().first().toMap()
+                                            .value(QStringLiteral("id")).toString();
+        QVERIFY(document.addLayer(QStringLiteral("command-target"),
+                                  QStringLiteral("command target")));
+        QVERIFY(document.moveLayer(originalLayerId, document.layers().size() - 1));
+        QVERIFY(invokeCommand(QStringLiteral("layers.select"),
+                              {{QStringLiteral("layerId"), originalLayerId}}));
+        QCOMPARE(document.activeLayerId(), originalLayerId);
+
+        const QVariantMap originalClip = document.clips().first().toMap();
+        const QString originalClipId = originalClip.value(QStringLiteral("id")).toString();
+        const QString originalClipName = originalClip.value(QStringLiteral("name")).toString();
+        document.addClip(QStringLiteral("command clip"));
+        document.renameClip(originalClipName, QStringLiteral("renamed command clip"));
+        document.setClip(QStringLiteral("command clip"));
+        QVERIFY(invokeCommand(QStringLiteral("timeline.selectClip"),
+                              {{QStringLiteral("clipId"), originalClipId}}));
+        QCOMPARE(document.activeClipId(), originalClipId);
 
         QTest::keyClick(window, Qt::Key_K, Qt::ControlModifier);
         QTRY_VERIFY_WITH_TIMEOUT(root->property("commandPaletteOpen").toBool(), 1000);
         QTest::keyClick(window, Qt::Key_Escape);
         QTRY_VERIFY_WITH_TIMEOUT(!root->property("commandPaletteOpen").toBool(), 1000);
+
+        QVERIFY(document.addLayer(QStringLiteral("keyboard-layer"),
+                                  QStringLiteral("Keyboard layer")));
+        openNavigate();
+        QTest::keyClick(window, Qt::Key_2);
+        QTRY_VERIFY_WITH_TIMEOUT(layerList->hasActiveFocus(), 1000);
+        QTest::keyClick(window, Qt::Key_Down);
+        QTest::keyClick(window, Qt::Key_Return);
+        QTRY_VERIFY_WITH_TIMEOUT(layerTool->isVisible(), 1000);
+        QCOMPARE(document.activeLayerId(), QStringLiteral("keyboard-layer"));
+    }
+
+    void keyboardFocusContractsCoverSheetsFieldsAndDisabledRegions()
+    {
+        QTest::failOnWarning();
+        StudioHarness studio;
+        studio.document.reset(16, 16);
+        QVERIFY2(studio.open(), qPrintable(studio.error));
+
+        auto *canvas = qobject_cast<QQuickItem *>(studio.named(QStringLiteral("canvas keys")));
+        auto *timelineAdd = qobject_cast<QQuickItem *>(
+            studio.named(QStringLiteral("timelineAddFrameControl")));
+        auto *paletteSection = studio.named(QStringLiteral("paletteSection"));
+        auto *eraser = qobject_cast<QQuickItem *>(studio.named(QStringLiteral("toolEraser")));
+        QVERIFY(canvas);
+        QVERIFY(timelineAdd);
+        QVERIFY(paletteSection);
+        QVERIFY(eraser);
+
+        // Region navigation must never land on Play when one frame makes it
+        // unusable. The first usable timeline operation is Add frame.
+        QVERIFY(studio.invoke(QStringLiteral("navigate.timeline")));
+        QTRY_VERIFY_WITH_TIMEOUT(timelineAdd->hasActiveFocus(), 1000);
+        const int framesBefore = studio.document.frameCount();
+        QTest::keyClick(studio.window, Qt::Key_Enter);
+        QTRY_COMPARE(studio.document.frameCount(), framesBefore + 1);
+
+        auto *timelinePlay = qobject_cast<QQuickItem *>(
+            studio.named(QStringLiteral("timelineFirstControl")));
+        QVERIFY(timelinePlay);
+        QVERIFY(studio.invoke(QStringLiteral("navigate.timeline")));
+        QTRY_VERIFY_WITH_TIMEOUT(timelinePlay->hasActiveFocus(), 1000);
+        studio.document.removeFrame();
+        QCOMPARE(studio.document.frameCount(), 1);
+        QTRY_VERIFY_WITH_TIMEOUT(timelineAdd->hasActiveFocus(), 1000);
+        studio.root->setProperty("caretColumn", 0);
+        studio.root->setProperty("caretRow", 0);
+        QCOMPARE(studio.document.slotAt(0, 0), QStringLiteral("."));
+        QTest::keyClick(studio.window, Qt::Key_Enter);
+        QCOMPARE(studio.document.slotAt(0, 0), QStringLiteral("."));
+        QCOMPARE(studio.document.frameCount(), 2);
+
+        // Keypad Enter is an activation key too. This catches custom controls
+        // that implement Return but silently ignore the second Enter keycode.
+        eraser->forceActiveFocus();
+        QTest::keyClick(studio.window, Qt::Key_Enter);
+        QCOMPARE(studio.root->property("tool").toString(), QStringLiteral("eraser"));
+        QVERIFY(QMetaObject::invokeMethod(paletteSection, "focusHeader"));
+        const bool sectionWasOpen = paletteSection->property("open").toBool();
+        QTest::keyClick(studio.window, Qt::Key_Enter);
+        QTRY_COMPARE(paletteSection->property("open").toBool(), !sectionWasOpen);
+
+        // Go-to owns the arrows while its fields are active, and closing it
+        // returns to the canvas rather than the unrelated Layer tool origin.
+        studio.root->setProperty("caretColumn", 4);
+        studio.root->setProperty("caretRow", 5);
+        QVERIFY(studio.invoke(QStringLiteral("view.goTo")));
+        auto *goTo = studio.named(QStringLiteral("goToSheet"));
+        auto *goToX = studio.named(QStringLiteral("goToX"));
+        QVERIFY(goTo);
+        QVERIFY(goToX);
+        QTRY_VERIFY_WITH_TIMEOUT(goTo->property("opened").toBool(), 1000);
+        QObject *goToInput = goToX->property("input").value<QObject *>();
+        QTRY_COMPARE_WITH_TIMEOUT(studio.window->activeFocusItem(), goToInput, 1000);
+        QTest::keyClick(studio.window, Qt::Key_Up);
+        QCOMPARE(studio.root->property("caretColumn").toInt(), 4);
+        QCOMPARE(studio.root->property("caretRow").toInt(), 5);
+        QTest::keyClick(studio.window, Qt::Key_Escape);
+        QTRY_VERIFY_WITH_TIMEOUT(!goTo->property("opened").toBool(), 1000);
+        QTRY_VERIFY_WITH_TIMEOUT(canvas->hasActiveFocus(), 1000);
+
+        // Every modal sheet declares a deterministic first focus target and
+        // Escape returns to the documented canvas fallback.
+        const QList<QPair<QString, QString>> sheets{
+            {QStringLiteral("newSheet"), QStringLiteral("newColumns")},
+            {QStringLiteral("exportSheet"), QStringLiteral("exportChecker")},
+            {QStringLiteral("unsavedSheet"), QStringLiteral("unsavedSave")},
+            {QStringLiteral("trimSheet"), QStringLiteral("trimConfirm")},
+            {QStringLiteral("layerSheet"), QStringLiteral("layerConfirm")}};
+        for (const auto &[sheetName, focusName] : sheets) {
+            QObject *sheet = studio.named(sheetName);
+            QObject *focusObject = studio.named(focusName);
+            QVERIFY2(sheet, qPrintable(sheetName));
+            QVERIFY2(focusObject, qPrintable(focusName));
+            QVERIFY(QMetaObject::invokeMethod(sheet, "open"));
+            QTRY_VERIFY_WITH_TIMEOUT(sheet->property("opened").toBool(), 1000);
+            QObject *expected = focusObject;
+            if (focusObject->property("input").isValid())
+                expected = focusObject->property("input").value<QObject *>();
+            QTRY_COMPARE_WITH_TIMEOUT(studio.window->activeFocusItem(), expected, 1000);
+            QTest::keyClick(studio.window, Qt::Key_Escape);
+            QTRY_VERIFY_WITH_TIMEOUT(!sheet->property("opened").toBool(), 1000);
+            if (sheetName == QLatin1String("layerSheet")) {
+                auto *layerList = qobject_cast<QQuickItem *>(
+                    studio.named(QStringLiteral("layerList")));
+                QVERIFY(layerList);
+                QTRY_VERIFY_WITH_TIMEOUT(layerList->hasActiveFocus(), 1000);
+            } else {
+                QTRY_VERIFY_WITH_TIMEOUT(canvas->hasActiveFocus(), 1000);
+            }
+        }
+
+        // Search-list arrows belong to the command palette, not to the canvas.
+        studio.root->setProperty("caretColumn", 7);
+        studio.root->setProperty("caretRow", 8);
+        canvas->forceActiveFocus();
+        QVERIFY(studio.invoke(QStringLiteral("command.palette")));
+        auto *palette = studio.named(QStringLiteral("commandPalette"));
+        QVERIFY(palette);
+        QTRY_VERIFY_WITH_TIMEOUT(palette->property("opened").toBool(), 1000);
+        QTest::keyClick(studio.window, Qt::Key_Down);
+        QCOMPARE(studio.root->property("caretColumn").toInt(), 7);
+        QCOMPARE(studio.root->property("caretRow").toInt(), 8);
+        QTest::keyClick(studio.window, Qt::Key_Escape);
+        QTRY_VERIFY_WITH_TIMEOUT(canvas->hasActiveFocus(), 1000);
     }
 
     void theColourPanelIsDrivenFromTheKeyboardAlone()
@@ -6238,6 +6586,86 @@ private slots:
             }
         }
         QVERIFY2(invented.isEmpty(), qPrintable(invented.join(QStringLiteral(", "))));
+    }
+
+    void semanticCommandsHaveOneCanonicalDefinition()
+    {
+        QSet<QString> commandIds;
+        QStringList duplicates;
+        const QRegularExpression definition(
+            QStringLiteral("commandId\\s*:\\s*\"([^\"]+)\""));
+        QDirIterator qml(QStringLiteral(SOURCE_DIR "/src/gui/qml"),
+                         {QStringLiteral("*Commands.qml")}, QDir::Files);
+        while (qml.hasNext()) {
+            QFile file(qml.next());
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            const QString body = QString::fromUtf8(file.readAll());
+            auto found = definition.globalMatch(body);
+            while (found.hasNext()) {
+                const QString id = found.next().captured(1);
+                if (commandIds.contains(id))
+                    duplicates << id;
+                commandIds.insert(id);
+            }
+        }
+        QVERIFY2(commandIds.size() > 70, "the semantic command surface is incomplete");
+        QVERIFY2(duplicates.isEmpty(), qPrintable(duplicates.join(QStringLiteral(", "))));
+
+        QFile main(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml"));
+        QVERIFY(main.open(QIODevice::ReadOnly));
+        const QString body = QString::fromUtf8(main.readAll());
+        QVERIFY(!body.contains(QStringLiteral("runCommand")));
+        QVERIFY(!body.contains(QStringLiteral("buildCommandEntries")));
+        QVERIFY(!body.contains(QStringLiteral("commandIndex")));
+        QVERIFY(!body.contains(QRegularExpression(
+            QStringLiteral("(?:layers\\.select|timeline\\.(?:clip|frame)|palette\\.select)\\.\""))));
+    }
+
+    void pointerOperationsDeclareAKeyboardRoute()
+    {
+        const QSet<QString> keyboardControls{
+            QStringLiteral("Chip.qml"), QStringLiteral("ToolButton.qml"),
+            QStringLiteral("LayerAction.qml"), QStringLiteral("Section.qml")};
+        QStringList missing;
+        QDirIterator qml(QStringLiteral(SOURCE_DIR "/src/gui/qml"),
+                         {QStringLiteral("*.qml")}, QDir::Files);
+        while (qml.hasNext()) {
+            const QString path = qml.next();
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            const QString body = QString::fromUtf8(file.readAll());
+            const QString name = QFileInfo(path).fileName();
+            if (keyboardControls.contains(name)) {
+                QVERIFY2(body.contains(QStringLiteral("activeFocusOnTab")),
+                         qPrintable(name + QStringLiteral(" is clickable but not tabbable")));
+                QVERIFY2(body.contains(QStringLiteral("Keys.onSpacePressed")), qPrintable(name));
+                QVERIFY2(body.contains(QStringLiteral("Keys.onReturnPressed")), qPrintable(name));
+                QVERIFY2(body.contains(QStringLiteral("Keys.onEnterPressed")), qPrintable(name));
+            }
+
+            const QStringList lines = body.split(QLatin1Char('\n'));
+            for (int line = 0; line < lines.size(); ++line) {
+                if (!lines.at(line).contains(QRegularExpression(
+                        QStringLiteral("\\b(?:TapHandler|MouseArea)\\s*\\{"))))
+                    continue;
+                if (keyboardControls.contains(name))
+                    continue;
+                const int first = std::max(0, line - 2);
+                const int last = std::min(int(lines.size()) - 1, line + 15);
+                QString context;
+                for (int at = first; at <= last; ++at)
+                    context += lines.at(at) + QLatin1Char('\n');
+                const bool commandRoute = context.contains(QRegularExpression(
+                    QStringLiteral("(?:commands\\.invoke|commandRequested)\\s*\\(")));
+                const bool localRoute = context.contains(
+                    QStringLiteral("keyboard-equivalent:"));
+                if (!commandRoute && !localRoute)
+                    missing << QStringLiteral("%1:%2").arg(name).arg(line + 1);
+            }
+        }
+        QVERIFY2(missing.isEmpty(),
+                 qPrintable(QStringLiteral("pointer operation has no keyboard route: ")
+                            + missing.join(QStringLiteral(", "))));
     }
 
     // ------------------------------------------------------------ i18n

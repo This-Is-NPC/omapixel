@@ -32,6 +32,7 @@ class DocumentModel : public QObject
     Q_PROPERTY(int columns READ columns NOTIFY changed)
     Q_PROPERTY(int rows READ rows NOTIFY changed)
     Q_PROPERTY(QStringList clipNames READ clipNames NOTIFY changed)
+    Q_PROPERTY(QVariantList clips READ clips NOTIFY changed)
     // The palette has its own signal because it has its own lifetime: it
     // changes when a colour is added or edited, and not when a pixel is
     // painted. Bound to `changed` it was rebuilt on every brush stroke, and
@@ -51,6 +52,7 @@ class DocumentModel : public QObject
     Q_PROPERTY(QAbstractListModel *changes READ changes CONSTANT)
 
     Q_PROPERTY(QString clip READ clip WRITE setClip NOTIFY viewChanged)
+    Q_PROPERTY(QString activeClipId READ activeClipId NOTIFY viewChanged)
     Q_PROPERTY(int frame READ frame WRITE setFrame NOTIFY viewChanged)
     Q_PROPERTY(int frameCount READ frameCount NOTIFY changed)
     Q_PROPERTY(int fps READ fps NOTIFY changed)
@@ -86,6 +88,7 @@ public:
     int columns() const { return m_document.columns(); }
     int rows() const { return m_document.rows(); }
     QStringList clipNames() const { return m_document.clipNames(); }
+    QVariantList clips() const;
     QVariantList palette() const;
     int paletteRevision() const { return m_paletteRevision; }
     QAbstractListModel *paletteModel() { return &m_paletteRows; }
@@ -97,7 +100,9 @@ public:
     bool lastChangeWasExternal() const { return m_lastChangeExternal; }
 
     QString clip() const { return m_clip; }
+    QString activeClipId() const;
     void setClip(const QString &clip);
+    Q_INVOKABLE void selectClip(const QString &id);
     int frame() const { return m_frame; }
     void setFrame(int frame);
     int frameCount() const;

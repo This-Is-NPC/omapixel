@@ -14,6 +14,7 @@ C.Popup {
     id: sheet
 
     property string title: ""
+    property var firstFocusItem: null
 
     // Centred on its default parent, the window's content item, rather than on
     // Controls' Overlay: this window is a plain Window, and depending on the
@@ -28,6 +29,7 @@ C.Popup {
     focus: true
     padding: 16
     closePolicy: C.Popup.CloseOnEscape | C.Popup.CloseOnPressOutside
+    onOpened: if (firstFocusItem) Qt.callLater(firstFocusItem.forceActiveFocus)
 
     background: Rectangle {
         color: theme.panel

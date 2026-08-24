@@ -242,6 +242,7 @@ Item {
     // the hand tool is chosen, because a middle button is not something every
     // mouse or trackpad has, and dragging the picture around is the first thing
     // anybody tries. Buttons this area does not accept fall through to drawing.
+    // keyboard-equivalent: canvas keys cover cursor movement, drawing and selection.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: win.tool === "hand" ? (Qt.LeftButton | Qt.MiddleButton)
@@ -397,6 +398,7 @@ Item {
 
         HoverHandler { id: hover }
 
+        // keyboard-equivalent: view zoom commands and go-to pixel replace scrollbar dragging.
         MouseArea {
             id: drag
             anchors.fill: parent
@@ -542,6 +544,7 @@ Item {
             z: 1
         }
 
+        // keyboard-equivalent: canvas keys cover every drawing and picking operation.
         MouseArea {
             id: pointer
             objectName: "canvasPointer"

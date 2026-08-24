@@ -18,6 +18,7 @@ Rectangle {
     activeFocusOnTab: true
     Keys.onSpacePressed: function (event) { button.clicked(); event.accepted = true }
     Keys.onReturnPressed: function (event) { button.clicked(); event.accepted = true }
+    Keys.onEnterPressed: function (event) { button.clicked(); event.accepted = true }
 
     Rectangle {
         anchors.fill: parent

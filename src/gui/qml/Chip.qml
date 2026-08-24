@@ -17,15 +17,31 @@ Rectangle {
     // this window is a Chip, so the keyboard reaches almost all of them from
     // this one place -- and a control that can only be clicked is a control
     // somebody cannot use.
-    activeFocusOnTab: usable
+    activeFocusOnTab: true
+    function updateTabFocus() {
+        if (!usable && activeFocus) {
+            var next = nextItemInFocusChain(true)
+            if (next && next !== chip)
+                next.forceActiveFocus()
+        }
+        activeFocusOnTab = usable
+    }
+    onUsableChanged: updateTabFocus()
+    Component.onCompleted: updateTabFocus()
     Keys.onSpacePressed: function (event) {
-        if (chip.usable) { chip.clicked(); event.accepted = true }
+        if (chip.usable)
+            chip.clicked()
+        event.accepted = true
     }
     Keys.onReturnPressed: function (event) {
-        if (chip.usable) { chip.clicked(); event.accepted = true }
+        if (chip.usable)
+            chip.clicked()
+        event.accepted = true
     }
     Keys.onEnterPressed: function (event) {
-        if (chip.usable) { chip.clicked(); event.accepted = true }
+        if (chip.usable)
+            chip.clicked()
+        event.accepted = true
     }
 
     // Keep the focus ring inside the control. Chips routinely sit at the edge

@@ -16,9 +16,15 @@ Item {
     id: line
     objectName: "timeline"
 
-    signal commandRequested(string commandId)
+    signal commandRequested(string commandId, var args)
 
-    function focusFirst() { playButton.forceActiveFocus() }
+    function focusFirst() {
+        if (playButton.usable)
+            playButton.forceActiveFocus()
+        else
+            addFrameButton.forceActiveFocus()
+    }
+    function focusClipName() { clipName.focusEntry() }
 
     implicitHeight: 128
     height: implicitHeight
@@ -38,29 +44,31 @@ Item {
         Label { anchors.verticalCenter: parent.verticalCenter; text: T.t("timeline.clip") }
 
         Repeater {
-            model: doc.clipNames
+            model: doc.clips
 
             Chip {
                 required property var modelData
                 required property int index
-                label: modelData
-                on: modelData === doc.clip
-                onClicked: line.commandRequested("timeline.clip." + index)
+                label: modelData.name
+                on: modelData.id === doc.activeClipId
+                onClicked: line.commandRequested("timeline.selectClip",
+                                                 { clipId: modelData.id })
             }
         }
 
-        Chip { label: T.t("timeline.addClip"); onClicked: line.commandRequested("timeline.addClip") }
+        Chip { label: T.t("timeline.addClip"); onClicked: line.commandRequested("timeline.addClip", {}) }
         Chip {
             label: T.t("timeline.removeClip")
             usable: doc.clipNames.length > 1
             role: theme.urgent
-            onClicked: line.commandRequested("timeline.removeClip")
+            onClicked: line.commandRequested("timeline.removeClip", {})
         }
 
         Rectangle { anchors.verticalCenter: parent.verticalCenter
                     width: 1; height: 20; color: theme.fill(theme.foreground, 0.18) }
 
         Field {
+            id: clipName
             onEscaped: win.focusCanvas()
             label: ""
             boxWidth: 150
@@ -72,8 +80,8 @@ Item {
                     width: 1; height: 20; color: theme.fill(theme.foreground, 0.18) }
 
         Label { anchors.verticalCenter: parent.verticalCenter; text: T.t("timeline.fps").arg(doc.fps) }
-        Chip { label: T.t("timeline.decreaseFps"); onClicked: line.commandRequested("timeline.fpsDown") }
-        Chip { label: T.t("timeline.increaseFps"); onClicked: line.commandRequested("timeline.fpsUp") }
+        Chip { label: T.t("timeline.decreaseFps"); onClicked: line.commandRequested("timeline.fpsDown", {}) }
+        Chip { label: T.t("timeline.increaseFps"); onClicked: line.commandRequested("timeline.fpsUp", {}) }
     }
 
     // ------------------------------------------------------------- the frames
@@ -92,15 +100,20 @@ Item {
             label: win.playing ? T.t("timeline.pause") : T.t("timeline.play")
             on: win.playing
             usable: doc.frameCount > 1
-            onClicked: line.commandRequested("timeline.play")
+            onClicked: line.commandRequested("timeline.play", {})
         }
-        Chip { label: T.t("timeline.addFrame"); onClicked: line.commandRequested("timeline.addFrame") }
-        Chip { label: T.t("timeline.duplicate"); onClicked: line.commandRequested("timeline.duplicateFrame") }
-        Chip { label: T.t("timeline.previousFrame"); usable: doc.frame > 0; onClicked: line.commandRequested("timeline.moveBack") }
+        Chip {
+            id: addFrameButton
+            objectName: "timelineAddFrameControl"
+            label: T.t("timeline.addFrame")
+            onClicked: line.commandRequested("timeline.addFrame", {})
+        }
+        Chip { label: T.t("timeline.duplicate"); onClicked: line.commandRequested("timeline.duplicateFrame", {}) }
+        Chip { label: T.t("timeline.previousFrame"); usable: doc.frame > 0; onClicked: line.commandRequested("timeline.moveBack", {}) }
         Chip { label: T.t("timeline.nextFrame"); usable: doc.frame < doc.frameCount - 1
-               onClicked: line.commandRequested("timeline.moveOn") }
+               onClicked: line.commandRequested("timeline.moveOn", {}) }
         Chip { label: T.t("timeline.delete"); usable: doc.frameCount > 1; role: theme.urgent
-               onClicked: line.commandRequested("timeline.deleteFrame") }
+               onClicked: line.commandRequested("timeline.deleteFrame", {}) }
     }
 
     ListView {
@@ -149,7 +162,8 @@ Item {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: line.commandRequested("timeline.frame." + cellBox.index)
+                onClicked: line.commandRequested("timeline.selectFrame",
+                                                 { frame: cellBox.index })
             }
         }
     }

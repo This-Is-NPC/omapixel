@@ -63,6 +63,7 @@ Window {
     }
 
     function returnFocus() {
+        win.requestActivate()
         if (returnFocusItem)
             returnFocusItem.focusList()
         else
@@ -132,6 +133,9 @@ Window {
     }
 
     signal confirmationRequested(string kind, string layerId, var report)
+
+    function focusRename() { renameField.focusEntry() }
+    function focusOpacity() { opacitySlider.forceActiveFocus() }
     signal commandRequested(string commandId)
 
     onVisibleChanged: {
@@ -235,6 +239,7 @@ Window {
                     hint: currentLayer().name || T.t("panel.layers.none")
 
                     Field {
+                        id: renameField
                         objectName: "toolRenameField"
                         width: parent.width
                         boxWidth: parent.width

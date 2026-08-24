@@ -24,6 +24,27 @@ import QtQuick.Controls.Basic as C
 C.MenuBar {
     id: bar
 
+    function openCurrentMenu() {
+        var menu = menuAt(currentIndex >= 0 ? currentIndex : 0)
+        if (menu) {
+            menu.open()
+            Qt.callLater(function () {
+                menu.currentIndex = 0
+                var item = menu.itemAt(0)
+                if (item)
+                    item.forceActiveFocus()
+            })
+        }
+    }
+
+    Keys.onPressed: function (event) {
+        if (event.key === Qt.Key_Down || event.key === Qt.Key_Space
+                || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            bar.openCurrentMenu()
+            event.accepted = true
+        }
+    }
+
     // Sized to its own contents, so whatever sits beside it on the row -- the
     // document name, the save state -- can have the rest.
     width: implicitWidth

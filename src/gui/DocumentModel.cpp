@@ -211,6 +211,31 @@ void DocumentModel::setClip(const QString &clip)
     emit viewChanged();
 }
 
+QVariantList DocumentModel::clips() const
+{
+    QVariantList out;
+    for (const Clip &clip : m_document.clips()) {
+        QVariantMap entry;
+        entry.insert(QStringLiteral("id"), clip.id);
+        entry.insert(QStringLiteral("name"), clip.name);
+        out.append(entry);
+    }
+    return out;
+}
+
+QString DocumentModel::activeClipId() const
+{
+    const Clip *clip = m_document.clip(m_clip);
+    return clip ? clip->id : QString();
+}
+
+void DocumentModel::selectClip(const QString &id)
+{
+    const Clip *clip = m_document.clipById(id);
+    if (clip)
+        setClip(clip->name);
+}
+
 void DocumentModel::setFrame(int frame)
 {
     const int bounded = qBound(0, frame, qMax(0, frameCount() - 1));

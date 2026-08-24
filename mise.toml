@@ -65,18 +65,48 @@ run = "rm -rf '{{config_root}}/build' '{{config_root}}/build-tests'"
 
 # --------------------------------------------------------------------- tests
 
-[tasks.test]
-description = "Build and run the unit tests"
+[tasks.build-tests]
+description = "Build the Qt test executable"
 depends = ["deps", "build"]
 run = """
 mkdir -p "{{config_root}}/build-tests"
 cd "{{config_root}}/build-tests"
 qmake6 "{{config_root}}/tests/tests.pro"
 make -j"$(nproc 2>/dev/null || echo 1)"
+"""
+
+[tasks.test]
+description = "Build and run the unit tests"
+depends = ["build-tests"]
+run = """
+cd "{{config_root}}/build-tests"
 # offscreen: the tests touch QImage and never open a window, and CI has no
 # display. Without this Qt aborts on a missing platform plugin.
 QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./tst_omapixel
 """
+
+[tasks.test-keyboard]
+description = "Run the deterministic keyboard-accessibility contract"
+depends = ["test"]
+run = """
+cd "{{config_root}}/build-tests"
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./tst_omapixel \
+  layerDockIsAKeyboardLayerBrowser \
+  layerToolKeyboardLifecycleAndConfirmationReturn \
+  goToPixelMovesByExactZeroBasedCoordinates \
+  theArrowKeysWalkAPixelCursorOverTheDrawing \
+  pickupAndNumberShortcutsPaintASelectionWithTheCollectedColour \
+  everyControlIsReachableWithTab \
+  commandPaletteSearchesRunsAndNavigatesEveryRegion \
+  keyboardFocusContractsCoverSheetsFieldsAndDisabledRegions \
+  theColourPanelIsDrivenFromTheKeyboardAlone \
+  pointerOperationsDeclareAKeyboardRoute
+"""
+
+[tasks.test-keyboard-wayland]
+description = "Run keyboard journeys through a real nested Hyprland compositor"
+depends = ["build", "test-keyboard"]
+run = 'python3 "{{config_root}}/tests/test_keyboard_wayland.py"'
 
 [tasks.i18n]
 description = "Compare a language file against English — mise run i18n pt"
@@ -124,7 +154,8 @@ run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 [tasks.check]
 description = "Everything CI would run"
 depends = ["build", "test", "format-v2", "properties-v2", "cli-layers",
-           "layers-e2e", "i18n", "i18n-surface", "benchmark-layers"]
+           "layers-e2e", "i18n", "i18n-surface", "benchmark-layers",
+           "test-keyboard", "test-keyboard-wayland"]
 run = """
 mise run studio-smoke
 echo 'build, tests, and Studio startup are green'

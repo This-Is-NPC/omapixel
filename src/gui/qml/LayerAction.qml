@@ -27,18 +27,34 @@ Rectangle {
                 : hover.hovered ? theme.fill(theme.foreground, 0.32)
                                 : theme.fill(theme.foreground, 0.18)
 
-    activeFocusOnTab: usable
+    activeFocusOnTab: true
+    function updateTabFocus() {
+        if (!usable && activeFocus) {
+            var next = nextItemInFocusChain(true)
+            if (next && next !== action)
+                next.forceActiveFocus()
+        }
+        activeFocusOnTab = usable
+    }
+    onUsableChanged: updateTabFocus()
+    Component.onCompleted: updateTabFocus()
     Accessible.name: tooltip
     Accessible.description: tooltip
 
     Keys.onSpacePressed: function (event) {
-        if (usable) { clicked(); event.accepted = true }
+        if (usable)
+            clicked()
+        event.accepted = true
     }
     Keys.onReturnPressed: function (event) {
-        if (usable) { clicked(); event.accepted = true }
+        if (usable)
+            clicked()
+        event.accepted = true
     }
     Keys.onEnterPressed: function (event) {
-        if (usable) { clicked(); event.accepted = true }
+        if (usable)
+            clicked()
+        event.accepted = true
     }
 
     Rectangle {

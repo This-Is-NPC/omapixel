@@ -19,3 +19,12 @@ LayerAction 1.0 LayerAction.qml
 LayerDock 1.0 LayerDock.qml
 LayerToolWindow 1.0 LayerToolWindow.qml
 CommandPalette 1.0 CommandPalette.qml
+CommandAction 1.0 CommandAction.qml
+CommandProvider 1.0 CommandProvider.qml
+CommandRegistry 1.0 CommandRegistry.qml
+NavigationCommands 1.0 NavigationCommands.qml
+FileEditCommands 1.0 FileEditCommands.qml
+CanvasViewCommands 1.0 CanvasViewCommands.qml
+LayerCommands 1.0 LayerCommands.qml
+InspectorCommands 1.0 InspectorCommands.qml
+TimelineCommands 1.0 TimelineCommands.qml

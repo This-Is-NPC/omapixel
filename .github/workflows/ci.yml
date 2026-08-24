@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: system dependencies
+        run: |
+          pacman -Syu --needed --noconfirm git mise qt6-base qt6-declarative hyprland weston wtype mesa
+
+      - uses: actions/checkout@v4
+
+      - name: build and test
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mise trust
+          mise run check
