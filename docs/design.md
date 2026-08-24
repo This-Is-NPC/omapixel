@@ -23,7 +23,7 @@ rule both front ends obey.
 
 ```
 mise.toml        every task: deps, build, test, check, cli, studio, i18n,
-                 config, install
+                 format/properties, CLI/Studio E2E, benchmark, config, install
 omapixel.pro     subdirs, core first
 src/core/
   Grid           one frame: a rectangle of palette slots, one character each
@@ -41,14 +41,14 @@ src/gui/
   InputLog       pointer input, logged either side of the QML boundary
   PixelGridItem  the drawing surface, painted from Render at scale 1
   Theme          the omarchy theme, followed live
-  qml/           Main, Surface, Timeline, and the controls
+  qml/           Main, Surface, Timeline, LayerDock, LayerToolWindow, controls
 src/cli/         Commands: what each command does, over an open document
                  main: arguments and files, and the `batch` loop
 i18n/            one JSON catalogue per language; en.json is the full list
 config/          the annotated default config.toml
 examples/        two documents, one of them animated, and the script that built it
-tests/           QtTest over the core, and over the window through QML
-docs/            how to use it
+tests/           QtTest over the core and QML, plus CLI/format/property/E2E gates
+docs/            how to use it and how to run acceptance gates
 ```
 
 ## Everything the studio can do, the command line can do
@@ -156,6 +156,19 @@ class beside it, and neither the core nor the format changes.
 
 `mise run test` runs them all offscreen, so they need no display.
 
+The layer tool is intentionally a second native `QQuickWindow` in the same QML
+engine, not a second `DocumentModel`. Its transient parent is the Studio for
+window-manager association, while `Qt.Window` keeps it top-level and its
+geometry independent. Therefore the CLI/session contract remains one process,
+one document, and one process-bound IPC session: opening, moving, focusing, or
+closing the tool cannot alter CLI defaults or create another `where` entry.
+
+The native-layer hardening gate extends that test boundary across real
+subprocesses: `mise run layers-e2e` launches the offscreen Studio and exercises
+CLI/session/render/flatten behavior against the same temporary document. The
+canonical benchmark is a separate 60-second stop-rule profile and is included
+in `mise run check`.
+
 Beyond the model, three of them exist to stop documentation and code drifting
 apart, which is a failure nothing else notices:
 
@@ -173,6 +186,19 @@ apart, which is a failure nothing else notices:
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
   OMAPIXEL_SHOT=/tmp/studio.png omapixel-studio drawing.json
 ```
+
+For layer-window review, the screenshot harness can capture both native windows
+and their independent geometry without a desktop compositor:
+
+```bash
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  OMAPIXEL_SHOT_LAYER=/tmp/layer-tool.png \
+  OMAPIXEL_SHOT_LAYER_GEOMETRY=/tmp/layer-tool-geometry.json \
+  omapixel-studio drawing.json
+```
+
+The combined image places the Studio capture beside the separately captured
+top-level tool; the JSON records each native window's coordinates and size.
 
 Renders the window to a PNG and exits. The studio was the one part of this
 project that could not be inspected without a display, so a layout change had to

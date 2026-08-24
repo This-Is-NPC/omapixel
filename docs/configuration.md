@@ -35,6 +35,7 @@ language = ""          # a catalogue name from i18n/, "" follows the system
 width  = 1280
 height = 820
 hints  = true          # the bar of keys under the drawing
+inspector_width = 320  # initial width of the resizable Studio inspector
 
 [canvas]
 zoom     = "fit"       # "fit", or screen pixels per drawing pixel
@@ -77,6 +78,17 @@ directory, so `omapixel where` can find it and an agent can draw into it live.
 It is an address, not a save: the file lives on tmpfs and dies with the
 session, the window keeps saying unsaved, and closing still asks. Off, an
 untitled window is invisible to the command line. Read when the studio starts.
+
+`window.inspector_width` sets the initial width of the Studio's layer inspector.
+The in-window divider keeps the current value for the session and clamps it to
+the usable desktop range, so resizing the inspector cannot collapse the canvas
+or push layer actions beyond the right edge.
+
+The acceptance fixture sets `XDG_RUNTIME_DIR` to a temporary directory so
+scratch files and legacy-session garbage collection are isolated from a user's
+live Studio windows. Session discovery itself uses the Linux process-bound IPC
+endpoint and `/proc` peer checks. Production runs use the normal runtime
+directory; the setting does not change the explicit-target rule for CLI commands.
 
 Numeric settings are checked by domain: document dimensions are `1..2048`
 (the format's own ceiling), FPS is `1..60`, zoom is `fit` or `1..40`, and
@@ -132,6 +144,7 @@ Every action, and what it comes bound to:
 | `clip_previous` `clip_next` | `[` `]` |
 | `zoom_in` `zoom_out` `zoom_fit` | `ctrl++` or `+`, `ctrl+-` or `-`, `ctrl+0` |
 | `toggle_grid` `toggle_onion` `toggle_hints` `toggle_loop` | `m` `o`, both unbound |
+| `layer_tool` | `ctrl+shift+l`, open or focus the independent Layer tool |
 | `menus` | `f10`, the keyboard onto the menu bar |
 
 Two things are deliberately not rebindable. **The digits 1 to 0** are the ten

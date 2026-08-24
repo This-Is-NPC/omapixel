@@ -27,13 +27,18 @@
 #include <QJsonArray>
 
 #include <limits>
+#include <algorithm>
 #include <QJsonDocument>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/stat.h>
 
 #include "Bridge.h"
 #include "Codec.h"
 #include "Document.h"
 #include "Differences.h"
 #include "Grid.h"
+#include "LayerOperations.h"
 #include "Ops.h"
 #include "Palette.h"
 #include "Render.h"
@@ -48,6 +53,8 @@
 #include "SessionPublisher.h"
 #include "ChangeLog.h"
 #include "Theme.h"
+#include "Output.h"
+#include "TextSafety.h"
 
 using namespace omapixel;
 
@@ -101,8 +108,8 @@ QJsonObject catalog()
     QJsonObject species;
     species.insert(QStringLiteral("critter"), bank);
     QJsonObject palette;
-    palette.insert(QStringLiteral("I"), QStringLiteral("#1A1B26"));
-    palette.insert(QStringLiteral("S"), QStringLiteral("#F0CDBF"));
+    palette.insert(QStringLiteral("I"), QStringLiteral("#1A1B26FF"));
+    palette.insert(QStringLiteral("S"), QStringLiteral("#F0CDBFFF"));
     QJsonObject declared;
     declared.insert(QStringLiteral("idle"), 2);
 
@@ -147,6 +154,51 @@ bool writeDocument(const QString &path, const Document &document)
     QString error;
     return Codec::writeFile(path, document, &error);
 }
+
+void registerQmlTypes()
+{
+    qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+    qmlRegisterUncreatableType<DocumentModel>(
+        "omapixel", 1, 0, "DocumentModel", QStringLiteral("owned by the test harness"));
+}
+
+struct ProcessResult {
+    int exitCode = -1;
+    QByteArray output;
+    QByteArray error;
+};
+
+ProcessResult runProcess(const QString &program, const QStringList &arguments,
+                         const QProcessEnvironment &environment = {})
+{
+    QProcess process;
+    process.setProgram(program);
+    process.setArguments(arguments);
+    if (!environment.isEmpty())
+        process.setProcessEnvironment(environment);
+    process.start();
+    if (!process.waitForStarted(5000) || !process.waitForFinished(30000))
+        return {-1, process.readAllStandardOutput(), process.readAllStandardError()};
+    return {process.exitCode(), process.readAllStandardOutput(), process.readAllStandardError()};
+}
+
+struct ScopedProcessCleanup
+{
+    QList<QProcess *> processes;
+
+    ~ScopedProcessCleanup()
+    {
+        for (QProcess *process : processes) {
+            if (!process || process->state() == QProcess::NotRunning)
+                continue;
+            process->terminate();
+            if (!process->waitForFinished(2000)) {
+                process->kill();
+                process->waitForFinished(2000);
+            }
+        }
+    }
+};
 
 } // namespace
 
@@ -241,7 +293,7 @@ private slots:
         QVERIFY(!doc.removeFrame(QStringLiteral("idle"), 0));
         doc.addFrame(QStringLiteral("idle"), 0, false);
         QVERIFY(doc.removeFrame(QStringLiteral("idle"), 0));
-        QCOMPARE(doc.clip(QStringLiteral("idle"))->frames.size(), 1);
+        QCOMPARE(doc.clip(QStringLiteral("idle"))->frameCount, 1);
     }
 
     void renamingKeepsTheClipWhereItWas()
@@ -316,12 +368,12 @@ private slots:
         doc.addClip(QStringLiteral("walk"));
         doc.addFrame(QStringLiteral("walk"), 0, false);
         doc.resize(6, 5);
-        for (const Clip &clip : doc.clips()) {
-            for (const Grid &grid : clip.frames) {
+        for (const Clip &clip : doc.clips())
+            for (int frame = 0; frame < clip.frameCount; ++frame) {
+                const Grid grid = doc.frame(clip.id, frame);
                 QCOMPARE(grid.columns(), 6);
                 QCOMPARE(grid.rows(), 5);
             }
-        }
     }
 
     void drawnBoundsIgnoreOuterEmptinessButKeepInternalGaps()
@@ -404,8 +456,27 @@ private slots:
     void theTransparentSlotMayNotBeColoured()
     {
         Document doc = sample();
-        doc.palette().set(Grid::Empty, QColor("#000000"));
-        QVERIFY(!doc.problems().isEmpty());
+        QVERIFY(!doc.palette().set(Grid::Empty, QColor("#000000")));
+        QVERIFY(doc.problems().isEmpty());
+    }
+
+    void paletteSlotValidationIsSharedByRuntimeAndCodec()
+    {
+        const QList<QChar> invalid{u'.', u'"', u'\\', QChar(0x00), QChar(0x1f),
+                                   QChar(0x7f), QChar(0x80), QChar(0x9f)};
+        for (const QChar slot : invalid) {
+            QVERIFY(!Palette::validSlot(slot));
+            Palette palette;
+            QVERIFY(!palette.set(slot, QColor("#112233")));
+            Document doc = Document::blank(1, 1);
+            QString error;
+            QVERIFY(!doc.setPaletteColour(slot, QColor("#112233"), &error));
+            QVERIFY(error.startsWith(QStringLiteral("E_PALETTE_VALUE")));
+        }
+        QVERIFY(Palette::validSlot(QChar(0x20)));
+         QVERIFY(!Palette::validSlot(QChar(0x2028)));
+         QVERIFY(!Palette::validSlot(QChar(0x202E)));
+         QVERIFY(text::isSafe(QStringLiteral("日本語")));
     }
 
     // ----------------------------------------------------------------- Codec
@@ -432,21 +503,231 @@ private slots:
         QCOMPARE(back.document.palette().letters(), (QList<QChar>{u'Z', u'A'}));
     }
 
-    void theLegacyObjectShapeStillOpens()
+    void v2LayerIdentityLookupsAndMetadataRoundTrip()
     {
-        // Documents written by the Python version. Nobody's file should stop
-        // opening because the program grew up.
+        Document doc = Document::blank(2, 2);
+        const QString clipId = doc.clips().first().id;
+        const QString layerId = doc.layers().first().id;
+        QVERIFY(doc.addLayer(QStringLiteral("background"), QStringLiteral("Background"),
+                             QStringLiteral("shared")));
+        Layer *background = doc.layerById(QStringLiteral("background"));
+        QVERIFY(background);
+        background->visible = false;
+        background->opacity = 192;
+        background->mode = QStringLiteral("screen");
+        QVERIFY(doc.setCel(QStringLiteral("background"), clipId, 0,
+                           Grid::fromRows({QStringLiteral("AA"), QStringLiteral("A.")})));
+        background->locked = true;
+
+        QCOMPARE(doc.layerById(layerId)->name, QStringLiteral("Layer"));
+        QCOMPARE(doc.layerByName(QStringLiteral("Background"))->id,
+                 QStringLiteral("background"));
+        QCOMPARE(doc.cel(QStringLiteral("Background"), clipId, 0).row(0),
+                 QStringLiteral("AA"));
+        const QString originalClipId = doc.clips().first().id;
+        QVERIFY(doc.renameClip(QStringLiteral("idle"), QStringLiteral("Renamed")));
+        QCOMPARE(doc.clips().first().id, originalClipId);
+        QCOMPARE(doc.clipById(originalClipId)->name, QStringLiteral("Renamed"));
+
+        const QByteArray encoded = Codec::write(doc);
+        QCOMPARE(encoded, Codec::write(doc));
+        const Codec::Result back = Codec::read(encoded);
+        QVERIFY2(back.ok, qPrintable(back.error));
+        QVERIFY(back.document == doc);
+    }
+
+    void layerIntegrityChecksCatchBrokenCelStorage()
+    {
+        Document doc = Document::blank(2, 2);
+        doc.layers().first().cels.clear();
+        QVERIFY(!doc.problems().isEmpty());
+        QVERIFY(doc.problems().join(QStringLiteral("\n")).contains(
+            QStringLiteral("invalid cel count")));
+    }
+
+    void layerEditsRespectScopeVisibilityAndLockState()
+    {
+        struct Case {
+            QString storage;
+            EditScope scope;
+            bool hidden;
+            bool locked;
+        };
+        const QList<Case> cases{
+            {QStringLiteral("animated"), EditScope::CurrentFrame, false, false},
+            {QStringLiteral("animated"), EditScope::AllFrames, true, false},
+            {QStringLiteral("shared"), EditScope::CurrentFrame, false, false},
+            {QStringLiteral("shared"), EditScope::AllFrames, true, false},
+            {QStringLiteral("animated"), EditScope::CurrentFrame, true, true},
+            {QStringLiteral("animated"), EditScope::AllFrames, false, true},
+            {QStringLiteral("shared"), EditScope::CurrentFrame, true, true},
+            {QStringLiteral("shared"), EditScope::AllFrames, false, true},
+        };
+        for (const Case &test : cases) {
+            Document doc = Document::blank(2, 1);
+            QVERIFY(doc.addClip(QStringLiteral("walk")));
+            QVERIFY(doc.addFrame(QStringLiteral("idle"), 0, false));
+            QVERIFY(doc.addLayer(QStringLiteral("target"), QStringLiteral("Target"),
+                                 test.storage));
+            Layer *layer = doc.layerById(QStringLiteral("target"));
+            QVERIFY(layer);
+            layer->visible = !test.hidden;
+            QVERIFY(doc.setCel(QStringLiteral("target"), QStringLiteral("idle"), 0,
+                               Grid::fromRows({QStringLiteral("I.")})));
+            QVERIFY(doc.setCel(QStringLiteral("target"), QStringLiteral("idle"), 1,
+                               Grid::fromRows({QStringLiteral("I.")})));
+            layer->locked = test.locked;
+
+            const Document before = doc;
+            int changed = 0;
+            QString error;
+            const bool edited = doc.editLayer(
+                QStringLiteral("target"), QStringLiteral("idle"), 0, test.scope,
+                [](Grid &grid) { grid.set(1, 0, u'A'); }, &changed, &error);
+            if (test.locked) {
+                QVERIFY(!edited);
+                QCOMPARE(doc, before);
+                QVERIFY(error.startsWith(QStringLiteral("E_LAYER_LOCKED")));
+                continue;
+            }
+            QVERIFY(edited);
+            QCOMPARE(changed, test.storage == QStringLiteral("shared")
+                                 ? 1
+                                 : test.scope == EditScope::AllFrames ? 2 : 1);
+            QCOMPARE(doc.cel(QStringLiteral("target"), QStringLiteral("idle"), 0)
+                         .at(1, 0),
+                     QChar(u'A'));
+            QCOMPARE(doc.cel(QStringLiteral("target"), QStringLiteral("idle"), 1)
+                         .at(1, 0),
+                     test.storage == QStringLiteral("shared")
+                         ? QChar(u'A')
+                         : test.scope == EditScope::AllFrames ? QChar(u'A') : Grid::Empty);
+        }
+    }
+
+    void frameStructureIsAtomicAndPreservesSharedCels()
+    {
+        Document doc = Document::blank(2, 1);
+        QVERIFY(doc.addLayer(QStringLiteral("shared"), QStringLiteral("Shared"),
+                             QStringLiteral("shared")));
+        QVERIFY(doc.setCel(QStringLiteral("layer"), QStringLiteral("idle"), 0,
+                           Grid::fromRows({QStringLiteral("I.")})));
+        QVERIFY(doc.setCel(QStringLiteral("shared"), QStringLiteral("idle"), 0,
+                           Grid::fromRows({QStringLiteral(".A")})));
+        const QList<Cel> sharedBefore = doc.layerById(QStringLiteral("shared"))->cels;
+        QVERIFY(doc.addFrame(QStringLiteral("idle"), 0, true));
+        QCOMPARE(doc.layerById(QStringLiteral("shared"))->cels, sharedBefore);
+        QCOMPARE(doc.layerById(QStringLiteral("layer"))->cels.size(), 2);
+        QCOMPARE(doc.cel(QStringLiteral("layer"), QStringLiteral("idle"), 1).row(0),
+                 QStringLiteral("I."));
+        QCOMPARE(doc.cel(QStringLiteral("shared"), QStringLiteral("idle"), 1).row(0),
+                 QStringLiteral(".A"));
+
+        Document malformed = doc;
+        malformed.layerById(QStringLiteral("layer"))->cels.removeLast();
+        const Document before = malformed;
+        QVERIFY(!malformed.addFrame(QStringLiteral("idle"), 0, false));
+        QCOMPARE(malformed, before);
+    }
+
+    void frameLimitsReturnDeterministicErrors()
+    {
+        Document frames = Document::blank(1, 1);
+        for (int index = 1; index < Document::maxFramesPerClip; ++index)
+            QVERIFY(frames.addFrame(QStringLiteral("idle"), index - 1, false));
+        QString error;
+        QVERIFY(!frames.addFrame(QStringLiteral("idle"), Document::maxFramesPerClip - 1,
+                                 false, &error));
+        QVERIFY(error.startsWith(QStringLiteral("E_FRAME_LIMIT")));
+
+        Document cels = Document::blank(1, 1);
+        for (int index = 1; index < Document::maxFramesPerClip - 1; ++index)
+            QVERIFY(cels.addFrame(QStringLiteral("idle"), index - 1, false));
+        for (int index = 0; index < 15; ++index)
+            QVERIFY(cels.duplicateLayer(QStringLiteral("layer"),
+                                        QStringLiteral("copy-%1").arg(index),
+                                        QStringLiteral("Copy %1").arg(index)));
+        QVERIFY(!cels.addFrame(QStringLiteral("idle"), 0, false, &error));
+        QVERIFY(error.startsWith(QStringLiteral("E_CEL_LIMIT")));
+    }
+
+    void storageConversionReportsLossBeforeCollapse()
+    {
+        Document doc = Document::blank(2, 1);
+        QVERIFY(doc.addFrame(QStringLiteral("idle"), 0, false));
+        QVERIFY(doc.setCel(QStringLiteral("layer"), QStringLiteral("idle"), 0,
+                           Grid::fromRows({QStringLiteral("I.")})));
+        QVERIFY(doc.setCel(QStringLiteral("layer"), QStringLiteral("idle"), 1,
+                           Grid::fromRows({QStringLiteral(".I")})));
+        int lost = 0;
+        QString error;
+        QVERIFY(!doc.convertLayerStorage(QStringLiteral("layer"), QStringLiteral("shared"),
+                                          &lost, &error));
+        QCOMPARE(lost, 2);
+        QVERIFY(error.startsWith(QStringLiteral("E_LAYER_DATA_LOSS")));
+        QCOMPARE(doc.layerById(QStringLiteral("layer"))->storage,
+                 QStringLiteral("animated"));
+
+        QVERIFY(doc.setCel(QStringLiteral("layer"), QStringLiteral("idle"), 1,
+                           Grid::fromRows({QStringLiteral("I.")})));
+        QVERIFY(doc.convertLayerStorage(QStringLiteral("layer"), QStringLiteral("shared"),
+                                        &lost, &error));
+        QCOMPARE(doc.layerById(QStringLiteral("layer"))->cels.size(), 1);
+        QVERIFY(doc.convertLayerStorage(QStringLiteral("layer"), QStringLiteral("animated"),
+                                        &lost, &error));
+        QCOMPARE(doc.layerById(QStringLiteral("layer"))->cels.size(), 2);
+        doc.layerById(QStringLiteral("layer"))->locked = true;
+        QVERIFY(!doc.setLayerMode(QStringLiteral("layer"), QStringLiteral("multiply"),
+                                  &error));
+        QVERIFY(error.startsWith(QStringLiteral("E_LAYER_LOCKED")));
+    }
+
+    void paletteRemovalAndBoundsUseEveryLayer()
+    {
+        Document doc = Document::blank(4, 3);
+        QVERIFY(doc.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay"),
+                             QStringLiteral("shared")));
+        Layer *overlay = doc.layerById(QStringLiteral("overlay"));
+        QVERIFY(overlay);
+        overlay->visible = false;
+        QVERIFY(doc.setCel(QStringLiteral("overlay"), QStringLiteral("idle"), 0,
+                           Grid::fromRows({QStringLiteral("...."), QStringLiteral("...I"),
+                                           QStringLiteral("....")})));
+        QCOMPARE(doc.drawnBounds(QStringLiteral("idle"), 0), QRect(3, 1, 1, 1));
+        QString error;
+        QVERIFY(!doc.removePaletteSlot(u'I', &error));
+        QVERIFY(error.startsWith(QStringLiteral("E_PALETTE_IN_USE")));
+        int changed = 0;
+        QVERIFY(doc.editLayer(QStringLiteral("overlay"), QStringLiteral("idle"), 0,
+                              EditScope::AllFrames,
+                              [](Grid &grid) { ops::clear(grid); }, &changed, &error));
+        QVERIFY(doc.removePaletteSlot(u'I', &error));
+    }
+
+    void differencesNameLayerAndCel()
+    {
+        Document left = Document::blank(2, 1);
+        QVERIFY(left.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay"),
+                              QStringLiteral("shared")));
+        Document right = left;
+        QVERIFY(right.setCel(QStringLiteral("overlay"), QStringLiteral("idle"), 0,
+                             Grid::fromRows({QStringLiteral("I.")})));
+        const QStringList differences = documentDifferences(left, right);
+        QVERIFY(differences.join(QStringLiteral("\n")).contains(QStringLiteral("overlay")));
+        QVERIFY(differences.join(QStringLiteral("\n")).contains(QStringLiteral("frame 0")));
+    }
+
+    void theLegacyObjectShapeIsRejectedByTheCleanCut()
+    {
+        // v1 is deliberately not a production codec input after the clean cut.
         const QByteArray legacy = R"({
             "size": {"w": 2, "h": 2},
             "palette": {"I": "#1A1B26"},
             "clips": {"idle": {"fps": 6, "frames": [["II", "I."]]}}
         })";
         const Codec::Result read = Codec::read(legacy);
-        QVERIFY2(read.ok, qPrintable(read.error));
-        QCOMPARE(read.document.clipNames(), QStringList{QStringLiteral("idle")});
-        QCOMPARE(read.document.clip(QStringLiteral("idle"))->fps, 6);
-        QCOMPARE(read.document.frame(QStringLiteral("idle"), 0).row(1),
-                 QStringLiteral("I."));
+        QVERIFY(!read.ok);
+        QVERIFY(read.error.contains(QLatin1String("size")));
     }
 
     void badJsonIsAMessageAndNotACrash()
@@ -456,19 +737,23 @@ private slots:
         QVERIFY(!read.error.isEmpty());
     }
 
-    void aMissingSizeIsRefused()
+    void aMissingCanvasIsRefused()
     {
         const Codec::Result read = Codec::read(QByteArray(R"({"clips": []})"));
         QVERIFY(!read.ok);
-        QVERIFY(read.error.contains(QLatin1String("size")));
+        QVERIFY(read.error.contains(QLatin1String("version")));
     }
 
     void malformedDocumentsAreRefusedBeforeTheyCanBeNormalised()
     {
         const QByteArray valid = R"({
-            "size": {"w": 1, "h": 1},
-            "palette": [{"slot": "I", "colour": "#112233"}],
-            "clips": [{"name": "idle", "fps": 8, "frames": [["I"]]}]
+            "version": 2,
+            "canvas": {"width": 1, "height": 1},
+            "palette": [{"slot": "I", "colour": "#112233FF"}],
+            "clips": [{"id": "idle", "name": "Idle", "fps": 8, "frameCount": 1}],
+            "layers": [{"id": "layer", "name": "Layer", "visible": true,
+                         "locked": false, "opacity": 255, "mode": "normal",
+                         "storage": "shared", "cels": [{"scope": "all", "rows": ["I"]}]}]
         })";
         QVERIFY(Codec::read(valid).ok);
 
@@ -478,18 +763,173 @@ private slots:
 
         QByteArray shortRow = valid;
         shortRow.replace("[\"I\"]", "[\"\"]");
-        QVERIFY(Codec::read(shortRow).error.contains(QLatin1String("QChars")));
+        QVERIFY(Codec::read(shortRow).error.contains(QLatin1String("characters")));
 
         QByteArray unknownSlot = valid;
         unknownSlot.replace("[\"I\"]", "[\"Z\"]");
         QVERIFY(Codec::read(unknownSlot).error.contains(QLatin1String("undefined")));
 
         const QByteArray duplicate = R"({
-            "size": {"w": 1, "w": 2, "h": 1},
-            "palette": [{"slot": "I", "colour": "#112233"}],
-            "clips": [{"name": "idle", "fps": 8, "frames": [["I"]]}]
+            "version": 2, "version": 2,
+            "canvas": {"width": 1, "height": 1},
+            "palette": [{"slot": "I", "colour": "#112233FF"}],
+            "clips": [{"id": "idle", "name": "Idle", "fps": 8, "frameCount": 1}],
+            "layers": [{"id": "layer", "name": "Layer", "visible": true,
+                         "locked": false, "opacity": 255, "mode": "normal",
+                         "storage": "shared", "cels": [{"scope": "all", "rows": ["I"]}]}]
         })";
         QVERIFY(Codec::read(duplicate).error.contains(QLatin1String("duplicate")));
+    }
+
+    void unicodeFormatCharactersAreRejectedAcrossRuntimeAndBridge()
+    {
+        const QString bidi = QStringLiteral("safe") + QChar(0x202E)
+            + QStringLiteral("name");
+        QVERIFY(!text::isSafe(bidi));
+        QCOMPARE(text::escapeForTerminal(bidi), QStringLiteral("safe\\u202ename"));
+        QVERIFY(!Palette::validSlot(QChar(0x202E)));
+
+        Document document = sample();
+        QString error;
+        QVERIFY(!document.renameLayer(QStringLiteral("layer"), bidi, &error));
+        QVERIFY(error.contains(QStringLiteral("invalid")));
+
+        QJsonObject invalid = catalog();
+        QJsonObject species = invalid.value(QStringLiteral("species")).toObject();
+        species.insert(bidi, species.take(QStringLiteral("critter")));
+        invalid.insert(QStringLiteral("species"), species);
+        const Bridge::Result result = Bridge::importSpecies(
+            invalid, bidi, QStringLiteral("0"));
+        QVERIFY(!result.ok);
+        QVERIFY(result.error.contains(QStringLiteral("unsafe")));
+    }
+
+    void supplementaryUnicodeScalarsAreClassified()
+    {
+        const auto scalar = [](uint codepoint) {
+            QString value;
+            value += QChar::highSurrogate(codepoint);
+            value += QChar::lowSurrogate(codepoint);
+            return value;
+        };
+        QVERIFY(!text::isSafe(scalar(0xE0001)));
+        QVERIFY(!text::isSafe(scalar(0x1FFFE)));
+        QVERIFY(text::isSafe(scalar(0x1F600)));
+        QVERIFY(text::isUnsafe(0xE0001));
+        QVERIFY(text::isUnsafe(0x1FFFE));
+        QVERIFY(!text::isUnsafe(0x1F600));
+    }
+
+    void duplicateScannerIsNullSafeForDuplicateAndMalformedJson()
+    {
+        QVERIFY(Codec::rejectDuplicateJsonKeys(
+            QByteArrayLiteral(R"({"key":1,"key":2})"), nullptr));
+        QVERIFY(Codec::rejectDuplicateJsonKeys(
+            QByteArrayLiteral(R"({"key":})"), nullptr));
+        QVERIFY(!Codec::rejectDuplicateJsonKeys(
+            QByteArrayLiteral(R"({"key":1})"), nullptr));
+    }
+
+    void catalogDuplicateKeysAreRejectedBeforeQtNormalization()
+    {
+        const QByteArray duplicate =
+            R"({"palette":{},"palette":{},"states":{},"species":{}})";
+        QString error;
+        QVERIFY(Codec::rejectDuplicateJsonKeys(duplicate, &error));
+        QVERIFY(error.contains(QStringLiteral("duplicate")));
+        QVERIFY(QJsonDocument::fromJson(duplicate).object().contains(
+            QStringLiteral("palette")));
+    }
+
+    void cliCatalogImportAndExportRejectDuplicateKeys()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const QString catalogPath = root.filePath(QStringLiteral("catalog.json"));
+        QFile catalogFile(catalogPath);
+        QVERIFY(catalogFile.open(QIODevice::WriteOnly));
+        catalogFile.write(R"({"palette":{},"palette":{},"states":{},"species":{}})");
+        catalogFile.close();
+        const QString documentPath = root.filePath(QStringLiteral("document.json"));
+        QVERIFY(writeDocument(documentPath, sample()));
+        const QString cli = qEnvironmentVariable(
+            "OMAPIXEL_CLI", QStringLiteral(SOURCE_DIR "/build/bin/omapixel"));
+        const QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+
+        ProcessResult result = runProcess(
+            cli, {QStringLiteral("import"), catalogPath, QStringLiteral("--name"),
+                  QStringLiteral("critter"), QStringLiteral("--out"),
+                  root.filePath(QStringLiteral("imported.json"))}, environment);
+        QCOMPARE(result.exitCode, 1);
+        QVERIFY(result.error.contains(QByteArrayLiteral("duplicate")));
+
+        result = runProcess(
+            cli, {QStringLiteral("export"), documentPath, catalogPath,
+                  QStringLiteral("--name"), QStringLiteral("critter")}, environment);
+        QCOMPARE(result.exitCode, 1);
+        QVERIFY(result.error.contains(QByteArrayLiteral("duplicate")));
+    }
+
+    void cliRejectsNonRegularDocumentCatalogAndBatchInputs()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const QString fifoPath = root.filePath(QStringLiteral("input.fifo"));
+        QVERIFY(::mkfifo(fifoPath.toLocal8Bit().constData(), 0600) == 0);
+        const QString documentPath = root.filePath(QStringLiteral("document.json"));
+        QVERIFY(writeDocument(documentPath, sample()));
+        const QString cli = qEnvironmentVariable(
+            "OMAPIXEL_CLI", QStringLiteral(SOURCE_DIR "/build/bin/omapixel"));
+        const QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+
+        ProcessResult result = runProcess(
+            cli, {QStringLiteral("show"), fifoPath}, environment);
+        QCOMPARE(result.exitCode, 1);
+        QVERIFY(result.error.contains(QByteArrayLiteral("input is not a regular file")));
+
+        result = runProcess(
+            cli, {QStringLiteral("batch"), documentPath, QStringLiteral("--script"),
+                  fifoPath}, environment);
+        QCOMPARE(result.exitCode, 1);
+        QVERIFY(result.error.contains(QByteArrayLiteral("input is not a regular file")));
+
+        result = runProcess(
+            cli, {QStringLiteral("import"), fifoPath, QStringLiteral("--name"),
+                  QStringLiteral("critter"), QStringLiteral("--out"),
+                  root.filePath(QStringLiteral("imported.json"))}, environment);
+        QCOMPARE(result.exitCode, 1);
+        QVERIFY(result.error.contains(QByteArrayLiteral("input is not a regular file")));
+    }
+
+    void boundedReaderUsesOneDescriptorForSwapsSymlinksAndFifos()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const QString path = root.filePath(QStringLiteral("input.json"));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write("1234"), qint64(4));
+        file.close();
+
+        QByteArray bytes;
+        QString error;
+        QVERIFY(input::readRegularFile(path, 4, &bytes, &error));
+        QCOMPARE(bytes, QByteArrayLiteral("1234"));
+        QVERIFY(input::readRegularFile(path, 3, &bytes, &error));
+        QCOMPARE(bytes.size(), 4);
+
+        const QString link = root.filePath(QStringLiteral("input-link.json"));
+        QVERIFY(QFile::link(path, link));
+        QVERIFY(!input::readRegularFile(link, 4, &bytes, &error));
+        QVERIFY(error.contains(QStringLiteral("regular file")));
+
+        QVERIFY(QFile::remove(path));
+        QVERIFY(::mkfifo(path.toLocal8Bit().constData(), 0600) == 0);
+        QElapsedTimer timer;
+        timer.start();
+        QVERIFY(!input::readRegularFile(path, 4, &bytes, &error));
+        QVERIFY(timer.elapsed() < 1000);
+        QVERIFY(error.contains(QStringLiteral("regular file")));
     }
 
     void resourceThresholdsWarnWithoutRefusingTheDocument()
@@ -700,6 +1140,402 @@ private slots:
         QCOMPARE(ansi.count(QLatin1Char('\n')), 2);
     }
 
+    void terminalOutputBudgetRefusesBeforeBuildingOutput()
+    {
+        const Document huge = Document::blank(2048, 2048);
+        QStringList diagnostics;
+        QVERIFY(render::toText(huge, QStringLiteral("idle"), 0, {}, &diagnostics).isEmpty());
+        QVERIFY(diagnostics.first().contains(QStringLiteral("hard cell limit")));
+        diagnostics.clear();
+        QVERIFY(render::toAnsi(huge, QStringLiteral("idle"), 0, {}, &diagnostics).isEmpty());
+        QVERIFY(diagnostics.first().contains(QStringLiteral("hard cell limit")));
+    }
+
+    void compositeLayersMatchGoldenPixelsAndIsolation()
+    {
+        Document doc = Document::blank(2, 2);
+        doc.palette() = Palette();
+        doc.palette().set(u'R', QColor(220, 40, 50, 255));
+        doc.palette().set(u'G', QColor(30, 190, 80, 255));
+        doc.palette().set(u'B', QColor(40, 70, 220, 255));
+        QVERIFY(doc.setCel(QStringLiteral("layer"), QStringLiteral("idle"), 0,
+                           Grid::fromRows({QStringLiteral("R."),
+                                           QStringLiteral(".R")})));
+        QVERIFY(doc.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay"),
+                             QStringLiteral("shared")));
+        QVERIFY(doc.setCel(QStringLiteral("overlay"), QStringLiteral("idle"), 0,
+                           Grid::fromRows({QStringLiteral(".G"),
+                                           QStringLiteral("B.")})));
+
+        const QImage image = render::toImage(doc, QStringLiteral("idle"), 0, {});
+        QCOMPARE(image.size(), QSize(2, 2));
+        QCOMPARE(QColor::fromRgba(image.pixel(0, 0)), QColor(220, 40, 50, 255));
+        QCOMPARE(QColor::fromRgba(image.pixel(1, 0)), QColor(30, 190, 80, 255));
+        QCOMPARE(QColor::fromRgba(image.pixel(0, 1)), QColor(40, 70, 220, 255));
+        QCOMPARE(QColor::fromRgba(image.pixel(1, 1)), QColor(220, 40, 50, 255));
+
+        doc.layerById(QStringLiteral("overlay"))->visible = false;
+        const QImage hidden = render::toImage(doc, QStringLiteral("idle"), 0, {});
+        QCOMPARE(QColor::fromRgba(hidden.pixel(1, 0)), QColor(0, 0, 0, 0));
+        QCOMPARE(QColor::fromRgba(hidden.pixel(0, 0)), QColor(220, 40, 50, 255));
+        doc.layerById(QStringLiteral("overlay"))->visible = true;
+
+        render::Options isolated;
+        isolated.isolated = true;
+        isolated.layer = QStringLiteral("layer");
+        const QImage base = render::toImage(doc, QStringLiteral("idle"), 0, isolated);
+        QCOMPARE(QColor::fromRgba(base.pixel(1, 0)), QColor(0, 0, 0, 0));
+        isolated.layer = QStringLiteral("overlay");
+        const QImage top = render::toImage(doc, QStringLiteral("idle"), 0, isolated);
+        QCOMPARE(QColor::fromRgba(top.pixel(0, 0)), QColor(0, 0, 0, 0));
+        QCOMPARE(QColor::fromRgba(top.pixel(1, 0)), QColor(30, 190, 80, 255));
+
+        QCOMPARE(render::toText(doc, QStringLiteral("idle"), 0),
+                 QStringLiteral("RG\nBR\n"));
+    }
+
+    void sourceOverUsesContractedIntegerRoundingAtEveryOpacity()
+    {
+        const QList<int> opacities{0, 1, 50, 99, 100};
+        const QList<QColor> expected{
+            QColor(0, 0, 0, 0),
+            QColor(255, 0, 0, 1),
+            QColor(199, 102, 51, 50),
+            QColor(201, 100, 49, 99),
+            QColor(199, 99, 51, 100),
+        };
+        for (int index = 0; index < opacities.size(); ++index) {
+            Document doc = Document::blank(1, 1);
+            doc.palette() = Palette();
+            doc.palette().set(u'S', QColor(200, 100, 50, 255));
+            doc.setFrame(QStringLiteral("idle"), 0,
+                         Grid::fromRows({QStringLiteral("S")}));
+            doc.layers().first().opacity = opacities.at(index);
+            const QImage image = render::toImage(doc, QStringLiteral("idle"), 0, {});
+            QCOMPARE(QColor::fromRgba(image.pixel(0, 0)), expected.at(index));
+        }
+    }
+
+    void sourceOverCompositesAlphaOverTheFinalChecker()
+    {
+        Document doc = Document::blank(1, 1);
+        doc.palette() = Palette();
+        doc.palette().set(u'R', QColor(255, 0, 0, 128));
+        doc.setFrame(QStringLiteral("idle"), 0,
+                     Grid::fromRows({QStringLiteral("R")}));
+        render::Options options;
+        options.checker = true;
+        options.checkerDark = QColor(16, 16, 16);
+        options.checkerLight = QColor(32, 32, 32);
+        const QImage image = render::toImage(doc, QStringLiteral("idle"), 0, options);
+        QCOMPARE(QColor::fromRgba(image.pixel(0, 0)), QColor(136, 8, 8, 255));
+    }
+
+    void textFlatteningUsesPaletteOrderForEqualDistances()
+    {
+        Document doc = Document::blank(1, 1);
+        doc.palette() = Palette();
+        doc.palette().set(u'F', QColor(10, 10, 10, 128));
+        doc.palette().set(u'S', QColor(10, 10, 12, 128));
+        doc.setFrame(QStringLiteral("idle"), 0,
+                     Grid::fromRows({QStringLiteral("F")}));
+        QVERIFY(doc.addLayer(QStringLiteral("top"), QStringLiteral("Top"),
+                             QStringLiteral("shared")));
+        QVERIFY(doc.setCel(QStringLiteral("top"), QStringLiteral("idle"), 0,
+                           Grid::fromRows({QStringLiteral("S")})));
+        QCOMPARE(render::toText(doc, QStringLiteral("idle"), 0),
+                 QStringLiteral("F\n"));
+    }
+
+    void quantizerGoldenUsesPaletteOrderAndReportsLoss()
+    {
+        Document doc = Document::blank(1, 1);
+        doc.palette() = Palette();
+        doc.palette().set(u'A', QColor(0, 0, 0));
+        doc.palette().set(u'B', QColor(254, 254, 254));
+        doc.setFrame(QStringLiteral("idle"), 0, Grid::fromRows({QStringLiteral("B")}));
+        doc.layers().first().opacity = 127;
+        doc.layers().first().cels.first().grid = Grid::fromRows({QStringLiteral("A")});
+
+        render::QuantizationReport report;
+        const Grid flattened = render::toGrid(doc, QStringLiteral("idle"), 0,
+                                              render::Options(), nullptr, &report);
+        QCOMPARE(flattened.toRows(), QStringList{QStringLiteral("A")});
+        QCOMPARE(report.composedPixels, 1);
+        QCOMPARE(report.exactMatches, 0);
+        QCOMPARE(report.approximatedPixels, 1);
+        QCOMPARE(report.newSlots, 0);
+    }
+
+    void mergeDownPreviewAndApplyHaveIdenticalConsequences()
+    {
+        Document source = Document::blank(2, 1);
+        source.palette() = Palette();
+        source.palette().set(u'A', QColor(255, 0, 0));
+        source.palette().set(u'B', QColor(0, 0, 255));
+        source.palette().set(u'C', QColor(128, 0, 127));
+        source.setFrame(QStringLiteral("idle"), 0,
+                        Grid::fromRows({QStringLiteral("B.")}));
+        QVERIFY(source.addLayer(QStringLiteral("top"), QStringLiteral("Top"),
+                                QStringLiteral("shared")));
+        Layer *top = source.layerById(QStringLiteral("top"));
+        top->opacity = 128;
+        QVERIFY(source.setCel(QStringLiteral("top"), QStringLiteral("idle"), 0,
+                              Grid::fromRows({QStringLiteral("A.")})));
+
+        const QByteArray before = Codec::write(source);
+        const LayerOperationResult preview = previewMergeDown(source, QStringLiteral("top"));
+        QVERIFY2(preview, qPrintable(preview.error));
+        QCOMPARE(Codec::write(source), before);
+        QCOMPARE(preview.report.frames, 1);
+        QCOMPARE(preview.report.affectedPixels, 1);
+        QCOMPARE(preview.report.exactMatches, 1);
+        QCOMPARE(preview.report.approximatedPixels, 0);
+        QCOMPARE(preview.report.newSlots, 0);
+        QCOMPARE(preview.document.layers().size(), 1);
+        QCOMPARE(preview.document.layers().first().cels.first().grid.toRows(),
+                 QStringList{QStringLiteral("C.")});
+
+        Document applied = source;
+        LayerOperationReport appliedReport;
+        QString error;
+        QVERIFY2(applyMergeDown(&applied, QStringLiteral("top"), &appliedReport, &error),
+                 qPrintable(error));
+        QCOMPARE(appliedReport.frames, preview.report.frames);
+        QCOMPARE(appliedReport.affectedPixels, preview.report.affectedPixels);
+        QCOMPARE(appliedReport.exactMatches, preview.report.exactMatches);
+        QCOMPARE(appliedReport.approximatedPixels, preview.report.approximatedPixels);
+        QCOMPARE(Codec::write(applied), Codec::write(preview.document));
+    }
+
+    void mergeDownHonoursVisibilityOpacityOrderAndLocks()
+    {
+        Document doc = Document::blank(1, 1);
+        QVERIFY(doc.addLayer(QStringLiteral("hidden"), QStringLiteral("Hidden"),
+                             QStringLiteral("shared")));
+        Layer *hidden = doc.layerById(QStringLiteral("hidden"));
+        hidden->visible = false;
+        const QByteArray beforeHidden = Codec::write(doc);
+        const LayerOperationResult hiddenResult = previewMergeDown(doc, QStringLiteral("hidden"));
+        QVERIFY(!hiddenResult);
+        QVERIFY(hiddenResult.error.startsWith(QStringLiteral("E_LAYER_VISIBILITY")));
+        QCOMPARE(Codec::write(doc), beforeHidden);
+
+        hidden->visible = true;
+        doc.layers().first().visible = false;
+        const LayerOperationResult hiddenTarget =
+            previewMergeDown(doc, QStringLiteral("hidden"));
+        QVERIFY(!hiddenTarget);
+        QVERIFY(hiddenTarget.error.startsWith(QStringLiteral("E_LAYER_VISIBILITY")));
+        doc.layers().first().visible = true;
+        doc.layers().first().locked = true;
+        const QByteArray beforeLocked = Codec::write(doc);
+        const LayerOperationResult lockedResult = previewMergeDown(doc, QStringLiteral("hidden"));
+        QVERIFY(!lockedResult);
+        QVERIFY(lockedResult.error.startsWith(QStringLiteral("E_LAYER_LOCKED")));
+        QCOMPARE(Codec::write(doc), beforeLocked);
+
+        doc.layers().first().locked = false;
+        hidden->locked = true;
+        const LayerOperationResult sourceLocked = previewMergeDown(doc, QStringLiteral("hidden"));
+        QVERIFY(!sourceLocked);
+        QVERIFY(sourceLocked.error.startsWith(QStringLiteral("E_LAYER_LOCKED")));
+    }
+
+    void flattenVisibleIsSeparateDeterministicAndCancelSafe()
+    {
+        Document source = Document::blank(2, 1);
+        source.palette() = Palette();
+        source.palette().set(u'A', QColor(255, 0, 0));
+        source.palette().set(u'B', QColor(0, 0, 255));
+        source.setFrame(QStringLiteral("idle"), 0,
+                        Grid::fromRows({QStringLiteral("A.")}));
+        QVERIFY(source.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay"),
+                                QStringLiteral("shared")));
+        QVERIFY(source.setCel(QStringLiteral("overlay"), QStringLiteral("idle"), 0,
+                              Grid::fromRows({QStringLiteral(".B")})));
+        QVERIFY(source.addLayer(QStringLiteral("guide"), QStringLiteral("Guide"),
+                                QStringLiteral("shared")));
+        source.layerById(QStringLiteral("guide"))->visible = false;
+        QVERIFY(source.setCel(QStringLiteral("guide"), QStringLiteral("idle"), 0,
+                              Grid::fromRows({QStringLiteral("BB")})));
+
+        const QByteArray before = Codec::write(source);
+        const LayerOperationResult preview = previewFlattenVisible(source);
+        QVERIFY2(preview, qPrintable(preview.error));
+        QCOMPARE(Codec::write(source), before);
+        QCOMPARE(preview.document.layers().size(), 1);
+        QCOMPARE(preview.document.layers().first().name, QStringLiteral("Flattened"));
+        QCOMPARE(preview.document.layers().first().cels.first().grid.toRows(),
+                 QStringList{QStringLiteral("AB")});
+        QCOMPARE(preview.report.affectedPixels, 2);
+        QCOMPARE(preview.report.exactMatches, 2);
+        QCOMPARE(preview.report.approximatedPixels, 0);
+        QCOMPARE(preview.report.newSlots, 0);
+
+        const QByteArray firstOutput = Codec::write(preview.document);
+        const LayerOperationResult repeated = flattenVisible(preview.document);
+        QVERIFY2(repeated, qPrintable(repeated.error));
+        QCOMPARE(Codec::write(repeated.document), firstOutput);
+
+        Document applied = source;
+        LayerOperationReport appliedReport;
+        QString error;
+        QVERIFY2(applyFlattenVisible(&applied, &appliedReport, &error), qPrintable(error));
+        QCOMPARE(Codec::write(applied), firstOutput);
+        QCOMPARE(appliedReport.frames, preview.report.frames);
+        QCOMPARE(appliedReport.affectedPixels, preview.report.affectedPixels);
+        QCOMPARE(appliedReport.exactMatches, preview.report.exactMatches);
+        QCOMPARE(Codec::write(source), before);
+    }
+
+    void unknownSlotsAreSkippedAndDiagnosedOnEverySurface()
+    {
+        Document doc = Document::blank(1, 1);
+        doc.layers().first().cels.first().grid =
+            Grid::fromRows({QStringLiteral("?")});
+        QStringList diagnostics;
+        render::Options options;
+        const QImage image = render::toImage(doc, QStringLiteral("idle"), 0,
+                                              options, nullptr, nullptr,
+                                              &diagnostics);
+        QCOMPARE(QColor::fromRgba(image.pixel(0, 0)), QColor(0, 0, 0, 0));
+        QCOMPARE(diagnostics, QStringList{QStringLiteral("unknown palette slot `?` skipped")});
+        diagnostics.clear();
+        QCOMPARE(render::toText(doc, QStringLiteral("idle"), 0, options, &diagnostics),
+                 QStringLiteral(".\n"));
+        QCOMPARE(diagnostics, QStringList{QStringLiteral("unknown palette slot `?` skipped")});
+    }
+
+    void compositeCliCanSelectAnIsolatedLayer()
+    {
+        Document doc = Document::blank(1, 1);
+        doc.palette() = Palette();
+        doc.palette().set(u'A', QColor(255, 0, 0));
+        doc.palette().set(u'B', QColor(0, 0, 255));
+        doc.setFrame(QStringLiteral("idle"), 0, Grid::fromRows({QStringLiteral("A")}));
+        QVERIFY(doc.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay"),
+                             QStringLiteral("shared")));
+        doc.setCel(QStringLiteral("overlay"), QStringLiteral("idle"), 0,
+                   Grid::fromRows({QStringLiteral("B")}));
+        QCOMPARE(run(doc, QStringLiteral("text --isolated --layer-id overlay")).output,
+                 QStringLiteral("B\n"));
+    }
+
+    void nativeLayersCrossSurfaceAcceptanceFixture()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const QString runtime = root.path() + QStringLiteral("/runtime");
+        QVERIFY(QDir().mkpath(runtime));
+        QVERIFY(QFile::setPermissions(runtime, QFileDevice::ReadOwner
+                                               | QFileDevice::WriteOwner
+                                               | QFileDevice::ExeOwner));
+        const bool hadPreviousRuntime = qEnvironmentVariableIsSet("XDG_RUNTIME_DIR");
+        const QByteArray previousRuntime = qgetenv("XDG_RUNTIME_DIR");
+        qputenv("XDG_RUNTIME_DIR", runtime.toUtf8());
+
+        const QString documentPath = root.path() + QStringLiteral("/acceptance.json");
+        QVERIFY(QFile::copy(QStringLiteral(SOURCE_DIR
+                                           "/tests/fixtures/format-v2/valid/animated-shared.json"),
+                            documentPath));
+        const QString cli = qEnvironmentVariable(
+            "OMAPIXEL_CLI", QStringLiteral(SOURCE_DIR "/build/bin/omapixel"));
+        const QProcessEnvironment environment = [] {
+            QProcessEnvironment value = QProcessEnvironment::systemEnvironment();
+            value.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+            value.remove(QStringLiteral("QT_QPA_PLATFORMTHEME"));
+            return value;
+        }();
+
+        ProcessResult result = runProcess(
+            cli, {QStringLiteral("layer"), documentPath, QStringLiteral("list")}, environment);
+        QCOMPARE(result.exitCode, 0);
+        QVERIFY(result.output.contains("\"hero\""));
+
+        result = runProcess(cli, {QStringLiteral("paint"), documentPath,
+                                  QStringLiteral("--layer-id"), QStringLiteral("hero"),
+                                  QStringLiteral("--scope"), QStringLiteral("frame"),
+                                  QStringLiteral("--frame"), QStringLiteral("1"),
+                                  QStringLiteral("--at"), QStringLiteral("2,1"),
+                                  QStringLiteral("--slot"), QStringLiteral("A")}, environment);
+        QCOMPARE(result.exitCode, 0);
+
+        DocumentModel studio;
+        QVERIFY(studio.open(documentPath));
+        studio.setActiveLayerId(QStringLiteral("hero"));
+        studio.setFrame(0);
+        const QString beforeUndo = studio.slotAt(0, 0);
+        studio.beginStroke();
+        studio.paint(0, 0, QStringLiteral("B"));
+        studio.endStroke();
+        QCOMPARE(studio.slotAt(0, 0), QStringLiteral("B"));
+        studio.undo();
+        QCOMPARE(studio.slotAt(0, 0), beforeUndo);
+        studio.beginStroke();
+        studio.paint(2, 0, QStringLiteral("A"));
+        studio.endStroke();
+        QVERIFY(studio.dirty());
+        QVERIFY(studio.save());
+        QVERIFY(!studio.dirty());
+        // A reload of the just-saved bytes is deliberately a no-op; the later
+        // CLI write below proves the adopting path and returns true.
+        QVERIFY(!studio.reloadFromDisk());
+        QCOMPARE(studio.slotAt(2, 0), QStringLiteral("A"));
+
+         SessionPublisher publisher;
+         publisher.follow(&studio);
+         QJsonObject published = QJsonDocument::fromJson(publisher.snapshot()).object();
+         QVERIFY(!published.isEmpty());
+         QCOMPARE(published.value(QStringLiteral("path")).toString(),
+                  QFileInfo(documentPath).absoluteFilePath());
+         QCOMPARE(published.value(QStringLiteral("view")).toObject()
+                      .value(QStringLiteral("layerId")).toString(), QStringLiteral("hero"));
+
+        result = runProcess(cli, {QStringLiteral("paint"), documentPath,
+                                  QStringLiteral("--layer-id"), QStringLiteral("hero"),
+                                  QStringLiteral("--scope"), QStringLiteral("frame"),
+                                  QStringLiteral("--frame"), QStringLiteral("0"),
+                                  QStringLiteral("--at"), QStringLiteral("0,0"),
+                                  QStringLiteral("--slot"), QStringLiteral("A")}, environment);
+        QCOMPARE(result.exitCode, 0);
+        QVERIFY(studio.reloadFromDisk());
+        QCOMPARE(studio.slotAt(0, 0), QStringLiteral("A"));
+
+        const QString composite = root.path() + QStringLiteral("/composite.png");
+        const QString isolated = root.path() + QStringLiteral("/isolated.png");
+        result = runProcess(cli, {QStringLiteral("render"), documentPath,
+                                  QStringLiteral("-o"), composite}, environment);
+        QCOMPARE(result.exitCode, 0);
+        result = runProcess(cli, {QStringLiteral("render"), documentPath,
+                                  QStringLiteral("-o"), isolated, QStringLiteral("--isolated"),
+                                  QStringLiteral("--layer-id"), QStringLiteral("hero")}, environment);
+        QCOMPARE(result.exitCode, 0);
+        QVERIFY(QFileInfo::exists(composite));
+        QVERIFY(QFileInfo::exists(isolated));
+        QFile compositeFile(composite);
+        QFile isolatedFile(isolated);
+        QVERIFY(compositeFile.open(QIODevice::ReadOnly));
+        QVERIFY(isolatedFile.open(QIODevice::ReadOnly));
+        QVERIFY(compositeFile.readAll() != isolatedFile.readAll());
+
+        const QString flattened = root.path() + QStringLiteral("/flattened.json");
+        result = runProcess(cli, {QStringLiteral("flatten"), documentPath,
+                                  QStringLiteral("-o"), flattened}, environment);
+        QCOMPARE(result.exitCode, 1);
+        result = runProcess(cli, {QStringLiteral("flatten"), documentPath,
+                                  QStringLiteral("-o"), flattened, QStringLiteral("--anyway")},
+                            environment);
+        QCOMPARE(result.exitCode, 1);
+        QVERIFY(result.error.contains(QByteArrayLiteral("E_LAYER_LOCKED")));
+        QVERIFY(!QFileInfo::exists(flattened));
+        publisher.retire();
+        if (hadPreviousRuntime)
+            qputenv("XDG_RUNTIME_DIR", previousRuntime);
+        else
+            qunsetenv("XDG_RUNTIME_DIR");
+    }
+
     // ---------------------------------------------------------------- Bridge
 
     void aCatalogSurvivesTheRoundTrip()
@@ -717,6 +1553,32 @@ private slots:
                                QStringLiteral("0"));
         QVERIFY(pushed.ok);
         QCOMPARE(pushed.catalog, before);
+    }
+
+    void bridgeImportUsesTheFullV2PaletteSlotRules()
+    {
+        QJsonObject invalid = catalog();
+        QJsonObject palette = invalid.value(QStringLiteral("palette")).toObject();
+        palette.insert(QStringLiteral("."), QStringLiteral("#11223344"));
+        invalid.insert(QStringLiteral("palette"), palette);
+        Bridge::Result result = Bridge::importSpecies(
+            invalid, QStringLiteral("critter"), QStringLiteral("0"));
+        QVERIFY(!result.ok);
+        QVERIFY(result.error.contains(QStringLiteral("invalid slot")));
+
+        invalid = catalog();
+        palette = invalid.value(QStringLiteral("palette")).toObject();
+        palette.insert(QStringLiteral("X"), QStringLiteral("#112233"));
+        invalid.insert(QStringLiteral("palette"), palette);
+        result = Bridge::importSpecies(invalid, QStringLiteral("critter"), QStringLiteral("0"));
+        QVERIFY(!result.ok);
+        QVERIFY(result.error.contains(QStringLiteral("#RRGGBBAA")));
+
+        invalid = catalog();
+        invalid.insert(QStringLiteral("palette"), QJsonArray());
+        result = Bridge::importSpecies(invalid, QStringLiteral("critter"), QStringLiteral("0"));
+        QVERIFY(!result.ok);
+        QVERIFY(result.error.contains(QStringLiteral("must be an object")));
     }
 
     void everySequenceOfTheBankBecomesAClip()
@@ -883,10 +1745,10 @@ private slots:
         // return early whenever the declared size already matched -- leaving
         // `check` reporting a problem with no way to clear it.
         Document doc = Document::blank(8, 4);
-        Clip *clip = doc.clip(doc.clipNames().value(0));
-        clip->frames[0] = Grid::fromRows({QStringLiteral("RRRRRRRRRRRR"),
-                                          QStringLiteral("R.R"),
-                                          QStringLiteral("RR")});
+        Layer *layer = doc.layer(doc.layerIds().first());
+        layer->cels[0].grid = Grid::fromRows({QStringLiteral("RRRRRRRRRRRR"),
+                                              QStringLiteral("R.R"),
+                                              QStringLiteral("RR")});
         QVERIFY(!doc.problems().isEmpty());
 
         doc.resize(8, 4);
@@ -928,10 +1790,43 @@ private slots:
         // single invocation does, so a behaviour cannot be right in one and
         // wrong in the other.
         Document doc = Document::blank(8, 8);
-        const cli::Outcome painted = run(doc, QStringLiteral("paint --at 2,3 --slot R"));
+        const cli::Outcome painted = run(doc, QStringLiteral("paint --at 2,3 --slot R --frame 0"));
         QCOMPARE(painted.code, 0);
         QVERIFY(painted.changed);
         QCOMPARE(doc.frame(doc.clipNames().value(0), 0).at(2, 3), QChar(u'R'));
+    }
+
+    void cliDrawingTargetsLayerScopeAndLockPolicy()
+    {
+        Document doc = Document::blank(2, 1);
+        QVERIFY(doc.addFrame(QStringLiteral("idle"), 0, false));
+        QVERIFY(doc.addLayer(QStringLiteral("shared"), QStringLiteral("Shared"),
+                             QStringLiteral("shared")));
+
+        QCOMPARE(run(doc, QStringLiteral(
+                         "paint --layer-id layer --frame 0 --at 0,0 --slot I"))
+                     .code,
+                 0);
+        QCOMPARE(run(doc, QStringLiteral(
+                         "paint --layer-id layer --all-frames --at 1,0 --slot I"))
+                     .code,
+                 0);
+        QCOMPARE(doc.cel(QStringLiteral("layer"), QStringLiteral("idle"), 0).at(1, 0),
+                 QChar(u'I'));
+        QCOMPARE(doc.cel(QStringLiteral("layer"), QStringLiteral("idle"), 1).at(1, 0),
+                 QChar(u'I'));
+
+        const cli::Outcome shared = run(
+            doc, QStringLiteral("paint --layer-id shared --at 0,0 --slot I"));
+        QCOMPARE(shared.code, 0);
+        QCOMPARE(doc.cel(QStringLiteral("shared"), QStringLiteral("idle"), 1).at(0, 0),
+                 QChar(u'I'));
+
+        doc.layerById(QStringLiteral("layer"))->locked = true;
+        const cli::Outcome locked = run(
+            doc, QStringLiteral("paint --layer-id layer --frame 0 --at 0,0 --slot A"));
+        QCOMPARE(locked.code, 1);
+        QVERIFY(locked.error.contains(QStringLiteral("E_LAYER_LOCKED")));
     }
 
     void aCommandThatReadsDoesNotMarkTheDocumentChanged()
@@ -994,12 +1889,12 @@ private slots:
         QVERIFY(grown.setFps(QStringLiteral("idle"), 12));
         QCOMPARE(documentDifferences(sized, grown, before, after),
                  (QStringList{
-                     QStringLiteral("size: before is 4x3, after is 6x5"),
-                     QStringLiteral(
-                         "palette[0] I: colour is #1A1B26 in before, #999999 in after"),
-                     QStringLiteral("clip[0] (idle/idle): FPS is 8 in before, 12 in after"),
-                     QStringLiteral("clip[0] (idle/idle) frame 0: dimensions are "
-                                    "4x3 in before, 6x5 in after")}));
+                      QStringLiteral("size: before is 4x3, after is 6x5"),
+                      QStringLiteral(
+                          "palette[0] I: colour is #1A1B26 in before, #999999 in after"),
+                      QStringLiteral("layer[0] (layer/layer, Layer/Layer) cel idle frame 0: dimensions are "
+                                     "4x3 in before, 6x5 in after"),
+                      QStringLiteral("clip[0] (idle/idle): FPS is 8 in before, 12 in after")}));
 
         // Slot counts, slot order, slots on one side only, clip counts, and
         // clips on one side only.
@@ -1052,7 +1947,7 @@ private slots:
                                                  QStringLiteral("....")})));
         QCOMPARE(documentDifferences(drawn, touched, before, after),
                  (QStringList{
-                     QStringLiteral("clip[0] (idle/idle) frame 0: 4 pixel(s) differ")}));
+                     QStringLiteral("layer[0] (layer/layer, Layer/Layer) cel idle frame 0: 4 pixel(s) differ")}));
 
         // And the empty answer, which is what `diff` exits zero on.
         QVERIFY(documentDifferences(drawn, drawn, before, after).isEmpty());
@@ -1087,7 +1982,7 @@ private slots:
         QCOMPARE(changes, 4);
         QCOMPARE(doc.palette().colour(u'Z'), QColor(QStringLiteral("#123456")));
         QCOMPARE(doc.clip(QStringLiteral("walk"))->fps, 12);
-        QCOMPARE(doc.clip(QStringLiteral("walk"))->frames.size(), 2);
+        QCOMPARE(doc.clip(QStringLiteral("walk"))->frameCount, 2);
         QCOMPARE(doc.frame(QStringLiteral("walk"), 1).drawnCount(), 25);
         // ... and the other clip's frame is untouched.
         QCOMPARE(doc.frame(QStringLiteral("idle"), 0).drawnCount(), 0);
@@ -1559,9 +2454,9 @@ private slots:
         QVERIFY(doc.reloadFromDisk());
 
         QCOMPARE(doc.note(),
-                 QStringLiteral("drawing.json changed on disk: ")
-                     + QStringLiteral(
-                         "clip[0] (idle/idle) frame 0: 4 pixel(s) differ"));
+                      QStringLiteral("drawing.json changed on disk: ")
+                      + QStringLiteral(
+                          "layer[0] (layer/layer, Layer/Layer) cel idle frame 0: 4 pixel(s) differ"));
     }
 
     void aReloadThatReplacedUnsavedWorkSaysSo()
@@ -1582,7 +2477,7 @@ private slots:
         QVERIFY(doc.reloadFromDisk());
         QCOMPARE(doc.note(),
                  QStringLiteral("drawing.json changed on disk: ")
-                     + QStringLiteral("clip[0] (idle/idle) frame 0: 9 pixel(s) differ")
+                      + QStringLiteral("layer[0] (layer/layer, Layer/Layer) cel idle frame 0: 9 pixel(s) differ")
                      + QStringLiteral(
                          " — it replaced unsaved work, Ctrl+Z brings yours back"));
 
@@ -1802,6 +2697,810 @@ private slots:
         QCOMPARE(doc.palette().size(), paletteSize);
     }
 
+    void adversarialRenderInputsAreRejectedBeforeAllocation()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString source = dir.filePath(QStringLiteral("source.json"));
+        const QString output = dir.filePath(QStringLiteral("render.png"));
+        QVERIFY(writeDocument(source, sample()));
+        const QString cli = qEnvironmentVariable(
+            "OMAPIXEL_CLI", QStringLiteral(SOURCE_DIR "/build/bin/omapixel"));
+        const ProcessResult malformed = runProcess(
+            cli, {QStringLiteral("render"), source, QStringLiteral("--frame"),
+                  QStringLiteral("wat"), QStringLiteral("-o"), output});
+        QCOMPARE(malformed.exitCode, 2);
+        QVERIFY(malformed.error.contains("E_FRAME_OUT_OF_RANGE"));
+        const ProcessResult outOfRange = runProcess(
+            cli, {QStringLiteral("render"), source, QStringLiteral("--frame"),
+                  QStringLiteral("99"), QStringLiteral("-o"), output});
+        QCOMPARE(outOfRange.exitCode, 2);
+        QVERIFY(outOfRange.error.contains("E_FRAME_OUT_OF_RANGE"));
+
+        Document huge = Document::blank(Document::maxDimension, Document::maxDimension);
+        render::Options options;
+        options.scale = 64;
+        options.sheet = true;
+        QString error;
+        const QImage image = render::toImage(huge, QStringLiteral("idle"), 0,
+                                             options, nullptr, &error);
+        QVERIFY(image.isNull());
+        QVERIFY(error.contains(QStringLiteral("hard budget")));
+    }
+
+    void derivedOutputsRejectSymlinksAndSourceAliases()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString source = dir.filePath(QStringLiteral("source.json"));
+        const QString alias = dir.filePath(QStringLiteral("alias.json"));
+        const QString dangling = dir.filePath(QStringLiteral("dangling.json"));
+        QVERIFY(writeDocument(source, sample()));
+        QVERIFY(QFile::link(source, alias));
+        QVERIFY(QFile::link(dir.filePath(QStringLiteral("missing.json")), dangling));
+        const QByteArray before = Codec::write(sample());
+        QString error;
+        QVERIFY(!output::validate(alias, {source}, &error));
+        QVERIFY(error.contains(QStringLiteral("symlink")));
+        error.clear();
+        QVERIFY(!output::validate(dangling, {}, &error));
+        QVERIFY(error.contains(QStringLiteral("symlink")));
+
+        DocumentModel model;
+        QVERIFY(model.open(source));
+        QVERIFY(!model.exportImage(alias, 1, false, false));
+        const Codec::Result preserved = Codec::readFile(source);
+        QVERIFY(preserved);
+        QCOMPARE(Codec::write(preserved.document), before);
+
+        const QString cli = qEnvironmentVariable(
+            "OMAPIXEL_CLI", QStringLiteral(SOURCE_DIR "/build/bin/omapixel"));
+        const ProcessResult flattened = runProcess(
+            cli, {QStringLiteral("flatten"), source, QStringLiteral("-o"), alias,
+                  QStringLiteral("--anyway")});
+        QCOMPARE(flattened.exitCode, 2);
+        QVERIFY(flattened.error.contains("E_FLATTEN_OUTPUT"));
+        const Codec::Result afterFlatten = Codec::readFile(source);
+        QVERIFY(afterFlatten);
+        QCOMPARE(Codec::write(afterFlatten.document), before);
+    }
+
+    void flattenAnywayOnlyConfirmsPaletteLossAndNeverLocks()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString source = dir.filePath(QStringLiteral("locked.json"));
+        const QString output = dir.filePath(QStringLiteral("flattened.json"));
+        Document locked = sample();
+        locked.layerById(QStringLiteral("layer"))->locked = true;
+        QVERIFY(writeDocument(source, locked));
+
+        DocumentModel model;
+        QVERIFY(model.open(source));
+        QVERIFY(!model.flatten());
+        QVERIFY(model.note().contains(QStringLiteral("locked")));
+
+        const QString cli = qEnvironmentVariable(
+            "OMAPIXEL_CLI", QStringLiteral(SOURCE_DIR "/build/bin/omapixel"));
+        const ProcessResult refused = runProcess(
+            cli, {QStringLiteral("flatten"), source, QStringLiteral("-o"), output,
+                  QStringLiteral("--anyway")});
+        QCOMPARE(refused.exitCode, 1);
+        QVERIFY(refused.error.contains(QByteArrayLiteral("E_LAYER_LOCKED")));
+        QVERIFY(!QFile::exists(output));
+    }
+
+    void oversizedInMemoryDocumentsNeverReplaceTheirDestination()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString output = dir.filePath(QStringLiteral("destination.json"));
+        QFile destination(output);
+        QVERIFY(destination.open(QIODevice::WriteOnly));
+        destination.write("untouched");
+        destination.close();
+
+        Document huge = Document::blank(Document::maxDimension, Document::maxDimension);
+        for (int i = 0; i < 4; ++i)
+            QVERIFY(huge.addLayer(QStringLiteral("extra-%1").arg(i),
+                                  QStringLiteral("Extra %1").arg(i),
+                                  QStringLiteral("shared")));
+        QString error;
+        QVERIFY(Codec::write(huge, &error).isEmpty());
+        QVERIFY(error.contains(QStringLiteral("serialized document")));
+        QVERIFY(!Codec::writeFile(output, huge, &error));
+        QFile verify(output);
+        QVERIFY(verify.open(QIODevice::ReadOnly));
+        QCOMPARE(verify.readAll(), QByteArray("untouched"));
+    }
+
+    void codecBoundsRejectTinyAmplificationAndPathologicalInput()
+    {
+        const QByteArray tiny = R"({"version":2,"canvas":{"width":1,"height":1},
+"palette":[],"clips":[{"id":"idle","name":"Idle","fps":8,"frameCount":999999}],
+"layers":[]})";
+        const Codec::Result excessive = Codec::read(tiny);
+        QVERIFY(!excessive);
+        QVERIFY(excessive.error.contains(QStringLiteral("frameCount")));
+
+        QJsonArray clips;
+        clips.append(QJsonObject{{QStringLiteral("id"), QStringLiteral("idle")},
+                                 {QStringLiteral("name"), QStringLiteral("Idle")},
+                                 {QStringLiteral("fps"), 8},
+                                 {QStringLiteral("frameCount"), 300}});
+        QJsonArray layers;
+        for (int i = 0; i < 55; ++i) {
+            layers.append(QJsonObject{{QStringLiteral("id"), QStringLiteral("layer-%1").arg(i)},
+                                      {QStringLiteral("name"), QStringLiteral("Layer %1").arg(i)},
+                                      {QStringLiteral("visible"), true},
+                                      {QStringLiteral("locked"), false},
+                                      {QStringLiteral("opacity"), 255},
+                                      {QStringLiteral("mode"), QStringLiteral("normal")},
+                                      {QStringLiteral("storage"), QStringLiteral("animated")},
+                                      {QStringLiteral("cels"), QJsonArray()}});
+        }
+        const QJsonObject amplified{{QStringLiteral("version"), 2},
+                                    {QStringLiteral("canvas"), QJsonObject{{QStringLiteral("width"), 1},
+                                                                              {QStringLiteral("height"), 1}}},
+                                    {QStringLiteral("palette"), QJsonArray()},
+                                    {QStringLiteral("clips"), clips},
+                                    {QStringLiteral("layers"), layers}};
+        const Codec::Result tooManyCels =
+            Codec::read(QJsonDocument(amplified).toJson(QJsonDocument::Compact));
+        QVERIFY(!tooManyCels);
+        QVERIFY(tooManyCels.error.contains(QStringLiteral("cel count")));
+
+        QByteArray deep;
+        deep.fill('[', 70);
+        deep += '0';
+        deep.append(QByteArray(70, ']'));
+        const Codec::Result nested = Codec::read(deep);
+        QVERIFY(!nested);
+        QVERIFY(nested.error.contains(QStringLiteral("nesting depth")));
+
+        const QByteArray oversized(Document::maxDocumentBytes + 1, ' ');
+        const Codec::Result tooLarge = Codec::read(oversized);
+        QVERIFY(!tooLarge);
+        QVERIFY(tooLarge.error.contains(QStringLiteral("hard limit")));
+
+        QByteArray control = Codec::write(sample());
+        control.replace("Layer", "Bad\\nName");
+        const Codec::Result unsafeName = Codec::read(control);
+        QVERIFY(!unsafeName);
+        QVERIFY(unsafeName.error.contains(QStringLiteral("control")));
+    }
+
+    void clipboardBoundsAreCheckedBeforeMaterialization()
+    {
+        DocumentModel model;
+        QGuiApplication::clipboard()->setText(
+            QString(Document::maxClipboardBytes + 1, QLatin1Char('x')));
+        QVERIFY(!model.pastePixels(0, 0));
+        QVERIFY(model.note().contains(QStringLiteral("clipboard")));
+
+        QJsonArray row;
+        for (int i = 0; i < Document::maxClipboardColumns + 1; ++i)
+            row.append(QJsonValue::Null);
+        QJsonArray rows;
+        rows.append(row);
+        QGuiApplication::clipboard()->setText(
+            QString::fromUtf8(QJsonDocument(rows).toJson(QJsonDocument::Compact)));
+        QVERIFY(!model.pastePixels(0, 0));
+    }
+
+    void lockedStructuralActionsUseTheCorePolicy()
+    {
+        DocumentModel model;
+        QVERIFY(model.addLayer(QStringLiteral("locked"), QStringLiteral("Locked")));
+        QVERIFY(model.setLayerLocked(QStringLiteral("locked"), true));
+        const QList<Layer> before = model.document().layers();
+        QVERIFY(!model.moveLayers({QStringLiteral("locked")}, 0));
+        QVERIFY(!model.removeLayers({QStringLiteral("locked")}));
+        QCOMPARE(model.document().layers(), before);
+        QVERIFY(model.note().contains(QStringLiteral("locked")));
+    }
+
+    void activeLayerChangedIsPublishedOncePerDerivedIdentityChange()
+    {
+        DocumentModel model;
+        QVERIFY(model.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        QSignalSpy changed(&model, &DocumentModel::activeLayerChanged);
+
+        model.setActiveLayerId(QStringLiteral("overlay"));
+        QCOMPARE(changed.count(), 1);
+        changed.clear();
+        QVERIFY(model.removeLayer(QStringLiteral("overlay")));
+        QCOMPARE(changed.count(), 1);
+
+        QVERIFY(model.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        model.setActiveLayerId(QStringLiteral("overlay"));
+        changed.clear();
+        QVERIFY(model.mergeDown(QStringLiteral("overlay")));
+        QCOMPARE(changed.count(), 1);
+
+        QVERIFY(model.addLayer(QStringLiteral("top"), QStringLiteral("Top")));
+        model.setActiveLayerId(QStringLiteral("top"));
+        changed.clear();
+        QVERIFY(model.flatten());
+        QCOMPARE(changed.count(), 1);
+    }
+
+    void fakeSessionWithLivePidAndWrongExecutableIsPruned()
+    {
+        QTemporaryDir runtime;
+        QVERIFY(runtime.isValid());
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+        const QString path = sessions::directory() + QStringLiteral("/%1.json")
+                                                     .arg(QCoreApplication::applicationPid());
+        QJsonObject body{
+            {QStringLiteral("version"), 2},
+            {QStringLiteral("pid"), QCoreApplication::applicationPid()},
+            {QStringLiteral("started"), double(sessions::startTimeOf(QCoreApplication::applicationPid()))},
+            {QStringLiteral("executable"), QStringLiteral("/tmp/fake-studio")},
+            {QStringLiteral("path"), QString()},
+            {QStringLiteral("dirty"), false},
+            {QStringLiteral("view"), QJsonObject{{QStringLiteral("clip"), QStringLiteral("idle")},
+                                                   {QStringLiteral("frame"), 0},
+                                                   {QStringLiteral("layerId"), QStringLiteral("layer")},
+                                                   {QStringLiteral("layerName"), QStringLiteral("Layer")},
+                                                   {QStringLiteral("scope"), QStringLiteral("frame")}}},
+            {QStringLiteral("selection"), QJsonValue::Null}};
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QJsonDocument(body).toJson());
+        file.close();
+        QVERIFY(sessions::live().isEmpty());
+        QVERIFY(!QFile::exists(path));
+    }
+
+    void sessionPublicationFailuresAreVisible()
+    {
+        QTemporaryDir runtime;
+        QVERIFY(runtime.isValid());
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+        DocumentModel model;
+        const QString target = runtime.filePath(QStringLiteral("target.json"));
+        QFile targetFile(target);
+        QVERIFY(targetFile.open(QIODevice::WriteOnly));
+        targetFile.write("untouched");
+        targetFile.close();
+        QString ipcError;
+        const int occupied = sessions::openPublisher(QCoreApplication::applicationPid(),
+                                                     &ipcError);
+        QVERIFY2(occupied >= 0, qPrintable(ipcError));
+        SessionPublisher publisher;
+        QSignalSpy failure(&publisher, &SessionPublisher::publicationFailed);
+        publisher.follow(&model);
+        QVERIFY(failure.count() >= 1);
+        ::close(occupied);
+        QFile verify(target);
+        QVERIFY(verify.open(QIODevice::ReadOnly));
+        QCOMPARE(verify.readAll(), QByteArray("untouched"));
+    }
+
+    void modelRoutesEveryRasterToolThroughTheActiveLayerAndScope()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("layers.json"));
+        Document source = Document::blank(4, 2);
+        QVERIFY(source.addFrame(QStringLiteral("idle"), 0, false));
+        QVERIFY(source.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        QVERIFY(source.setCel(QStringLiteral("layer"), QStringLiteral("idle"), 0,
+                              Grid::fromRows({QStringLiteral("IIII"), QStringLiteral("....")})));
+        QVERIFY(source.setCel(QStringLiteral("overlay"), QStringLiteral("idle"), 0,
+                              Grid::fromRows({QStringLiteral("...."), QStringLiteral("....")})));
+        QVERIFY(writeDocument(path, source));
+
+        DocumentModel model;
+        QVERIFY(model.open(path));
+        model.setActiveLayerId(QStringLiteral("overlay"));
+        QCOMPARE(model.activeLayerId(), QStringLiteral("overlay"));
+        QCOMPARE(model.activeLayerName(), QStringLiteral("Overlay"));
+        const Grid baseBefore = model.document().cel(QStringLiteral("layer"),
+                                                      QStringLiteral("idle"), 0);
+
+        model.paint(0, 1, QStringLiteral("R"));
+        model.line(0, 1, 1, 1, QStringLiteral("R"));
+        model.rect(2, 0, 3, 1, QStringLiteral("A"), false);
+        model.fill(2, 0, QStringLiteral("B"));
+        model.shift(1, 0);
+        model.flip(QStringLiteral("x"));
+        model.clearFrame();
+        QCOMPARE(model.document().cel(QStringLiteral("layer"), QStringLiteral("idle"), 0),
+                 baseBefore);
+        QCOMPARE(model.slotAt(0, 0), QStringLiteral("."));
+
+        model.setEditScope(QStringLiteral("all-frames"));
+        model.paint(3, 1, QStringLiteral("R"));
+        QCOMPARE(model.document().cel(QStringLiteral("overlay"), QStringLiteral("idle"), 0)
+                     .at(3, 1),
+                 QChar(u'R'));
+        QCOMPARE(model.document().cel(QStringLiteral("overlay"), QStringLiteral("idle"), 1)
+                     .at(3, 1),
+                 QChar(u'R'));
+
+        QGuiApplication::clipboard()->setText(QStringLiteral("[[\"#F7768E\"]]"));
+        QVERIFY(model.pastePixels(0, 0));
+        QCOMPARE(model.document().cel(QStringLiteral("overlay"), QStringLiteral("idle"), 0)
+                     .at(0, 0),
+                 QChar(u'R'));
+        QCOMPARE(model.document().cel(QStringLiteral("overlay"), QStringLiteral("idle"), 1)
+                     .at(0, 0),
+                 QChar(u'R'));
+        QCOMPARE(model.document().cel(QStringLiteral("layer"), QStringLiteral("idle"), 1)
+                     .at(0, 0),
+                 Grid::Empty);
+    }
+
+    void sharedLayersExposeOneCelAndPickerHasExplicitScopes()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("shared.json"));
+        Document source = Document::blank(3, 1);
+        QVERIFY(source.addFrame(QStringLiteral("idle"), 0, false));
+        QVERIFY(source.addLayer(QStringLiteral("shared"), QStringLiteral("Shared"),
+                                QStringLiteral("shared")));
+        QVERIFY(source.setCel(QStringLiteral("layer"), QStringLiteral("idle"), 0,
+                              Grid::fromRows({QStringLiteral("I..")})));
+        QVERIFY(source.setCel(QStringLiteral("layer"), QStringLiteral("idle"), 1,
+                              Grid::fromRows({QStringLiteral("I..")})));
+        QVERIFY(source.setCel(QStringLiteral("shared"), QStringLiteral("idle"), 0,
+                              Grid::fromRows({QStringLiteral("..R")})));
+        QVERIFY(writeDocument(path, source));
+
+        DocumentModel model;
+        QVERIFY(model.open(path));
+        model.setActiveLayerId(QStringLiteral("shared"));
+        model.setFrame(1);
+        model.paint(1, 0, QStringLiteral("A"));
+        QCOMPARE(model.document().cel(QStringLiteral("shared"), QStringLiteral("idle"), 0)
+                     .at(1, 0),
+                 QChar(u'A'));
+        QCOMPARE(model.document().cel(QStringLiteral("shared"), QStringLiteral("idle"), 1)
+                     .at(1, 0),
+                 QChar(u'A'));
+
+        model.setActiveLayerId(QStringLiteral("shared"));
+        QCOMPARE(model.pickSlot(0, 0, false), QStringLiteral("."));
+        QCOMPARE(model.pickSlot(0, 0, true), QStringLiteral("I"));
+        model.setPickerScope(QStringLiteral("composite"));
+        QCOMPARE(model.pickerScope(), QStringLiteral("composite"));
+        QCOMPARE(model.layers().at(1).toMap().value(QStringLiteral("shared")).toBool(), true);
+    }
+
+    void lockedActiveLayerRefusesEditsWithLocalizedNote()
+    {
+        DocumentModel model;
+        QVERIFY(model.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        model.setActiveLayerId(QStringLiteral("overlay"));
+        QVERIFY(model.setLayerLocked(QStringLiteral("overlay"), true));
+        const Grid before = model.document().cel(QStringLiteral("overlay"),
+                                                 QStringLiteral("idle"), 0);
+        model.paint(0, 0, QStringLiteral("R"));
+        QCOMPARE(model.document().cel(QStringLiteral("overlay"), QStringLiteral("idle"), 0),
+                 before);
+        QCOMPARE(model.note(), QStringLiteral("layer Overlay is locked"));
+        QVERIFY(model.activeLayerLocked());
+    }
+
+    void activeLayerIdentitySurvivesOpenReloadAndUsesDeterministicFallback()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("identity.json"));
+        Document first = Document::blank(2, 1);
+        QVERIFY(first.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        QVERIFY(writeDocument(path, first));
+
+        DocumentModel model;
+        QVERIFY(model.open(path));
+        model.setActiveLayerId(QStringLiteral("overlay"));
+
+        Document renamed = first;
+        QVERIFY(renamed.renameLayer(QStringLiteral("overlay"), QStringLiteral("Renamed")));
+        QVERIFY(writeDocument(path, renamed));
+        QVERIFY(model.reloadFromDisk());
+        QCOMPARE(model.activeLayerId(), QStringLiteral("overlay"));
+        QCOMPARE(model.activeLayerName(), QStringLiteral("Renamed"));
+
+        Document withoutOverlay = Document::blank(2, 1);
+        QVERIFY(writeDocument(path, withoutOverlay));
+        QVERIFY(model.reloadFromDisk());
+        QCOMPARE(model.activeLayerId(), QStringLiteral("layer"));
+    }
+
+    void layerStructureUndoRestoresActiveIdentityAndContent()
+    {
+        DocumentModel model;
+        QVERIFY(model.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        model.setActiveLayerId(QStringLiteral("overlay"));
+        model.paint(1, 1, QStringLiteral("R"));
+        QVERIFY(model.removeLayer(QStringLiteral("overlay")));
+        QCOMPARE(model.activeLayerId(), QStringLiteral("layer"));
+        model.undo();
+        QCOMPARE(model.activeLayerId(), QStringLiteral("overlay"));
+        QCOMPARE(model.document().cel(QStringLiteral("overlay"), QStringLiteral("idle"), 0)
+                     .at(1, 1),
+                 QChar(u'R'));
+        model.undo();
+        QVERIFY(model.document().layerById(QStringLiteral("overlay")));
+        model.undo();
+        QCOMPARE(model.document().layerById(QStringLiteral("overlay")), nullptr);
+    }
+
+    void modelExposesDockOperationsAndConsequenceReports()
+    {
+        DocumentModel model;
+        QVERIFY(model.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        QVERIFY(model.addLayer(QStringLiteral("shared"), QStringLiteral("Shared"),
+                               QStringLiteral("shared")));
+        QCOMPARE(model.layers().size(), 3);
+        QCOMPARE(model.layers().at(2).toMap().value(QStringLiteral("animated")).toBool(),
+                 false);
+
+        model.setActiveLayerId(QStringLiteral("overlay"));
+        model.setEditScope(QStringLiteral("all-frames"));
+        model.paint(0, 0, QStringLiteral("I"));
+        QCOMPARE(model.document().cel(QStringLiteral("overlay"), QStringLiteral("idle"), 0)
+                     .at(0, 0),
+                 QChar(u'I'));
+        QVERIFY(model.clearLayer(QStringLiteral("overlay"), true));
+        QCOMPARE(model.document().cel(QStringLiteral("overlay"), QStringLiteral("idle"), 0)
+                     .at(0, 0),
+                 Grid::Empty);
+
+        QVERIFY(model.setLayersVisible({QStringLiteral("layer"), QStringLiteral("overlay")},
+                                       false));
+        QVERIFY(!model.document().layerById(QStringLiteral("layer"))->visible);
+        QVERIFY(model.setLayersLocked({QStringLiteral("layer"), QStringLiteral("overlay")},
+                                      true));
+        QVERIFY(model.document().layerById(QStringLiteral("overlay"))->locked);
+         QVERIFY(!model.moveLayers({QStringLiteral("overlay")}, 2));
+         QVERIFY(model.setLayersLocked({QStringLiteral("overlay")}, false));
+         QVERIFY(model.moveLayers({QStringLiteral("overlay")}, 2));
+        QCOMPARE(model.document().layers().at(2).id, QStringLiteral("overlay"));
+        QVERIFY(model.removeLayers({QStringLiteral("overlay"), QStringLiteral("shared")}));
+        QCOMPARE(model.document().layers().size(), 1);
+
+        DocumentModel conversion;
+        QVERIFY(conversion.addLayer(QStringLiteral("animated"), QStringLiteral("Animated")));
+        conversion.setActiveLayerId(QStringLiteral("animated"));
+        conversion.setFrame(0);
+        conversion.paint(0, 0, QStringLiteral("I"));
+        QVERIFY(conversion.frameCount() == 1);
+        const QVariantMap storage = conversion.layerStoragePreview(
+            QStringLiteral("animated"), QStringLiteral("shared"));
+        QVERIFY(storage.value(QStringLiteral("ok")).toBool());
+        QVERIFY(conversion.setLayerStorage(QStringLiteral("animated"),
+                                           QStringLiteral("shared"), false));
+        QCOMPARE(conversion.activeLayerStorage(), QStringLiteral("shared"));
+
+        const QVariantMap merge = conversion.mergeDownPreview(QStringLiteral("shared"));
+        QVERIFY(!merge.value(QStringLiteral("ok")).toBool());
+
+        DocumentModel flatten;
+        QVERIFY(flatten.addLayer(QStringLiteral("top"), QStringLiteral("Top")));
+        const QVariantMap flat = flatten.flattenPreview();
+        QVERIFY(flat.value(QStringLiteral("ok")).toBool());
+        QVERIFY(flatten.flatten());
+        QCOMPARE(flatten.layers().size(), 1);
+    }
+
+    void layerDockIsAKeyboardLayerBrowser()
+    {
+        QTest::failOnWarning();
+        registerQmlTypes();
+        DocumentModel document;
+        QVERIFY(document.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+
+        QQmlComponent component(
+            &engine,
+            QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/LayerDock.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> root(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        root->setProperty("width", 260);
+        QCoreApplication::processEvents();
+
+        auto *list = root->findChild<QQuickItem *>(QStringLiteral("layerList"));
+        QVERIFY(list);
+        QCOMPARE(list->width(), 260.0);
+        QVERIFY(root->findChild<QQuickItem *>(QStringLiteral("structuralSelectionBanner")));
+        QVERIFY(!root->findChild<QQuickItem *>(QStringLiteral("selectedLayerSection")));
+        QVERIFY(!root->findChild<QQuickItem *>(QStringLiteral("opacitySlider")));
+
+        QSignalSpy activated(root.data(), SIGNAL(layerActivated(QString)));
+        QVERIFY(QMetaObject::invokeMethod(root.data(), "toggleStructural",
+                                          Q_ARG(QVariant, QStringLiteral("overlay"))));
+        const QVariantList selected = root->property("selectedIds").toList();
+        QVERIFY(selected.contains(QStringLiteral("layer")));
+        QVERIFY(selected.contains(QStringLiteral("overlay")));
+
+        QVERIFY(QMetaObject::invokeMethod(root.data(), "focusList"));
+        QVERIFY(QMetaObject::invokeMethod(list, "step", Q_ARG(QVariant, 1)));
+        QVERIFY(QMetaObject::invokeMethod(list, "activateCurrent"));
+        QCOMPARE(activated.count(), 1);
+        QCOMPARE(activated.first().first().toString(), QStringLiteral("overlay"));
+        QCOMPARE(document.activeLayerId(), QStringLiteral("overlay"));
+
+        QQuickItem *row = nullptr;
+        QVERIFY(QMetaObject::invokeMethod(list, "itemAtIndex",
+                                          Q_RETURN_ARG(QQuickItem *, row), Q_ARG(int, 1)));
+        QVERIFY(row);
+        QVERIFY(row->property("activePaintTarget").toBool());
+        QVERIFY(row->findChild<QQuickItem *>(QStringLiteral("visibilityAction_overlay")) == nullptr);
+        QVERIFY(row->findChild<QQuickItem *>(QStringLiteral("lockAction_overlay")) == nullptr);
+
+        root->setProperty("width", 220);
+        QCoreApplication::processEvents();
+        QCOMPARE(list->width(), 220.0);
+    }
+
+    void layerToolIsTopLevelWithIndependentGeometryAndRetainedActions()
+    {
+        QTest::failOnWarning();
+        registerQmlTypes();
+        DocumentModel document;
+        document.reset(32, 24);
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+        static InputLog silent(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &silent);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent component(&engine,
+            QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> root(component.create());
+        QVERIFY(root);
+        auto *studio = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(studio);
+        studio->resize(900, 700);
+        studio->show();
+        QVERIFY(QTest::qWaitForWindowExposed(studio));
+        QCoreApplication::processEvents();
+
+        auto *dock = studio->findChild<QQuickItem *>(QStringLiteral("layerDock"));
+        auto *tool = studio->findChild<QQuickWindow *>(QStringLiteral("layerToolWindow"));
+        auto *panel = studio->findChild<QQuickItem *>(QStringLiteral("dockPanel"));
+        auto *stage = studio->findChild<QQuickItem *>(QStringLiteral("stage"));
+        QVERIFY(dock);
+        QVERIFY(tool);
+        QVERIFY(panel);
+        QVERIFY(stage);
+        QVERIFY(tool->type() == Qt::Window);
+        QVERIFY(tool->flags().testFlag(Qt::Window));
+        QCOMPARE(tool->transientParent(), studio);
+        QCOMPARE(tool->modality(), Qt::NonModal);
+        QVERIFY(!tool->isVisible());
+
+        QVERIFY(QMetaObject::invokeMethod(dock, "activate",
+                                          Q_ARG(QVariant, QStringLiteral("layer"))));
+        QTRY_VERIFY_WITH_TIMEOUT(tool->isVisible(), 1000);
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolVisibilityAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolLockAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolRenameField")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolOpacitySlider")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolNormalModeButton")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolDuplicateAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolMoveUpAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolMoveDownAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolDeleteAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolClearFrameAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolClearAllAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolConvertSharedAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolMergeAction")));
+        QVERIFY(tool->findChild<QQuickItem *>(QStringLiteral("toolFlattenAction")));
+
+        const int independentX = studio->x() + studio->width() + 33;
+        const int independentY = studio->y() + 41;
+        tool->setX(independentX);
+        tool->setY(independentY);
+        tool->resize(420, 640);
+        QCoreApplication::processEvents();
+        QCOMPARE(tool->x(), independentX);
+        QCOMPARE(tool->y(), independentY);
+        QCOMPARE(tool->width(), 420);
+        QCOMPARE(tool->height(), 640);
+        QVERIFY(stage->width() > 0);
+        QCOMPARE(studio->findChild<QQuickItem *>(QStringLiteral("selectedLayerSection")), nullptr);
+
+        QVERIFY(QMetaObject::invokeMethod(tool, "closeTool"));
+        QTRY_VERIFY_WITH_TIMEOUT(!tool->isVisible(), 1000);
+        auto *list = studio->findChild<QQuickItem *>(QStringLiteral("layerList"));
+        QVERIFY(list);
+        QTRY_VERIFY_WITH_TIMEOUT(list->hasActiveFocus(), 1000);
+
+        panel->setWidth(260);
+        QCoreApplication::processEvents();
+        QVERIFY(stage->width() > 0);
+    }
+
+    void layerToolKeyboardLifecycleAndConfirmationReturn()
+    {
+        QTest::failOnWarning();
+        registerQmlTypes();
+        DocumentModel document;
+        document.reset(32, 24);
+        QVERIFY(document.addLayer(QStringLiteral("overlay"), QStringLiteral("Overlay")));
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+        static InputLog silent(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &silent);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent component(&engine,
+            QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> root(component.create());
+        auto *studio = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(studio);
+        studio->resize(1000, 760);
+        studio->show();
+        QVERIFY(QTest::qWaitForWindowExposed(studio));
+
+        auto *dock = studio->findChild<QQuickItem *>(QStringLiteral("layerDock"));
+        auto *list = studio->findChild<QQuickItem *>(QStringLiteral("layerList"));
+        auto *tool = studio->findChild<QQuickWindow *>(QStringLiteral("layerToolWindow"));
+        auto *sheet = studio->findChild<QObject *>(QStringLiteral("layerSheet"));
+        const auto activeVisible = [&document] {
+            for (const QVariant &value : document.layers()) {
+                const QVariantMap layer = value.toMap();
+                if (layer.value(QStringLiteral("id")).toString() == document.activeLayerId())
+                    return layer.value(QStringLiteral("visible")).toBool();
+            }
+            return false;
+        };
+        QVERIFY(dock);
+        QVERIFY(list);
+        QVERIFY(tool);
+        QVERIFY(sheet);
+
+        QVERIFY(QMetaObject::invokeMethod(dock, "focusList"));
+        QTRY_VERIFY_WITH_TIMEOUT(list->hasActiveFocus(), 1000);
+        QCOMPARE(list->property("currentIndex").toInt(), 0);
+        QTest::keyClick(studio, Qt::Key_Down);
+        QCOMPARE(list->property("currentIndex").toInt(), 1);
+        QTest::keyClick(studio, Qt::Key_Return);
+        QTRY_VERIFY_WITH_TIMEOUT(tool->isVisible(), 1000);
+        QCOMPARE(document.activeLayerId(), QStringLiteral("overlay"));
+
+        QVERIFY(QMetaObject::invokeMethod(tool, "focusWindow"));
+        QTRY_VERIFY_WITH_TIMEOUT(tool->activeFocusItem(), 1000);
+        auto *visibility = tool->findChild<QQuickItem *>(QStringLiteral("toolVisibilityAction"));
+        QVERIFY(visibility);
+        QSet<QString> tabNames;
+        bool reachedVisibility = false;
+        for (int i = 0; i < 120; ++i) {
+            QTest::keyClick(tool, Qt::Key_Tab);
+            QQuickItem *focused = tool->activeFocusItem();
+            if (!focused)
+                continue;
+            if (!focused->objectName().isEmpty())
+                tabNames.insert(focused->objectName());
+            if (focused == visibility && !reachedVisibility) {
+                reachedVisibility = true;
+                QVERIFY(activeVisible());
+                QTest::keyClick(tool, Qt::Key_Space);
+                QTRY_VERIFY_WITH_TIMEOUT(!activeVisible(), 1000);
+            }
+        }
+        QVERIFY(reachedVisibility);
+        const QSet<QString> requiredToolControls{
+            QStringLiteral("toolVisibilityAction"),
+            QStringLiteral("toolLockAction"),
+            QStringLiteral("toolCloseAction"),
+            QStringLiteral("toolOpacitySlider"),
+            QStringLiteral("toolNormalModeButton"),
+            QStringLiteral("toolMultiplyModeButton"),
+            QStringLiteral("toolScreenModeButton"),
+            QStringLiteral("toolDuplicateAction"),
+            QStringLiteral("toolMoveUpAction"),
+            QStringLiteral("toolMoveDownAction"),
+            QStringLiteral("toolDeleteAction"),
+            QStringLiteral("toolClearFrameAction"),
+            QStringLiteral("toolClearAllAction"),
+            QStringLiteral("toolConvertSharedAction"),
+            QStringLiteral("toolMergeAction"),
+            QStringLiteral("toolFlattenAction")};
+        for (const QString &name : requiredToolControls)
+            QVERIFY2(tabNames.contains(name), qPrintable(name));
+
+        QTest::keyClick(tool, Qt::Key_Escape);
+        QTRY_VERIFY_WITH_TIMEOUT(!tool->isVisible(), 1000);
+        QTRY_VERIFY_WITH_TIMEOUT(list->hasActiveFocus(), 1000);
+
+        QVERIFY(QMetaObject::invokeMethod(dock, "activate",
+                                          Q_ARG(QVariant, QStringLiteral("overlay"))));
+        QTRY_VERIFY_WITH_TIMEOUT(tool->isVisible(), 1000);
+        QVERIFY(QMetaObject::invokeMethod(tool, "convert",
+                                          Q_ARG(QVariant, QVariant(QStringLiteral("shared")))));
+        QTRY_VERIFY_WITH_TIMEOUT(sheet->property("opened").toBool(), 1000);
+        QVERIFY(QMetaObject::invokeMethod(sheet, "close"));
+        QTRY_VERIFY_WITH_TIMEOUT(!sheet->property("opened").toBool(), 1000);
+        QTRY_VERIFY_WITH_TIMEOUT(tool->activeFocusItem(), 1000);
+        QVERIFY(tool->isVisible());
+    }
+
+    void layerToolLifecycleKeepsOnePublishedSessionAndStableCliState()
+    {
+        registerQmlTypes();
+        QTemporaryDir runtime;
+        QVERIFY(runtime.isValid());
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        DocumentModel document;
+        QVERIFY(document.renameLayer(QStringLiteral("layer"), QStringLiteral("Base")));
+        document.setEditScope(QStringLiteral("all-frames"));
+        SessionPublisher publisher;
+        publisher.follow(&document);
+         const QByteArray before = publisher.snapshot();
+         QVERIFY(!before.isEmpty());
+         const QJsonObject beforeView = QJsonDocument::fromJson(before).object()
+                                            .value(QStringLiteral("view")).toObject();
+        QCOMPARE(beforeView.value(QStringLiteral("layerId")).toString(),
+                 document.activeLayerId());
+        QCOMPARE(beforeView.value(QStringLiteral("layerName")).toString(),
+                 document.activeLayerName());
+        QCOMPARE(beforeView.value(QStringLiteral("scope")).toString(), document.editScope());
+
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+        static InputLog silent(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &silent);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+        QQmlComponent component(&engine,
+            QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> root(component.create());
+        QVERIFY(root);
+        auto *studio = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(studio);
+        auto *dock = studio->findChild<QQuickItem *>(QStringLiteral("layerDock"));
+        auto *tool = studio->findChild<QQuickWindow *>(QStringLiteral("layerToolWindow"));
+        QVERIFY(dock);
+        QVERIFY(tool);
+        QVERIFY(QMetaObject::invokeMethod(dock, "activate",
+                                          Q_ARG(QVariant, QStringLiteral("layer"))));
+        QTRY_VERIFY_WITH_TIMEOUT(tool->isVisible(), 1000);
+        tool->setX(2100);
+        tool->setY(90);
+        tool->requestActivate();
+        QCoreApplication::processEvents();
+        QVERIFY(QMetaObject::invokeMethod(tool, "closeTool"));
+        QTRY_VERIFY_WITH_TIMEOUT(!tool->isVisible(), 1000);
+         const QByteArray after = publisher.snapshot();
+         QCOMPARE(after, before);
+        QCOMPARE(document.activeLayerId(), QStringLiteral("layer"));
+        const QJsonObject afterView = QJsonDocument::fromJson(after).object()
+                                          .value(QStringLiteral("view")).toObject();
+        QCOMPARE(afterView.value(QStringLiteral("layerId")).toString(), QStringLiteral("layer"));
+        QCOMPARE(afterView.value(QStringLiteral("layerName")).toString(),
+                 QStringLiteral("Base"));
+        QCOMPARE(afterView.value(QStringLiteral("scope")).toString(),
+                 QStringLiteral("all-frames"));
+        publisher.retire();
+    }
+
     void aSessionSaysWhatTheStudioHoldsOpen()
     {
         // The agent-side half of the live loop: before writing, an agent can
@@ -1819,16 +3518,9 @@ private slots:
         SessionPublisher sessions;
         sessions.follow(&doc);
 
-        const QString sessionPath =
-            sessions::directory() + QStringLiteral("/%1.json")
-                .arg(QCoreApplication::applicationPid());
-        const auto published = [&sessionPath] {
-            // A failed open parses to an empty object, and the comparisons
-            // below fail loudly enough.
-            QFile file(sessionPath);
-            file.open(QIODevice::ReadOnly);
-            return QJsonDocument::fromJson(file.readAll()).object();
-        };
+         const auto published = [&sessions] {
+             return QJsonDocument::fromJson(sessions.snapshot()).object();
+         };
 
         // Untitled: `path` exists and names the scratch backing -- the
         // whole point of the file is that the command line can reach a
@@ -1845,6 +3537,18 @@ private slots:
             double(sessions::startTimeOf(QCoreApplication::applicationPid())));
         QCOMPARE(session.value(QStringLiteral("path")).toString(), scratch);
         QCOMPARE(session.value(QStringLiteral("dirty")).toBool(), false);
+        QCOMPARE(session.value(QStringLiteral("version")).toInt(), 2);
+        const QJsonObject initialView =
+            session.value(QStringLiteral("view")).toObject();
+        QCOMPARE(initialView.value(QStringLiteral("clip")).toString(),
+                 QStringLiteral("idle"));
+        QCOMPARE(initialView.value(QStringLiteral("frame")).toInt(), 0);
+        QCOMPARE(initialView.value(QStringLiteral("layerId")).toString(),
+                 QStringLiteral("layer"));
+        QCOMPARE(initialView.value(QStringLiteral("layerName")).toString(),
+                 QStringLiteral("Layer"));
+        QCOMPARE(initialView.value(QStringLiteral("scope")).toString(),
+                 QStringLiteral("frame"));
         QVERIFY(session.value(QStringLiteral("selection")).isNull());
 
         QVERIFY(doc.open(drawing));
@@ -1866,20 +3570,108 @@ private slots:
         QCOMPARE(selection.value(QStringLiteral("clip")).toString(),
                  QStringLiteral("idle"));
         QCOMPARE(selection.value(QStringLiteral("frame")).toInt(), 0);
+        QCOMPARE(selection.value(QStringLiteral("layerId")).toString(),
+                 QStringLiteral("layer"));
+        QCOMPARE(selection.value(QStringLiteral("layerName")).toString(),
+                 QStringLiteral("Layer"));
         QCOMPARE(selection.value(QStringLiteral("x")).toInt(), 0);
         QCOMPARE(selection.value(QStringLiteral("y")).toInt(), 0);
         QCOMPARE(selection.value(QStringLiteral("width")).toInt(), 4);
         QCOMPARE(selection.value(QStringLiteral("height")).toInt(), 3);
         QCOMPARE(selection.value(QStringLiteral("count")).toInt(), 12);
-        const QList<sessions::Entry> live = sessions::live(drawing);
-        QCOMPARE(live.size(), 1);
-        QCOMPARE(live.first().clip, QStringLiteral("idle"));
-        QCOMPARE(live.first().frame, 0);
-        QCOMPARE(live.first().selection, QRect(0, 0, 4, 3));
+         QCOMPARE(session.value(QStringLiteral("path")).toString(), drawing);
+         QCOMPARE(session.value(QStringLiteral("view")).toObject()
+                      .value(QStringLiteral("layerId")).toString(), QStringLiteral("layer"));
 
         QVERIFY(doc.save());
         session = published();
         QCOMPARE(session.value(QStringLiteral("dirty")).toBool(), false);
+    }
+
+    void sessionViewTracksLayerIdentityAndPlaybackSnapshot()
+    {
+        QTemporaryDir runtime;
+        QVERIFY(runtime.isValid());
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+
+        const QString drawing = runtime.path() + QStringLiteral("/layers.json");
+        Document layered = Document::blank(4, 3);
+        QVERIFY(layered.addLayer(QStringLiteral("hero"), QStringLiteral("Hero")));
+        QVERIFY(layered.addFrame(QStringLiteral("idle"), 0, false));
+        QVERIFY(writeDocument(drawing, layered));
+
+        DocumentModel doc;
+        QVERIFY(doc.open(drawing));
+        SessionPublisher publisher;
+        publisher.follow(&doc);
+
+         const auto bytes = [&publisher] {
+             return publisher.snapshot();
+         };
+        const auto json = [&bytes] {
+            return QJsonDocument::fromJson(bytes()).object();
+        };
+
+        // A view exists without a selection, and changing playback's frame
+        // publishes the latest atomic snapshot. Playback itself is local UI
+        // state and is intentionally not part of the session contract.
+        QJsonObject view = json().value(QStringLiteral("view")).toObject();
+        QCOMPARE(view.value(QStringLiteral("layerId")).toString(),
+                 QStringLiteral("layer"));
+        QVERIFY(json().value(QStringLiteral("selection")).isNull());
+        doc.setActiveLayerId(QStringLiteral("hero"));
+        doc.setEditScope(QStringLiteral("all-frames"));
+        doc.setFrame(1);
+        view = json().value(QStringLiteral("view")).toObject();
+        QCOMPARE(view.value(QStringLiteral("frame")).toInt(), 1);
+        QCOMPARE(view.value(QStringLiteral("layerId")).toString(),
+                 QStringLiteral("hero"));
+        QCOMPARE(view.value(QStringLiteral("layerName")).toString(),
+                 QStringLiteral("Hero"));
+        QCOMPARE(view.value(QStringLiteral("scope")).toString(),
+                 QStringLiteral("all-frames"));
+        QVERIFY(!json().contains(QStringLiteral("playing")));
+
+        doc.setSelection(0, 0, 1, 1);
+        const QJsonObject selection =
+            json().value(QStringLiteral("selection")).toObject();
+        QCOMPARE(selection.value(QStringLiteral("layerId")).toString(),
+                 QStringLiteral("hero"));
+        QCOMPARE(selection.value(QStringLiteral("layerName")).toString(),
+                 QStringLiteral("Hero"));
+        QCOMPARE(selection.value(QStringLiteral("count")).toInt(), 4);
+
+        // Rename and reorder preserve the immutable active ID; the name is
+        // refreshed from the reloaded document. Deleting it falls back to the
+        // first remaining layer in document order.
+        Document renamed = layered;
+        QVERIFY(renamed.renameLayer(QStringLiteral("hero"),
+                                    QStringLiteral("Renamed Hero")));
+        QVERIFY(renamed.moveLayer(QStringLiteral("hero"), 0));
+        QVERIFY(writeDocument(drawing, renamed));
+        QVERIFY(doc.reloadFromDisk());
+        view = json().value(QStringLiteral("view")).toObject();
+        QCOMPARE(view.value(QStringLiteral("layerId")).toString(),
+                 QStringLiteral("hero"));
+        QCOMPARE(view.value(QStringLiteral("layerName")).toString(),
+                 QStringLiteral("Renamed Hero"));
+        QVERIFY(json().value(QStringLiteral("selection")).isNull());
+
+        QVERIFY(renamed.removeLayer(QStringLiteral("hero")));
+        QVERIFY(writeDocument(drawing, renamed));
+        QVERIFY(doc.reloadFromDisk());
+        view = json().value(QStringLiteral("view")).toObject();
+        QCOMPARE(view.value(QStringLiteral("layerId")).toString(),
+                 QStringLiteral("layer"));
+        QCOMPARE(view.value(QStringLiteral("layerName")).toString(),
+                 QStringLiteral("Layer"));
+
+        // QSaveFile plus fixed insertion order makes the same no-selection
+        // state byte-stable after a selection round trip.
+        const QByteArray stable = bytes();
+        doc.setSelection(0, 0, 0, 0);
+        doc.clearSelection();
+        QCOMPARE(bytes(), stable);
     }
 
     void retiringARemovesTheSessionFile()
@@ -1892,19 +3684,17 @@ private slots:
         DocumentModel doc;
         SessionPublisher sessions;
         sessions.follow(&doc);
-        const QString sessionPath =
-            sessions::directory() + QStringLiteral("/%1.json")
-                .arg(QCoreApplication::applicationPid());
-        QVERIFY(QFile::exists(sessionPath));
+         QByteArray snapshot = sessions.snapshot();
+         QVERIFY(!snapshot.isEmpty());
 
-        sessions.retire();
-        QVERIFY(!QFile::exists(sessionPath));
+         sessions.retire();
+         QVERIFY(!sessions::readPublisher(QCoreApplication::applicationPid(), &snapshot));
     }
 
     void twoStudiosPublishBesideEachOther()
     {
-        // One file per process: two windows on two documents never merge and
-        // never overwrite each other.
+         // One abstract endpoint per process: two publishers never merge and
+         // never overwrite each other.
         QTemporaryDir runtime;
         qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
 
@@ -1912,26 +3702,10 @@ private slots:
         SessionPublisher mine;
         mine.follow(&doc);
 
-        const QString theirsPath =
-            sessions::directory() + QStringLiteral("/999999.json");
-        QFile theirs(theirsPath);
-        QVERIFY(theirs.open(QIODevice::WriteOnly));
-        theirs.write("{\"pid\": 999999}\n");
-        theirs.close();
-
-        doc.paint(2, 2, QStringLiteral("R"));   // rewrites ours, only ours
-
-        QFile after(theirsPath);
-        QVERIFY(after.open(QIODevice::ReadOnly));
-        QCOMPARE(QString::fromUtf8(after.readAll()),
-                 QStringLiteral("{\"pid\": 999999}\n"));
-        QFile ours(sessions::directory() + QStringLiteral("/%1.json")
-                                             .arg(QCoreApplication::applicationPid()));
-        QVERIFY(ours.open(QIODevice::ReadOnly));
-        QVERIFY(QJsonDocument::fromJson(ours.readAll())
-                    .object()
-                    .value(QStringLiteral("dirty"))
-                    .toBool());
+         doc.paint(2, 2, QStringLiteral("R"));   // rewrites ours, only ours
+         QJsonObject ours = QJsonDocument::fromJson(mine.snapshot()).object();
+         QVERIFY(!ours.isEmpty());
+         QVERIFY(ours.value(QStringLiteral("dirty")).toBool());
     }
 
     // ------------------------------------------------------ scratch backing
@@ -2041,14 +3815,9 @@ private slots:
         QCOMPARE(doc.followedPath(), QString());
         QVERIFY(!QFile::exists(
             sessions::scratchPath(QCoreApplication::applicationPid())));
-        QFile session(sessions::directory() + QStringLiteral("/%1.json")
-                                                  .arg(QCoreApplication::applicationPid()));
-        QVERIFY(session.open(QIODevice::ReadOnly));
-        QCOMPARE(QJsonDocument::fromJson(session.readAll())
-                     .object()
-                     .value(QStringLiteral("path"))
-                     .toString(),
-                 QString());
+         QJsonObject session = QJsonDocument::fromJson(publisher.snapshot()).object();
+         QVERIFY(!session.isEmpty());
+         QCOMPARE(session.value(QStringLiteral("path")).toString(), QString());
 
         // Put the suite's config back the way initTestCase found it.
         qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
@@ -2059,34 +3828,37 @@ private slots:
 
     void whereFindsTheStudioHoldingADocument()
     {
-        // The read side of the session contract: `live()` reports the
-        // sessions whose pid-and-start-time still name a running process.
-        // This test IS that running process.
+        // The read side of the session contract must inspect a real Studio
+        // process. A test runner is deliberately not accepted as a Studio.
         QTemporaryDir runtime;
         qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
 
         const QString drawing =
             QDir(runtime.path()).absoluteFilePath(QStringLiteral("heart.json"));
-        QJsonObject body;
-        body.insert(QStringLiteral("pid"), QCoreApplication::applicationPid());
-        body.insert(
-            QStringLiteral("started"),
-            double(sessions::startTimeOf(QCoreApplication::applicationPid())));
-        body.insert(QStringLiteral("path"), drawing);
-        body.insert(QStringLiteral("dirty"), false);
-        body.insert(QStringLiteral("selection"), QJsonValue::Null);
+        QVERIFY(writeDocument(drawing, sample()));
 
-        QDir().mkpath(sessions::directory());
-        QFile file(sessions::directory() + QStringLiteral("/%1.json")
-                                              .arg(QCoreApplication::applicationPid()));
-        QVERIFY(file.open(QIODevice::WriteOnly));
-        file.write(QJsonDocument(body).toJson(QJsonDocument::Compact));
-        file.close();
-
-        const QList<sessions::Entry> found = sessions::live(drawing);
-        QCOMPARE(found.size(), 1);
-        QCOMPARE(found.first().pid, qint64(QCoreApplication::applicationPid()));
-        QCOMPARE(found.first().path, drawing);
+        QProcess studio;
+        ScopedProcessCleanup cleanup{{&studio}};
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+        environment.remove(QStringLiteral("QT_QPA_PLATFORMTHEME"));
+        studio.setProcessEnvironment(environment);
+        studio.start(QStringLiteral(SOURCE_DIR "/build/bin/omapixel-studio"), {drawing});
+        QVERIFY(studio.waitForStarted(5000));
+        QByteArray snapshot;
+        QString publisherError;
+         QTRY_VERIFY2_WITH_TIMEOUT(
+             sessions::readPublisher(studio.processId(), &snapshot, &publisherError),
+             qPrintable(publisherError), 5000);
+        const QString canonicalDrawing = QFileInfo(drawing).canonicalFilePath();
+        QList<sessions::Entry> found;
+        QTRY_VERIFY_WITH_TIMEOUT(([&] {
+            found = sessions::live();
+            return found.size() == 1 && found.first().pid == studio.processId()
+                && found.first().path == canonicalDrawing;
+        }()), 30000);
+        QCOMPARE(found.first().pid, studio.processId());
+        QCOMPARE(found.first().path, canonicalDrawing);
         QVERIFY(!found.first().dirty);
         QVERIFY(!found.first().selection.isValid());
     }
@@ -2147,38 +3919,101 @@ private slots:
 
     void whereReportsBothStudiosOnOneDocument()
     {
-        // Two windows on one document: two entries, because inventing a
-        // winner would be worse than making the caller choose. The second
-        // live process here is a real child, so both records validate.
+        // Two processes on one document: two entries, because inventing a
+        // winner would be worse than making the caller choose.
         QTemporaryDir runtime;
         qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
 
-        QProcess other;
-        other.start(QStringLiteral("sleep"), {QStringLiteral("10")});
-        QVERIFY(other.waitForStarted());
-        const qint64 otherStarted = sessions::startTimeOf(other.processId());
-        QVERIFY(otherStarted > 0);
+        const QString drawing = runtime.path() + QStringLiteral("/shared.json");
+        QVERIFY(writeDocument(drawing, sample()));
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+        environment.remove(QStringLiteral("QT_QPA_PLATFORMTHEME"));
+        QProcess first;
+        QProcess second;
+        ScopedProcessCleanup cleanup{{&first, &second}};
+        first.setProcessEnvironment(environment);
+        second.setProcessEnvironment(environment);
+        const QString studioPath = QStringLiteral(SOURCE_DIR "/build/bin/omapixel-studio");
+        first.start(studioPath, {drawing});
+        second.start(studioPath, {drawing});
+        QVERIFY(first.waitForStarted(5000));
+        QVERIFY(second.waitForStarted(5000));
+        QByteArray firstSnapshot;
+        QByteArray secondSnapshot;
+        QString firstError;
+        QTRY_VERIFY2_WITH_TIMEOUT(
+            sessions::readPublisher(first.processId(), &firstSnapshot, &firstError),
+            qPrintable(firstError), 15000);
+        QString secondError;
+         QTRY_VERIFY2_WITH_TIMEOUT(
+             sessions::readPublisher(second.processId(), &secondSnapshot, &secondError),
+             qPrintable(secondError), 15000);
+        const QString canonicalDrawing = QFileInfo(drawing).canonicalFilePath();
+        QCOMPARE(QJsonDocument::fromJson(firstSnapshot).object()
+                     .value(QStringLiteral("path")).toString(), canonicalDrawing);
+        QCOMPARE(QJsonDocument::fromJson(secondSnapshot).object()
+                     .value(QStringLiteral("path")).toString(), canonicalDrawing);
+         const QSet<qint64> expectedPids{first.processId(), second.processId()};
+         QList<sessions::Entry> found;
+          QTRY_VERIFY_WITH_TIMEOUT(([&] {
+              found = sessions::live();
+             if (found.size() != expectedPids.size())
+                 return false;
+             QSet<qint64> pids;
+             for (const sessions::Entry &entry : found) {
+                 if (entry.path != canonicalDrawing)
+                     return false;
+                 pids.insert(entry.pid);
+             }
+             return pids == expectedPids;
+          }()), 5000);
+          QCOMPARE(found.size(), expectedPids.size());
+     }
 
-        QDir().mkpath(sessions::directory());
-        const QString drawing = QStringLiteral("/tmp/shared.json");
-        const auto writeSession = [&](qint64 pid, qint64 started) {
-            QFile f(sessions::directory() + QStringLiteral("/%1.json").arg(pid));
-            QVERIFY(f.open(QIODevice::WriteOnly));
-            f.write(QString("{\"pid\": %1, \"started\": %2, \"path\": \"%3\", "
-                            "\"dirty\": false, \"selection\": null}")
-                        .arg(pid)
-                        .arg(started)
-                        .arg(drawing)
-                        .toUtf8());
-        };
-        writeSession(QCoreApplication::applicationPid(),
-                     sessions::startTimeOf(QCoreApplication::applicationPid()));
-        writeSession(other.processId(), otherStarted);
+    void whereDoesNotWaitForAnUnrelatedStoppedStudio()
+    {
+        QTemporaryDir runtime;
+        qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
 
-        QCOMPARE(sessions::live(drawing).size(), 2);
+        const QString wantedDrawing = runtime.path() + QStringLiteral("/wanted.json");
+        const QString unrelatedDrawing = runtime.path() + QStringLiteral("/unrelated.json");
+        QVERIFY(writeDocument(wantedDrawing, sample()));
+        QVERIFY(writeDocument(unrelatedDrawing, sample()));
 
-        other.kill();
-        QVERIFY(other.waitForFinished());
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+        environment.remove(QStringLiteral("QT_QPA_PLATFORMTHEME"));
+        QProcess unrelated;
+        QProcess wanted;
+        ScopedProcessCleanup cleanup{{&unrelated, &wanted}};
+        unrelated.setProcessEnvironment(environment);
+        wanted.setProcessEnvironment(environment);
+        const QString studioPath = QStringLiteral(SOURCE_DIR "/build/bin/omapixel-studio");
+        unrelated.start(studioPath, {unrelatedDrawing});
+        wanted.start(studioPath, {wantedDrawing});
+        QVERIFY(unrelated.waitForStarted(5000));
+        QVERIFY(wanted.waitForStarted(5000));
+
+        QByteArray snapshot;
+        QTRY_VERIFY_WITH_TIMEOUT(sessions::readPublisher(unrelated.processId(), &snapshot),
+                                 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(sessions::readPublisher(wanted.processId(), &snapshot),
+                                 5000);
+        QVERIFY(::kill(pid_t(unrelated.processId()), SIGSTOP) == 0);
+
+        const QString canonicalWanted = QFileInfo(wantedDrawing).canonicalFilePath();
+        QElapsedTimer timer;
+        timer.start();
+        const QList<sessions::Entry> found = sessions::live(canonicalWanted);
+        const qint64 elapsed = timer.elapsed();
+        QVERIFY(::kill(pid_t(unrelated.processId()), SIGCONT) == 0);
+
+        QCOMPARE(found.size(), 1);
+        QCOMPARE(found.first().pid, wanted.processId());
+        QCOMPARE(found.first().path, canonicalWanted);
+        QVERIFY2(elapsed < 750,
+                 qPrintable(QStringLiteral("discovery took %1 ms").arg(elapsed)));
     }
 
     // -------------------------------------------------------- change history
@@ -2380,7 +4215,7 @@ private slots:
         // rounds of "scrolling does not work" were spent testing simplified
         // stand-ins that behaved perfectly; the only thing worth testing is the
         // file that ships.
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QTest::failOnWarning();
         DocumentModel document;
@@ -2574,7 +4409,7 @@ private slots:
         // and scrolls at a point inside the drawing pane. Testing Surface.qml
         // on its own passed while the studio did not, which means the thing
         // that swallows the wheel is something Surface does not contain.
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QQmlEngine engine;
         DocumentModel document;
@@ -2639,7 +4474,7 @@ private slots:
     void dirtyDocumentsGateEveryDestructiveWindowAction()
     {
         QTest::failOnWarning();
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
         QQmlEngine engine;
         DocumentModel document;
         Theme theme;
@@ -2731,9 +4566,10 @@ private slots:
         // was a limit nobody chose on purpose.
         DocumentModel doc;
         QSet<QString> handed;
-        for (int i = 0; i < 300; ++i) {
+        const int additions = Document::maxPaletteSlots - doc.document().palette().size();
+        for (int i = 0; i < additions; ++i) {
             const QString slot = doc.freeSlot();
-            QVERIFY2(!slot.isEmpty(), "ran out of slots before three hundred");
+            QVERIFY2(!slot.isEmpty(), "ran out of slots before the 256-slot limit");
             QCOMPARE(slot.size(), 1);
             QVERIFY(slot != QStringLiteral("."));      // emptiness is not a slot
             // The digits belong to the studio's colour keys. A slot called `3`
@@ -2746,6 +4582,7 @@ private slots:
             handed.insert(slot);
             doc.setPaletteColour(slot, QStringLiteral("#123456"));
         }
+        QVERIFY(doc.freeSlot().isEmpty());
 
         // Letters and digits come first, so a palette that stays small stays
         // legible in the file.
@@ -2824,7 +4661,7 @@ private slots:
 
     void goToPixelMovesByExactZeroBasedCoordinates()
     {
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QQmlEngine engine;
         DocumentModel document;
@@ -2902,7 +4739,7 @@ private slots:
         // pixel exactly. This asserts the keys actually reach the canvas --
         // which is a question about focus, and focus is the thing a window full
         // of controls quietly takes away.
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QQmlEngine engine;
         DocumentModel document;
@@ -3205,7 +5042,7 @@ private slots:
 
     void pickupAndNumberShortcutsPaintASelectionWithTheCollectedColour()
     {
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QQmlEngine engine;
         DocumentModel document;
@@ -3269,7 +5106,7 @@ private slots:
         // The audit this came from: nothing but the text fields accepted focus,
         // and Tab was intercepted to jump back to the drawing -- which answered
         // one complaint by making every button in the window unreachable.
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QQmlEngine engine;
         DocumentModel document;
@@ -3335,7 +5172,7 @@ private slots:
     {
         // Opening a search panel and then having to reach for the mouse to
         // type in it defeats the point of having it on a key.
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QQmlEngine engine;
         DocumentModel document;
@@ -3668,7 +5505,7 @@ private slots:
         // the real window so the cost of the QML side is in the measurement --
         // a C++-only benchmark would miss it entirely, and the QML side is
         // where the suspicion is.
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QQmlEngine engine;
         DocumentModel document;
@@ -3993,20 +5830,32 @@ private slots:
     {
         // The ceiling still exists: memory is the budget, and one over the
         // line fails with a sentence rather than an allocation death.
-        QJsonObject size;
-        size.insert(QStringLiteral("w"), Document::maxDimension + 1);
-        size.insert(QStringLiteral("h"), 2);
-        QJsonArray frames{QJsonArray{QStringLiteral("..")}};
+        QJsonObject canvas;
+        canvas.insert(QStringLiteral("width"), Document::maxDimension + 1);
+        canvas.insert(QStringLiteral("height"), 2);
         QJsonObject clip;
+        clip.insert(QStringLiteral("id"), QStringLiteral("idle"));
         clip.insert(QStringLiteral("name"), QStringLiteral("idle"));
         clip.insert(QStringLiteral("fps"), 8);
-        clip.insert(QStringLiteral("frames"), frames);
+        clip.insert(QStringLiteral("frameCount"), 1);
         QJsonArray clips{clip};
-        QJsonObject palette;
+        QJsonObject layer;
+        layer.insert(QStringLiteral("id"), QStringLiteral("layer"));
+        layer.insert(QStringLiteral("name"), QStringLiteral("Layer"));
+        layer.insert(QStringLiteral("visible"), true);
+        layer.insert(QStringLiteral("locked"), false);
+        layer.insert(QStringLiteral("opacity"), 255);
+        layer.insert(QStringLiteral("mode"), QStringLiteral("normal"));
+        layer.insert(QStringLiteral("storage"), QStringLiteral("shared"));
+        layer.insert(QStringLiteral("cels"), QJsonArray{QJsonObject{
+            {QStringLiteral("scope"), QStringLiteral("all")},
+            {QStringLiteral("rows"), QJsonArray{QStringLiteral(".."), QStringLiteral("..")}}}});
         QJsonObject root;
-        root.insert(QStringLiteral("size"), size);
+        root.insert(QStringLiteral("version"), 2);
+        root.insert(QStringLiteral("canvas"), canvas);
+        root.insert(QStringLiteral("palette"), QJsonArray());
         root.insert(QStringLiteral("clips"), clips);
-        root.insert(QStringLiteral("palette"), palette);
+        root.insert(QStringLiteral("layers"), QJsonArray{layer});
 
         const Codec::Result read = Codec::read(
             QJsonDocument(root).toJson(), Codec::WarningLimits());
@@ -4130,7 +5979,7 @@ private slots:
         // A loop is right for judging movement and wrong for judging the last
         // frame -- which the loop keeps snatching away a twelfth of a second
         // after it arrives. Both are wanted, so it is a flag.
-        qmlRegisterType<PixelGridItem>("omapixel", 1, 0, "PixelGridItem");
+        registerQmlTypes();
 
         QQmlEngine engine;
         DocumentModel document;

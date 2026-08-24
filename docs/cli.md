@@ -113,9 +113,14 @@ omapixel render heart.json -o sheet.png --scale 8 --sheet --checker
 | `--scale <n>` | screen pixels per sprite pixel, default `1` |
 | `--sheet` | every frame of the clip side by side, instead of one frame |
 | `--checker` | checkerboard behind transparency instead of alpha |
+| `--isolated --layer-id <id>` | render exactly one layer, instead of the composite |
+| `--isolated --layer "Exact Name"` | exact name form, including spaces |
 
 Scaling is nearest-neighbour, so a pixel stays a square. It works with no
 display attached.
+
+`show` and `text` use the same composite default and isolated target options.
+The CLI never reads a selected layer or frame from a Studio session.
 
 ### `diff` — what differs between two documents
 
@@ -136,17 +141,32 @@ omapixel where heart.json     # only studios holding that document
 
 The studio publishes what it has open while it runs, and this is the read side:
 one JSON object per window, with the process id, the document's absolute path,
-whether that window holds unsaved work, and its selected rectangle or `null`.
-A selection carries its clip, frame, x, y, width, height, and pixel count, so an
-agent can address exactly what the user selected. Ask before you write: a write to a
-document a window holds will appear in that window, and unsaved strokes there
-move one Ctrl+Z away.
+whether that window holds unsaved work, its current view, and its selected
+rectangle or `null`. The view always carries the clip, frame, stable active layer
+ID and name, and edit scope (`frame` or `all-frames`). A selection repeats its
+clip, frame, layer ID and layer name alongside x, y, width, height, and pixel
+count, so an agent can address exactly what the user selected. Ask before you
+write: a write to a document a window holds will appear in that window, and
+unsaved strokes there move one Ctrl+Z away.
 
 ```json
-{"sessions":[{"pid":1234,"started":987654,"path":"/work/heart.json","dirty":false,"selection":{"clip":"idle","frame":0,"x":2,"y":3,"width":6,"height":7,"count":42}}]}
+{"sessions":[{"pid":1234,"started":987654,"path":"/work/heart.json","dirty":false,"view":{"clip":"idle","frame":0,"layerId":"hero","layerName":"Hero","scope":"frame"},"selection":{"clip":"idle","frame":0,"layerId":"hero","layerName":"Hero","x":2,"y":3,"width":6,"height":7,"count":42}}]}
 ```
 
-Without a selected range, `selection` is `null`.
+Without a selected range, `selection` is `null`; `view` is still present.
+
+The result is a point-in-time state snapshot. Playback remains a Studio-local
+control. The endpoint is authenticated with Linux `SO_PEERCRED` plus `/proc` PID,
+start-time, UID, and executable checks; `started` is `/proc` clock ticks since
+boot, not epoch seconds. Discovery and responses are bounded. Legacy sidecars are
+stale garbage only and are never parsed as authority.
+`where` never supplies defaults to another command: pass the clip, frame, layer,
+or scope explicitly to the command you run.
+
+The acceptance fixture creates both storage modes through the CLI, edits by
+stable layer ID, and proves that the same document can be inspected by `where`,
+rendered as a composite or isolated layer, and flattened to a separate output.
+Run it with `mise run layers-e2e`.
 
 An untitled window publishes a scratch path under the runtime directory
 (`studio.scratch`), so "draw on what I have open" works before any save — the
@@ -206,6 +226,18 @@ omapixel edit heart.json swap  --slot R --to B    # every R becomes a B
 `shift` moves what is drawn and drops whatever leaves the frame. `swap` is the
 one to reach for when a colour is wrong everywhere.
 
+Content mutations on an animated layer can state their scope explicitly:
+
+```bash
+omapixel paint heart.json --layer-id hero --scope frame --at 2,2 --slot R
+omapixel edit heart.json clear --layer "Hero Layer" --scope all-frames
+```
+
+`--scope frame` addresses the selected frame (default `0`); `--scope all-frames`
+addresses every frame in that clip. `--all-frames` is an equivalent spelling for
+batch scripts. A multi-frame animated edit without a frame or scope is refused
+instead of guessing.
+
 ---
 
 ## Structure
@@ -248,6 +280,10 @@ is allowed: those pixels keep their letter in the file and read as empty until
 the slot comes back, which is what makes a wrong `rm` recoverable. `check`
 reports it as *uses a slot with no colour: B*, so it does not go unnoticed.
 
+Palette slots are limited to 256 and must be one printable character other than
+`.`, `"`, or `\\`; C0/C1 controls and DEL are refused consistently by the CLI,
+Studio core, Bridge, and v2 codec.
+
 ### `resize` — change the frame, keeping the drawing centred
 
 ```bash
@@ -282,6 +318,53 @@ how many would be lost. `--anyway` confirms the crop. An empty reference frame
 is also refused, while a frame that already touches all four canvas edges is a
 successful no-op and does not rewrite the file.
 
+### `layer` — inspect and control the layer stack
+
+Layer order is bottom-to-top and indices are zero-based. IDs are stable across
+rename and reorder; use them for automation. `--layer` is an exact, unique name,
+not an ID-or-name fallback.
+
+```bash
+omapixel layer art.json list
+omapixel layer art.json add --id hero --name "Hero Layer" --storage animated
+omapixel layer art.json rename --layer-id hero --name "Main Hero"
+omapixel layer art.json move --layer "Main Hero" --index 1
+omapixel layer art.json set --layer-id hero --visible false --opacity 160
+omapixel layer art.json mode --layer-id hero --mode multiply
+omapixel layer art.json dup --layer-id hero --id hero-copy --name "Hero Copy"
+omapixel layer art.json rm --layer-id hero-copy
+omapixel layer art.json merge-down --layer-id hero
+```
+
+`set` accepts `--visible true|false`, `--locked true|false`, and
+`--opacity 0..255`. `add` and `dup` require the new `--id` and `--name` so the
+result is deterministic. `merge-down` composites the selected layer into the
+layer immediately below it and reports its frame and pixel consequences.
+
+Every mutation against a multilayer document requires either `--layer-id` or an
+exact `--layer` name. Supplying both is allowed only when they identify the same
+layer. Missing, unknown, negative, or conflicting targets fail with stable
+`E_LAYER_*` diagnostics and do not write the document. Renaming or reordering
+never changes an ID.
+
+Locked targets refuse content, metadata, reorder, duplicate, remove, and merge
+operations. Hidden targets refuse content and destructive stack operations unless
+`--include-hidden` is present. Rendering and flattening always omit hidden layers.
+
+### `flatten` — write a separate composite document
+
+```bash
+omapixel flatten art.json -o art-flat.json
+omapixel flatten art.json -o art-flat.json --anyway
+```
+
+`-o` is required and must differ from the input path. The source is never changed.
+The command prints a deterministic report containing frames, affected pixels,
+exact and approximated palette pixels, new slots, and removed layers. If palette
+quantization would approximate any composed pixels, it exits `1` with the report
+and requires `--anyway` before writing. `--anyway` confirms only that palette loss;
+flattening still refuses if it would remove or change any locked layer.
+
 ---
 
 ## Many commands at once
@@ -307,7 +390,7 @@ frame dup --clip walk
 
 Only commands that work on the open document are allowed: `info`, `check`,
 `show`, `text`, `resize`, `trim`, `clip`, `frame`, `palette`, `paint`, `line`, `rect`,
-`fill`, `edit`. Anything that names a second file (`render`, `diff`, `export`,
+`fill`, `edit`, `layer`. Anything that names a second file (`render`, `flatten`, `diff`, `export`,
 `import`, `new`) stays outside, so a script cannot quietly write over something
 the person running it never mentioned.
 

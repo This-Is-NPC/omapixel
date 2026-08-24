@@ -20,10 +20,13 @@
 #include "Config.h"
 #include "Differences.h"
 #include "Document.h"
+#include "LayerOperations.h"
 #include "Ops.h"
+#include "Output.h"
 #include "Sessions.h"
 #include "Strings.h"
 #include "Render.h"
+#include "TextSafety.h"
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -36,7 +39,7 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QProcess>
-#include <QSaveFile>
+#include <QBuffer>
 #include <QTextStream>
 
 #include "version.h"
@@ -57,6 +60,20 @@ QTextStream &err()
 {
     static QTextStream stream(stderr);
     return stream;
+}
+
+QString safeDiagnostic(const QString &text)
+{
+    return text::escapeForTerminal(text);
+}
+
+constexpr qsizetype maxBatchLines = 8192;
+constexpr qsizetype maxBatchCommands = 4096;
+constexpr qsizetype maxBatchOutputBytes = 4 * 1024 * 1024;
+
+void diagnostic(const QString &text)
+{
+    err() << safeDiagnostic(text) << "\n";
 }
 
 Codec::WarningLimits warningLimits()
@@ -85,15 +102,34 @@ bool readScript(const QString &path, QStringList *lines, QString *error)
 {
     if (path == QLatin1String("-")) {
         QTextStream in(stdin);
-        *lines = in.readAll().split(QLatin1Char('\n'));
+        const QString text = in.read(Document::maxDocumentBytes + 1);
+        if (text.toUtf8().size() > Document::maxDocumentBytes) {
+            *error = QStringLiteral("batch script exceeds the hard input limit");
+            return false;
+        }
+        const qsizetype count = text.isEmpty() ? 0 : text.count(QLatin1Char('\n'))
+            + (text.endsWith(QLatin1Char('\n')) ? 0 : 1);
+        if (count > maxBatchLines) {
+            *error = QStringLiteral("batch script exceeds the hard line limit");
+            return false;
+        }
+        *lines = text.split(QLatin1Char('\n'));
         return true;
     }
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        *error = path + QStringLiteral(": ") + file.errorString();
+    QByteArray bytes;
+    if (!input::readRegularFile(path, Document::maxDocumentBytes, &bytes, error))
+        return false;
+    if (bytes.size() > Document::maxDocumentBytes) {
+        *error = QStringLiteral("%1: batch script exceeds the hard input limit").arg(path);
         return false;
     }
-    *lines = QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'));
+    const qsizetype count = bytes.isEmpty() ? 0 : bytes.count('\n')
+        + (bytes.endsWith('\n') ? 0 : 1);
+    if (count > maxBatchLines) {
+        *error = QStringLiteral("%1: batch script exceeds the hard line limit").arg(path);
+        return false;
+    }
+    *lines = QString::fromUtf8(bytes).split(QLatin1Char('\n'));
     return true;
 }
 
@@ -117,12 +153,14 @@ int runBatch(Document &doc, const QString &path, const QCommandLineParser &parse
     QStringList lines;
     QString error;
     if (!readScript(parser.value(QStringLiteral("script")), &lines, &error)) {
-        err() << error << "\n";
+        diagnostic(error);
         return 1;
     }
 
     int applied = 0;
     int changes = 0;
+    qsizetype commands = 0;
+    qsizetype outputBytes = 0;
     for (int number = 1; number <= lines.size(); ++number) {
         const QString line = lines.at(number - 1).trimmed();
         if (line.isEmpty() || line.startsWith(QLatin1Char('#')))
@@ -131,12 +169,17 @@ int runBatch(Document &doc, const QString &path, const QCommandLineParser &parse
         QStringList words = QProcess::splitCommand(line);
         if (words.isEmpty())
             continue;
+        if (++commands > maxBatchCommands) {
+            diagnostic(QStringLiteral("line %1: batch script exceeds the hard command limit")
+                           .arg(number));
+            return 2;
+        }
         const QString command = words.takeFirst();
 
         if (!cli::isDocumentCommand(command)) {
-            err() << "line " << number << ": " << command
-                  << " cannot run in a batch — a batch works on the one document "
-                     "it opened\n";
+            diagnostic(QStringLiteral("line %1: %2 cannot run in a batch — a batch works "
+                                     "on the one document it opened")
+                           .arg(number).arg(command));
             return 2;
         }
 
@@ -145,17 +188,30 @@ int runBatch(Document &doc, const QString &path, const QCommandLineParser &parse
         QCommandLineParser lineParser;
         cli::addOptions(lineParser);
         if (!lineParser.parse(QStringList{QStringLiteral("omapixel")} + words)) {
-            err() << "line " << number << ": " << lineParser.errorText() << "\n";
+            diagnostic(QStringLiteral("line %1: %2")
+                           .arg(number).arg(lineParser.errorText()));
             return 2;
         }
 
         const cli::Outcome outcome = cli::applyCommand(
             doc, command, lineParser.positionalArguments(), lineParser);
+        outputBytes += outcome.output.toUtf8().size();
+        if (outputBytes > maxBatchOutputBytes) {
+            diagnostic(QStringLiteral("line %1: batch output exceeds the hard limit of %2 MiB")
+                           .arg(number).arg(maxBatchOutputBytes / (1024 * 1024)));
+            return 2;
+        }
+        const QStringList lineWords = lineParser.positionalArguments();
+        const bool machineOutput = command == QLatin1String("info")
+            || ((command == QLatin1String("palette") || command == QLatin1String("layer"))
+                && (lineWords.isEmpty() || lineWords.first() == QLatin1String("list")));
         if (!outcome.output.isEmpty())
-            out() << outcome.output;
+            out() << (command == QLatin1String("show") || machineOutput
+                          ? outcome.output
+                          : safeDiagnostic(outcome.output));
         if (outcome.code != 0) {
-            err() << "line " << number << ": " << outcome.error << "\n";
-            err() << "nothing was saved\n";
+            diagnostic(QStringLiteral("line %1: %2").arg(number).arg(outcome.error));
+            diagnostic(QStringLiteral("nothing was saved"));
             return outcome.code;
         }
         applied += 1;
@@ -164,14 +220,90 @@ int runBatch(Document &doc, const QString &path, const QCommandLineParser &parse
     }
 
     if (changes > 0 && !Codec::writeFile(path, doc, &error)) {
-        err() << error << "\n";
+        diagnostic(error);
         return 1;
     }
-    out() << path << ": " << applied << " command(s), " << changes << " change(s)\n";
+    out() << safeDiagnostic(path) << ": " << applied << " command(s), " << changes
+           << " change(s)\n";
     return 0;
 }
 
-/// `where` -- which live studios hold a document, their dirty state and range.
+bool resolveRenderLayer(const Document &doc, const QCommandLineParser &parser,
+                        QString *layer, QString *error)
+{
+    const QString idOption = parser.value(QStringLiteral("layer-id"));
+    const QString nameOption = parser.value(QStringLiteral("layer"));
+    const Layer *byId = idOption.isEmpty() ? nullptr : doc.layerById(idOption);
+    const Layer *byName = nameOption.isEmpty() ? nullptr : doc.layerByName(nameOption);
+    if (!idOption.isEmpty() && !byId) {
+        *error = QStringLiteral("E_LAYER_NOT_FOUND: --layer-id=%1").arg(idOption);
+        return false;
+    }
+    if (!nameOption.isEmpty() && !byName) {
+        *error = QStringLiteral("E_LAYER_NOT_FOUND: --layer=%1").arg(nameOption);
+        return false;
+    }
+    if (byId && byName && byId != byName) {
+        *error = QStringLiteral("E_LAYER_TARGET_CONFLICT: --layer-id=%1 conflicts with --layer=%2")
+                     .arg(idOption, nameOption);
+        return false;
+    }
+    const Layer *found = byId ? byId : byName;
+    if (!found) {
+        *error = QStringLiteral("E_LAYER_TARGET_REQUIRED: --isolated requires "
+                                "--layer-id=ID or --layer=EXACT_NAME");
+        return false;
+    }
+    *layer = found->id;
+    return true;
+}
+
+int flattenTo(const Document &source, const QString &inputPath,
+              const QCommandLineParser &parser)
+{
+    if (!parser.isSet(QStringLiteral("out"))) {
+        err() << "flatten: say where to write, with -o\n";
+        return 2;
+    }
+    const QString outputPath = parser.value(QStringLiteral("out"));
+    QString outputError;
+    if (!output::validate(outputPath, {inputPath}, &outputError)) {
+        diagnostic(QStringLiteral("E_FLATTEN_OUTPUT: %1").arg(outputError));
+        return 2;
+    }
+
+    // Stage through the permissive path so an existing palette-loss report is
+    // preserved as the primary refusal before the structural lock policy.
+    const LayerOperationResult staged = previewFlattenVisible(source);
+    if (!staged) {
+        diagnostic(staged.error);
+        return 1;
+    }
+    const LayerOperationReport &report = staged.report;
+    const QString summary = QStringLiteral(
+        "frames=%1 affected-pixels=%2 exact-pixels=%3 approximated-pixels=%4 "
+        "new-slots=%5 removed-layers=%6")
+                                .arg(report.frames)
+                                .arg(report.affectedPixels)
+                                .arg(report.exactMatches)
+                                .arg(report.approximatedPixels)
+                                .arg(report.newSlots)
+                                .arg(report.removedLayers);
+    if (report.hasPaletteLoss() && !parser.isSet(QStringLiteral("anyway"))) {
+        diagnostic(QStringLiteral("E_FLATTEN_PALETTE_LOSS: %1; pass --anyway to write")
+                       .arg(summary));
+        return 1;
+    }
+    QString error;
+    if (!Codec::writeFile(outputPath, staged.document, {inputPath}, &error)) {
+        diagnostic(error);
+        return 1;
+    }
+    out() << safeDiagnostic(outputPath) << ": " << summary << "\n";
+    return 0;
+}
+
+/// `where` -- which live studios hold a document and their view state.
 ///
 /// The read side of the session files the studio publishes. An explicit ask
 /// rather than a silent default: if `--frame` ever fell back to the session,
@@ -192,11 +324,11 @@ int where(const QStringList &words)
     const QList<sessions::Entry> found = sessions::live(wanted);
 
     if (found.isEmpty()) {
-        err() << (wanted.isEmpty()
-                      ? Strings::shared().t(QStringLiteral("error.whereNoSessions"))
-                      : Strings::shared().t(QStringLiteral("error.whereNobody"))
-                            .arg(wanted))
-              << "\n";
+        const QString message = wanted.isEmpty()
+                                    ? Strings::shared().t(QStringLiteral("error.whereNoSessions"))
+                                    : Strings::shared().t(QStringLiteral("error.whereNobody"))
+                                          .arg(wanted);
+        err() << safeDiagnostic(message) << "\n";
         return 1;
     }
 
@@ -207,10 +339,18 @@ int where(const QStringList &words)
         one.insert(QStringLiteral("started"), entry.started);
         one.insert(QStringLiteral("path"), entry.path);
         one.insert(QStringLiteral("dirty"), entry.dirty);
+        one.insert(QStringLiteral("view"), QJsonObject{
+                                             {QStringLiteral("clip"), entry.clip},
+                                             {QStringLiteral("frame"), entry.frame},
+                                             {QStringLiteral("layerId"), entry.layerId},
+                                             {QStringLiteral("layerName"), entry.layerName},
+                                             {QStringLiteral("scope"), entry.scope}});
         if (entry.selection.isValid()) {
             QJsonObject selection;
-            selection.insert(QStringLiteral("clip"), entry.clip);
-            selection.insert(QStringLiteral("frame"), entry.frame);
+            selection.insert(QStringLiteral("clip"), entry.selectionClip);
+            selection.insert(QStringLiteral("frame"), entry.selectionFrame);
+            selection.insert(QStringLiteral("layerId"), entry.selectionLayerId);
+            selection.insert(QStringLiteral("layerName"), entry.selectionLayerName);
             selection.insert(QStringLiteral("x"), entry.selection.x());
             selection.insert(QStringLiteral("y"), entry.selection.y());
             selection.insert(QStringLiteral("width"), entry.selection.width());
@@ -237,31 +377,47 @@ int where(const QStringList &words)
 int checkCatalogues(const QString &wanted)
 {
     const QString home = Strings::catalogueDir();
-    const auto read = [](const QString &path, QJsonObject *into) {
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    const auto read = [](const QString &path, QJsonObject *into, QString *error) {
+        QByteArray bytes;
+        if (!input::readRegularFile(path, Document::maxDocumentBytes, &bytes, error))
             return false;
-        *into = QJsonDocument::fromJson(file.readAll()).object();
+        if (bytes.size() > Document::maxDocumentBytes) {
+            *error = QStringLiteral("%1: catalog exceeds the hard input limit").arg(path);
+            return false;
+        }
+        QString scanError;
+        if (Codec::rejectDuplicateJsonKeys(bytes, &scanError)) {
+            *error = QStringLiteral("%1: %2").arg(path, scanError);
+            return false;
+        }
+        QJsonParseError parseError;
+        const QJsonDocument parsed = QJsonDocument::fromJson(bytes, &parseError);
+        if (parseError.error != QJsonParseError::NoError || !parsed.isObject()) {
+            *error = QStringLiteral("%1: invalid catalog JSON").arg(path);
+            return false;
+        }
+        *into = parsed.object();
         return true;
     };
 
     QJsonObject english;
-    if (!read(home + QStringLiteral("/en.json"), &english)) {
-        err() << home << "/en.json: not there\n";
+    QString readError;
+    if (!read(home + QStringLiteral("/en.json"), &english, &readError)) {
+        diagnostic(readError);
         return 1;
     }
 
     if (wanted.isEmpty()) {
-        out() << "catalogues in " << home << ":\n";
+        out() << "catalogues in " << safeDiagnostic(home) << ":\n";
         const QFileInfoList files =
             QDir(home).entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
         for (const QFileInfo &file : files) {
             QJsonObject one;
-            if (!read(file.absoluteFilePath(), &one))
+            if (!read(file.absoluteFilePath(), &one, &readError))
                 continue;
-            out() << QStringLiteral("  %1 %2 strings")
-                         .arg(file.completeBaseName(), -8)
-                         .arg(one.size());
+            out() << safeDiagnostic(QStringLiteral("  %1 %2 strings")
+                                        .arg(file.completeBaseName(), -8)
+                                        .arg(one.size()));
             if (file.completeBaseName() != QLatin1String("en"))
                 out() << "  (" << one.size() * 100 / english.size() << "% of English)";
             out() << "\n";
@@ -272,8 +428,9 @@ int checkCatalogues(const QString &wanted)
     }
 
     QJsonObject them;
-    if (!read(home + QLatin1Char('/') + wanted + QStringLiteral(".json"), &them)) {
-        err() << "no i18n/" << wanted << ".json — copy i18n/en.json to start\n";
+    if (!read(home + QLatin1Char('/') + wanted + QStringLiteral(".json"),
+              &them, &readError)) {
+        diagnostic(readError);
         return 1;
     }
 
@@ -294,14 +451,14 @@ int checkCatalogues(const QString &wanted)
     missing.sort();
     stale.sort();
 
-    out() << wanted << ": " << (english.size() - missing.size()) << " of "
+    out() << safeDiagnostic(wanted) << ": " << (english.size() - missing.size()) << " of "
           << english.size() << " translated\n";
     if (!missing.isEmpty()) {
         out() << "\n  " << missing.size() << " still to do:\n";
         for (int i = 0; i < missing.size() && i < 40; ++i) {
-            out() << QStringLiteral("    %1 %2\n")
-                         .arg(missing.at(i), -38)
-                         .arg(english.value(missing.at(i)).toString());
+            out() << safeDiagnostic(QStringLiteral("    %1 %2\n")
+                                        .arg(missing.at(i), -38)
+                                        .arg(english.value(missing.at(i)).toString()));
         }
         if (missing.size() > 40)
             out() << "    ... and " << missing.size() - 40 << " more\n";
@@ -310,7 +467,7 @@ int checkCatalogues(const QString &wanted)
         out() << "\n  " << stale.size()
               << " the program no longer asks for, safe to delete:\n";
         for (const QString &key : stale)
-            out() << "    " << key << "\n";
+            out() << "    " << safeDiagnostic(key) << "\n";
     }
     if (!untouched.isEmpty() && missing.isEmpty()) {
         out() << "\n  " << untouched.size()
@@ -334,16 +491,17 @@ int inspectConfig(const QString &what)
     if (what == QLatin1String("check")) {
         const QStringList problems = config.problems();
         if (!QFile::exists(path)) {
-            out() << path << ": not there — omapixel runs on its defaults\n";
+            out() << safeDiagnostic(path)
+                  << ": not there — omapixel runs on its defaults\n";
             return 0;
         }
         if (problems.isEmpty()) {
-            out() << path << ": good\n";
+            out() << safeDiagnostic(path) << ": good\n";
             return 0;
         }
-        err() << path << ":\n";
+        err() << safeDiagnostic(path) << ":\n";
         for (const QString &problem : problems)
-            err() << "  " << problem << "\n";
+            err() << "  " << safeDiagnostic(problem) << "\n";
         return 1;
     }
 
@@ -352,21 +510,22 @@ int inspectConfig(const QString &what)
         if (text.isEmpty()) {
             err() << "the default config is not installed — looked in:\n";
             for (const QString &place : Config::defaultSearchPath())
-                err() << "  " << place << "\n";
+                err() << "  " << safeDiagnostic(place) << "\n";
             return 1;
         }
         if (QFile::exists(path)) {
-            err() << path << " is already there — delete it first, or edit it\n";
+            err() << safeDiagnostic(path)
+                  << " is already there — delete it first, or edit it\n";
             return 1;
         }
         QDir().mkpath(QFileInfo(path).absolutePath());
         QFile file(path);
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            err() << "could not write " << path << "\n";
+            err() << "could not write " << safeDiagnostic(path) << "\n";
             return 1;
         }
         file.write(text.toUtf8());
-        out() << "wrote " << path << "\n";
+        out() << "wrote " << safeDiagnostic(path) << "\n";
         return 0;
     }
 
@@ -375,15 +534,16 @@ int inspectConfig(const QString &what)
         return 2;
     }
 
-    out() << "file      " << path;
+    out() << "file      " << safeDiagnostic(path);
     out() << (QFile::exists(path) ? "\n" : "   (not there — running on the defaults)\n");
     const QString speaking = Strings::shared().language();
     const QString wanted = Strings::preferredLanguage();
-    out() << "language  " << speaking;
+    out() << "language  " << safeDiagnostic(speaking);
     // Asked for one and speaking another means there is no catalogue for it.
     // Saying only the one it settled on reads as the setting being ignored.
     if (!wanted.startsWith(speaking))
-        out() << "   (asked for " << wanted << ", no catalogue — `omapixel i18n`)";
+        out() << "   (asked for " << safeDiagnostic(wanted)
+              << ", no catalogue — `omapixel i18n`)";
     out() << "\n";
 
     // What the file actually changed. A config file you cannot diff against
@@ -418,7 +578,7 @@ int inspectConfig(const QString &what)
     } else {
         out() << "\nchanged from the defaults:\n";
         for (const QString &line : differs)
-            out() << line << "\n";
+            out() << safeDiagnostic(line) << "\n";
     }
 
     const QStringList problems = config.problems();
@@ -459,7 +619,7 @@ int main(int argc, char *argv[])
             err() << "the default config is not installed\n";
             return 1;
         }
-        out() << text;
+        out() << text::escapeForTerminal(text);
         out().flush();
         return 0;
     }
@@ -475,10 +635,12 @@ int main(int argc, char *argv[])
         "  show     draw a frame in the terminal\n"
         "  text     the frame as letters, one per pixel\n"
         "  render   write a PNG\n"
+        "  flatten  write a separate composite document\n"
         "  resize   change the frame, keeping the drawing centred\n"
         "  trim     crop empty borders around one frame's content\n"
         "  clip     add | rm | rename | fps\n"
         "  frame    add | dup | rm | move\n"
+        "  layer    list | add | rm | rename | move | set | mode | dup | merge-down\n"
         "  paint    one pixel\n"
         "  line     from one point to another\n"
         "  rect     an outline or a filled block\n"
@@ -539,17 +701,18 @@ int main(int argc, char *argv[])
                 rows = parts.at(1).toInt(&okRows);
             }
             if (!okColumns || !okRows || columns <= 0 || rows <= 0) {
-                err() << "--size: " << text << " is not COLUMNSxROWS\n";
+        err() << "--size: " << safeDiagnostic(text) << " is not COLUMNSxROWS\n";
                 return 2;
             }
         }
         const Document doc = Document::blank(columns, rows);
         QString error;
         if (!Codec::writeFile(words.first(), doc, &error)) {
-            err() << error << "\n";
+        err() << safeDiagnostic(error) << "\n";
             return 1;
         }
-        out() << words.first() << ": " << columns << "x" << rows << ", one clip\n";
+        out() << safeDiagnostic(words.first()) << ": " << columns << "x" << rows
+              << ", one clip\n";
         return 0;
     }
 
@@ -572,48 +735,74 @@ int main(int argc, char *argv[])
             err() << "import: say --name which set to pull out\n";
             return 2;
         }
-        QFile file(words.first());
-        if (!file.open(QIODevice::ReadOnly)) {
-            err() << words.first() << ": " << file.errorString() << "\n";
+        QString outputError;
+        if (!output::validate(parser.value(QStringLiteral("out")), {words.first()},
+                              &outputError)) {
+            diagnostic(QStringLiteral("import: %1").arg(outputError));
+            return 2;
+         }
+         QByteArray catalogBytes;
+         if (!input::readRegularFile(words.first(), Document::maxDocumentBytes,
+                                     &catalogBytes, &outputError)) {
+             diagnostic(outputError);
+             return 1;
+         }
+         if (catalogBytes.size() > Document::maxDocumentBytes) {
+             diagnostic(QStringLiteral("%1: catalog exceeds the hard input limit")
+                            .arg(words.first()));
+             return 1;
+         }
+         QString scanError;
+         if (Codec::rejectDuplicateJsonKeys(catalogBytes, &scanError)) {
+             diagnostic(QStringLiteral("%1: %2").arg(words.first(), scanError));
+             return 1;
+         }
+         QJsonParseError catalogParse;
+        const QJsonDocument catalogDocument =
+            QJsonDocument::fromJson(catalogBytes, &catalogParse);
+        if (catalogParse.error != QJsonParseError::NoError
+            || !catalogDocument.isObject()) {
+            diagnostic(QStringLiteral("%1: catalog must be a JSON object (%2)")
+                           .arg(words.first(), catalogParse.errorString()));
             return 1;
         }
-        const QJsonObject catalog = QJsonDocument::fromJson(file.readAll()).object();
+        const QJsonObject catalog = catalogDocument.object();
         const QString species = parser.value(QStringLiteral("name"));
         const QString variant = parser.isSet(QStringLiteral("index"))
                                     ? parser.value(QStringLiteral("index"))
                                     : QStringLiteral("0");
         const Bridge::Result pulled = Bridge::importSpecies(catalog, species, variant);
         if (!pulled) {
-            err() << pulled.error << "\n";
+            diagnostic(pulled.error);
             return 1;
         }
         QString error;
-        if (!Codec::writeFile(parser.value(QStringLiteral("out")), pulled.document,
-                              &error)) {
-            err() << error << "\n";
+         if (!Codec::writeFile(parser.value(QStringLiteral("out")), pulled.document,
+                               {words.first()}, &error)) {
+            diagnostic(error);
             return 1;
         }
         int frames = 0;
         for (const Clip &clip : pulled.document.clips())
-            frames += clip.frames.size();
-        out() << parser.value(QStringLiteral("out")) << ": "
+            frames += clip.frameCount;
+        out() << safeDiagnostic(parser.value(QStringLiteral("out"))) << ": "
               << pulled.document.clips().size() << " clip(s), " << frames << " frames\n";
         return 0;
     }
 
     // Everything below reads a document first.
     if (words.isEmpty()) {
-        err() << command << ": say which document\n";
+        err() << safeDiagnostic(command) << ": say which document\n";
         return 2;
     }
     const QString path = words.takeFirst();
     Codec::Result loaded = Codec::readFile(path, warningLimits());
     if (!loaded) {
-        err() << loaded.error << "\n";
+        diagnostic(loaded.error);
         return 1;
     }
     for (const QString &warning : loaded.warnings)
-        err() << "warning: " << warning << "\n";
+        diagnostic(QStringLiteral("warning: %1").arg(warning));
     Document doc = loaded.document;
     QString error;
 
@@ -625,40 +814,87 @@ int main(int argc, char *argv[])
             return 2;
         }
         if (doc.clips().isEmpty()) {
-            err() << "the document has no clips\n";
+            diagnostic(QStringLiteral("the document has no clips"));
             return 1;
         }
         const QString clipName = parser.value(QStringLiteral("clip")).isEmpty()
                                      ? doc.clips().first().name
                                      : parser.value(QStringLiteral("clip"));
+        const bool frameProvided = parser.isSet(QStringLiteral("frame"));
         const QString frameText = parser.value(QStringLiteral("frame"));
-        const int frame = frameText.isEmpty() ? 0 : frameText.toInt();
+        bool frameOk = true;
+        const int frame = !frameProvided ? 0 : frameText.toInt(&frameOk);
+        const Clip *selectedClip = doc.clip(clipName);
+        if (!selectedClip) {
+            diagnostic(QStringLiteral("E_CLIP_NOT_FOUND: --clip=%1").arg(clipName));
+            return 1;
+        }
+        if (!frameOk || frame < 0 || frame >= selectedClip->frameCount) {
+            diagnostic(QStringLiteral("E_FRAME_OUT_OF_RANGE: --frame=%1").arg(frameText));
+            return 2;
+        }
+        QString outputError;
+        if (!output::validate(parser.value(QStringLiteral("out")), {path},
+                              &outputError)) {
+            diagnostic(QStringLiteral("render: %1").arg(outputError));
+            return 2;
+        }
         render::Options options;
+        bool scaleOk = true;
         options.scale = parser.isSet(QStringLiteral("scale"))
-                            ? parser.value(QStringLiteral("scale")).toInt()
+                            ? parser.value(QStringLiteral("scale")).toInt(&scaleOk)
                             : 1;
+        if (!scaleOk || options.scale < 1 || options.scale > 64) {
+            diagnostic(QStringLiteral("E_RENDER_SCALE: --scale must be an integer between 1 and 64"));
+            return 2;
+        }
         options.checker = parser.isSet(QStringLiteral("checker"));
         options.sheet = parser.isSet(QStringLiteral("sheet"));
+        options.isolated = parser.isSet(QStringLiteral("isolated"));
+        QString layerError;
+        if (!options.isolated
+            && (parser.isSet(QStringLiteral("layer-id"))
+                || parser.isSet(QStringLiteral("layer")))) {
+            diagnostic(QStringLiteral("--layer-id/--layer require --isolated"));
+            return 2;
+        }
+        if (options.isolated
+            && !resolveRenderLayer(doc, parser, &options.layer, &layerError)) {
+            diagnostic(layerError);
+            return layerError.startsWith(QStringLiteral("E_LAYER_TARGET_REQUIRED")) ? 2 : 1;
+        }
         options.warningPixels = renderWarningPixels();
         QString warning;
         QString renderError;
+        QStringList diagnostics;
         const QImage image =
-            render::toImage(doc, clipName, frame, options, &warning, &renderError);
+            render::toImage(doc, clipName, frame, options, &warning, &renderError,
+                            &diagnostics);
         if (!warning.isEmpty())
-            err() << "warning: " << warning << "\n";
+            diagnostic(QStringLiteral("warning: %1").arg(warning));
         if (image.isNull()) {
-            err() << "render: " << renderError << "\n";
+            diagnostic(QStringLiteral("render: %1").arg(renderError));
             return 1;
         }
-        if (!image.save(parser.value(QStringLiteral("out")))) {
-            err() << "render: could not write " << parser.value(QStringLiteral("out"))
-                  << "\n";
+        QBuffer encoded;
+        encoded.open(QIODevice::WriteOnly);
+        if (!image.save(&encoded, "PNG")) {
+            diagnostic(QStringLiteral("render: could not encode PNG"));
             return 1;
         }
-        out() << parser.value(QStringLiteral("out")) << ": " << image.width() << "x"
+        if (!output::writeAtomically(parser.value(QStringLiteral("out")),
+                                     encoded.data(), {path}, &outputError)) {
+            diagnostic(QStringLiteral("render: %1").arg(outputError));
+            return 1;
+        }
+        out() << safeDiagnostic(parser.value(QStringLiteral("out"))) << ": "
+              << image.width() << "x"
               << image.height() << "\n";
         return 0;
     }
+
+    if (command == QLatin1String("flatten"))
+        return flattenTo(doc, path, parser);
 
     if (command == QLatin1String("export")) {
         if (words.isEmpty()) {
@@ -673,26 +909,40 @@ int main(int argc, char *argv[])
         const QStringList problems = doc.problems();
         if (!problems.isEmpty()) {
             for (const QString &line : problems)
-                err() << "error: " << line << "\n";
+            err() << "error: " << safeDiagnostic(line) << "\n";
             err() << "did not export: fix the document first\n";
             return 1;
         }
         const QString into = words.first();
-        QFile file(into);
-        if (!file.open(QIODevice::ReadOnly)) {
-            err() << into << ": " << file.errorString() << "\n";
+        QString outputError;
+        if (!output::validate(into, {}, &outputError)) {
+            err() << "export: " << safeDiagnostic(outputError) << "\n";
+            return 2;
+        }
+        QByteArray catalogBytes;
+        if (!input::readRegularFile(into, Document::maxDocumentBytes, &catalogBytes,
+                                    &outputError)) {
+            diagnostic(outputError);
+            return 1;
+        }
+        if (catalogBytes.size() > Document::maxDocumentBytes) {
+            diagnostic(QStringLiteral("%1: catalog exceeds the hard input limit").arg(into));
+            return 1;
+        }
+        QString scanError;
+        if (Codec::rejectDuplicateJsonKeys(catalogBytes, &scanError)) {
+            diagnostic(QStringLiteral("%1: %2").arg(into, scanError));
             return 1;
         }
         QJsonParseError parse;
-        const QJsonDocument parsed = QJsonDocument::fromJson(file.readAll(), &parse);
-        file.close();
+        const QJsonDocument parsed = QJsonDocument::fromJson(catalogBytes, &parse);
         if (parse.error != QJsonParseError::NoError) {
-            err() << into << ": invalid JSON at offset " << parse.offset << ": "
-                  << parse.errorString() << "\n";
+            diagnostic(QStringLiteral("%1: invalid JSON at offset %2: %3")
+                           .arg(into).arg(parse.offset).arg(parse.errorString()));
             return 1;
         }
         if (!parsed.isObject()) {
-            err() << into << ": the catalog has to be a JSON object\n";
+            diagnostic(QStringLiteral("%1: the catalog has to be a JSON object").arg(into));
             return 1;
         }
         const QJsonObject catalog = parsed.object();
@@ -702,31 +952,26 @@ int main(int argc, char *argv[])
                                     : QStringLiteral("0");
         const Bridge::Result pushed = Bridge::exportInto(catalog, doc, species, variant);
         if (!pushed) {
-            err() << pushed.error << "\n";
+            diagnostic(pushed.error);
             return 1;
         }
         for (const QString &name : pushed.skipped) {
-            err() << "warning: the catalog does not know the sequence " << name
-                  << " — skipped\n";
-        }
-        QSaveFile writing(into);
-        if (!writing.open(QIODevice::WriteOnly)) {
-            err() << into << ": " << writing.errorString() << "\n";
-            return 1;
+            diagnostic(QStringLiteral("warning: the catalog does not know the sequence %1 — skipped")
+                           .arg(name));
         }
         const QByteArray serialized =
             QJsonDocument(pushed.catalog).toJson(QJsonDocument::Compact);
-        if (writing.write(serialized) != serialized.size()) {
-            err() << into << ": could not write the complete catalog: "
-                  << writing.errorString() << "\n";
-            writing.cancelWriting();
+        if (serialized.size() > Document::maxDocumentBytes) {
+            diagnostic(QStringLiteral("export: serialized catalog exceeds the hard limit of %1 MiB")
+                           .arg(Document::maxDocumentBytes / (1024 * 1024)));
             return 1;
         }
-        if (!writing.commit()) {
-            err() << into << ": " << writing.errorString() << "\n";
+        if (!output::writeAtomically(into, serialized, {}, &error)) {
+            diagnostic(error);
             return 1;
         }
-        out() << into << ": " << species << "/" << variant << " — "
+        out() << safeDiagnostic(into) << ": " << safeDiagnostic(species) << "/"
+              << safeDiagnostic(variant) << " — "
               << pushed.exported << " sequence(s)\n";
         return 0;
     }
@@ -738,15 +983,15 @@ int main(int argc, char *argv[])
         }
         Codec::Result other = Codec::readFile(words.first(), warningLimits());
         if (!other) {
-            err() << other.error << "\n";
+            err() << safeDiagnostic(other.error) << "\n";
             return 1;
         }
         for (const QString &warning : other.warnings)
-            err() << "warning: " << warning << "\n";
+            err() << "warning: " << safeDiagnostic(warning) << "\n";
         const QStringList differences =
             documentDifferences(doc, other.document, path, words.first());
         for (const QString &difference : differences)
-            out() << difference << "\n";
+            out() << safeDiagnostic(difference) << "\n";
         out() << differences.size() << " difference(s)\n";
         return differences.isEmpty() ? 0 : 1;
     }
@@ -757,12 +1002,17 @@ int main(int argc, char *argv[])
     // ------------------------------------------- everything else, over the doc
 
     const cli::Outcome outcome = cli::applyCommand(doc, command, words, parser);
+    const bool machineOutput = command == QLatin1String("info")
+        || ((command == QLatin1String("palette") || command == QLatin1String("layer"))
+            && (words.isEmpty() || words.first() == QLatin1String("list")));
     if (!outcome.output.isEmpty())
-        out() << outcome.output;
+        out() << (command == QLatin1String("show") || machineOutput
+                      ? outcome.output
+                      : safeDiagnostic(outcome.output));
     if (!outcome.error.isEmpty())
-        err() << outcome.error << "\n";
+        err() << safeDiagnostic(outcome.error) << "\n";
     if (outcome.changed && !Codec::writeFile(path, doc, &error)) {
-        err() << error << "\n";
+        err() << safeDiagnostic(error) << "\n";
         return 1;
     }
     return outcome.code;

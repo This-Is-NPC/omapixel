@@ -21,7 +21,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 14
 
-        StatusText { text: doc.columns + "×" + doc.rows }
+        StatusText { text: T.t("status.canvasSize").arg(doc.columns).arg(doc.rows) }
         // The colour being drawn with, as a colour. The letter alone tells you
         // which slot and nothing about what it will look like, which is the
         // thing you actually want to know before you press a key.
@@ -42,7 +42,7 @@ Rectangle {
                 Text {
                     anchors.centerIn: parent
                     visible: win.slot === "."
-                    text: "×"
+                    text: T.t("status.emptyMarker")
                     color: theme.dim
                     font.family: theme.fontFamily
                     font.pixelSize: 9
@@ -62,8 +62,9 @@ Rectangle {
             // The keyboard cursor wins when it is on: it is the one the keys
             // act on, and the mouse may be nowhere near the drawing.
             text: win.caretColumn >= 0
-                  ? "⌖ " + win.caretColumn + ", " + win.caretRow
-                  : (bar.column < 0 ? "—" : bar.column + ", " + bar.row)
+                  ? T.t("status.caret").arg(win.caretColumn).arg(win.caretRow)
+                  : (bar.column < 0 ? T.t("status.noCursor")
+                                    : T.t("status.coordinates").arg(bar.column).arg(bar.row))
             alarm: false
         }
         StatusText {
@@ -77,6 +78,10 @@ Rectangle {
         StatusText {
             text: T.t(doc.frameCount === 1 ? "status.oneFrame" : "status.frames")
                       .arg(doc.clip).arg(doc.frameCount).arg(doc.fps)
+        }
+        StatusText {
+            text: T.t("status.layer").arg(doc.clip).arg(doc.frame + 1)
+                      .arg(doc.activeLayerName)
         }
     }
 

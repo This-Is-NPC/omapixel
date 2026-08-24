@@ -1,5 +1,7 @@
 #include "InputLog.h"
 
+#include "TextSafety.h"
+
 #include <QEvent>
 #include <QNativeGestureEvent>
 #include <QKeyEvent>
@@ -19,7 +21,7 @@ void InputLog::say(const QString &line) const
 {
     if (!m_enabled)
         return;
-    std::fprintf(stderr, "qml    %s\n", qPrintable(line));
+    std::fprintf(stderr, "qml    %s\n", qPrintable(text::escapeForTerminal(line)));
     std::fflush(stderr);
 }
 
@@ -59,7 +61,8 @@ bool InputLog::eventFilter(QObject *watched, QEvent *event)
             }
         }
         std::fprintf(stderr, "key    0x%x  modifiers 0x%x  focus %s\n", key->key(),
-                     int(key->modifiers()), qPrintable(holder));
+                     int(key->modifiers()),
+                     qPrintable(text::escapeForTerminal(holder)));
         break;
     }
     case QEvent::NativeGesture: {

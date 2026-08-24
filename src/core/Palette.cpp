@@ -1,5 +1,7 @@
 #include "Palette.h"
 
+#include "TextSafety.h"
+
 namespace omapixel {
 
 Palette Palette::standard()
@@ -33,6 +35,17 @@ bool Palette::has(QChar letter) const
     return m_index.contains(letter);
 }
 
+bool Palette::validSlot(QChar letter, QString *error)
+{
+    const ushort code = letter.unicode();
+    const bool valid = !letter.isNull() && letter != QLatin1Char('.')
+        && letter != QLatin1Char('"') && letter != QLatin1Char('\\')
+        && !text::isUnsafe(code);
+    if (!valid && error)
+        *error = QStringLiteral("invalid palette slot");
+    return valid;
+}
+
 QColor Palette::colour(QChar letter) const
 {
     const auto at = m_index.constFind(letter);
@@ -47,15 +60,20 @@ void Palette::reindex()
         m_index.insert(m_entries.at(i).letter, i);
 }
 
-void Palette::set(QChar letter, const QColor &colour)
+bool Palette::set(QChar letter, const QColor &colour)
 {
+    if (!validSlot(letter) || !colour.isValid())
+        return false;
     const auto at = m_index.constFind(letter);
     if (at != m_index.constEnd()) {
         m_entries[at.value()].colour = colour;   // the order did not move
-        return;
+        return true;
     }
+    if (m_entries.size() >= maxSlots)
+        return false;
     m_entries.append({letter, colour});
     m_index.insert(letter, m_entries.size() - 1);
+    return true;
 }
 
 bool Palette::remove(QChar letter)

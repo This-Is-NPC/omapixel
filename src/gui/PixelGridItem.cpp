@@ -101,6 +101,15 @@ void PixelGridItem::setFrame(int frame)
     emit specChanged();
 }
 
+void PixelGridItem::setIsolatedLayer(const QString &layer)
+{
+    if (m_isolatedLayer == layer)
+        return;
+    m_isolatedLayer = layer;
+    m_textureDirty = true;
+    emit specChanged();
+}
+
 void PixelGridItem::setCell(qreal cell)
 {
     if (qFuzzyCompare(m_cell, cell))
@@ -180,6 +189,8 @@ QSGNode *PixelGridItem::updatePaintNode(QSGNode *oldNode,
         options.checker = m_checker;
         options.checkerDark = m_checkerDark;
         options.checkerLight = m_checkerLight;
+        options.isolated = !m_isolatedLayer.isEmpty();
+        options.layer = m_isolatedLayer;
         const QImage image =
             render::toImage(m_model->document(), m_clip, m_frame, options);
         if (!image.isNull() && window()) {

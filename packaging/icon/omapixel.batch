@@ -1,4 +1,4 @@
-# A pixel heart -- the document omapixel's own docs teach you to draw.
+# A pixel heart -- the v2 document omapixel's own docs teach you to draw.
 line --from 3,3 --to 6,3 --slot R
 line --from 9,3 --to 12,3 --slot R
 line --from 2,4 --to 13,4 --slot R

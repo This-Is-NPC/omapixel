@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "canvas": {"width": 3, "height": 2},
+  "palette": [
+    {"slot": "A", "colour": "#112233FF"},
+    {"slot": "B", "colour": "#CC8844C0"}
+  ],
+  "clips": [
+    {"id": "idle", "name": "Idle", "fps": 8, "frameCount": 2},
+    {"id": "walk", "name": "Walk", "fps": 12, "frameCount": 1}
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "name": "Background",
+      "visible": true,
+      "locked": true,
+      "opacity": 255,
+      "mode": "normal",
+      "storage": "shared",
+      "cels": [{"scope": "all", "rows": ["AAA", "A.A"]}]
+    },
+    {
+      "id": "hero",
+      "name": "Hero",
+      "visible": true,
+      "locked": false,
+      "opacity": 192,
+      "mode": "screen",
+      "storage": "animated",
+      "cels": [
+        {"clip": "idle", "frame": 0, "rows": [".B.", "BBB"]},
+        {"clip": "idle", "frame": 1, "rows": ["B.B", ".B."]},
+        {"clip": "walk", "frame": 0, "rows": ["BBB", "..."]}
+      ]
+    }
+  ]
+}

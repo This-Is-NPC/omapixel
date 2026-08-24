@@ -67,7 +67,7 @@ run = "rm -rf '{{config_root}}/build' '{{config_root}}/build-tests'"
 
 [tasks.test]
 description = "Build and run the unit tests"
-depends = ["deps"]
+depends = ["deps", "build"]
 run = """
 mkdir -p "{{config_root}}/build-tests"
 cd "{{config_root}}/build-tests"
@@ -83,6 +83,39 @@ description = "Compare a language file against English — mise run i18n pt"
 depends = ["build"]
 run = '"$BUILD_DIR/bin/omapixel" i18n "$@"'
 
+[tasks.i18n-surface]
+description = "Audit QML user-facing strings against the English catalogue"
+run = 'python3 "{{config_root}}/tests/test_i18n_surface.py"'
+
+[tasks.format-v2]
+description = "Run the executable v2 contract and canonical fixture tests"
+run = 'python3 "{{config_root}}/tests/test_format_v2.py"'
+
+[tasks.properties-v2]
+description = "Run deterministic property checks for every v2 schema domain"
+run = 'python3 "{{config_root}}/tests/test_format_v2_properties.py"'
+
+[tasks.cli-layers]
+description = "Run deterministic CLI layer and batch contract tests"
+depends = ["build"]
+run = 'python3 "{{config_root}}/tests/test_cli_layers.py"'
+
+[tasks.layers-e2e]
+description = "Run the CLI, Studio, where, render, flatten and live-reload fixture"
+depends = ["build", "test"]
+run = 'python3 "{{config_root}}/tests/test_layers_e2e.py"'
+
+[tasks.benchmark-layers]
+description = "Build and run the disposable v2 multilayer feasibility benchmark"
+depends = ["deps"]
+run = """
+mkdir -p "{{config_root}}/build-benchmark"
+cd "{{config_root}}/build-benchmark"
+qmake6 "{{config_root}}/tests/benchmarks/layer_benchmark.pro"
+make -j"$(nproc 2>/dev/null || echo 1)"
+"{{config_root}}/build-benchmark/layer_benchmark"
+"""
+
 [tasks.config]
 description = "The settings file — mise run config check"
 depends = ["build"]
@@ -90,7 +123,8 @@ run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 
 [tasks.check]
 description = "Everything CI would run"
-depends = ["build", "test"]
+depends = ["build", "test", "format-v2", "properties-v2", "cli-layers",
+           "layers-e2e", "i18n", "i18n-surface", "benchmark-layers"]
 run = "echo 'build and tests are green'"
 
 # ---------------------------------------------------------------------- dist

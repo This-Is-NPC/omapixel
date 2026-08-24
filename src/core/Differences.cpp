@@ -64,6 +64,96 @@ QStringList documentDifferences(const Document &left, const Document &right,
                            .arg(QString(rightPalette.at(i).letter));
     }
 
+    const QList<Layer> &leftLayers = left.layers();
+    const QList<Layer> &rightLayers = right.layers();
+    if (leftLayers.size() != rightLayers.size()) {
+        differences << Strings::shared().t(QStringLiteral("diff.layers.count"))
+                           .arg(leftLabel)
+                           .arg(leftLayers.size())
+                           .arg(rightLabel)
+                           .arg(rightLayers.size());
+    }
+    const int layerCount = qMin(leftLayers.size(), rightLayers.size());
+    for (int i = 0; i < layerCount; ++i) {
+        const Layer &mine = leftLayers.at(i);
+        const Layer &theirs = rightLayers.at(i);
+        const QString layerLabel = QStringLiteral("layer[%1] (%2/%3, %4/%5)")
+                                        .arg(i)
+                                        .arg(mine.id, theirs.id)
+                                        .arg(mine.name, theirs.name);
+        if (mine.id != theirs.id || mine.name != theirs.name) {
+            differences << Strings::shared().t(QStringLiteral("diff.layers.order"))
+                               .arg(i)
+                               .arg(mine.id + QStringLiteral("/") + mine.name)
+                               .arg(leftLabel)
+                               .arg(theirs.id + QStringLiteral("/") + theirs.name)
+                               .arg(rightLabel);
+        }
+        if (mine.visible != theirs.visible || mine.locked != theirs.locked
+            || mine.opacity != theirs.opacity || mine.mode != theirs.mode
+            || mine.storage != theirs.storage) {
+            differences << Strings::shared().t(QStringLiteral("diff.layer.metadata"))
+                               .arg(layerLabel)
+                               .arg(leftLabel)
+                               .arg(rightLabel);
+        }
+
+        const int layerClipCount = qMin(left.clips().size(), right.clips().size());
+        for (int clipIndex = 0; clipIndex < layerClipCount; ++clipIndex) {
+            const Clip &leftClip = left.clips().at(clipIndex);
+            const Clip &rightClip = right.clips().at(clipIndex);
+            const int frameCount = qMin(leftClip.frameCount, rightClip.frameCount);
+            for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+                const Grid mineGrid = left.cel(mine.id, leftClip.id, frameIndex);
+                const Grid theirGrid = right.cel(theirs.id, rightClip.id, frameIndex);
+                if (mineGrid.columns() != theirGrid.columns()
+                    || mineGrid.rows() != theirGrid.rows()) {
+                    differences
+                        << Strings::shared().t(QStringLiteral("diff.layer.celDimensions"))
+                               .arg(layerLabel)
+                               .arg(leftClip.name)
+                               .arg(frameIndex)
+                               .arg(mineGrid.columns())
+                               .arg(mineGrid.rows())
+                               .arg(leftLabel)
+                               .arg(theirGrid.columns())
+                               .arg(theirGrid.rows())
+                               .arg(rightLabel);
+                }
+                const int columns = qMax(mineGrid.columns(), theirGrid.columns());
+                const int rows = qMax(mineGrid.rows(), theirGrid.rows());
+                int pixels = 0;
+                for (int y = 0; y < rows; ++y) {
+                    for (int x = 0; x < columns; ++x) {
+                        if (mineGrid.at(x, y) != theirGrid.at(x, y))
+                            ++pixels;
+                    }
+                }
+                if (pixels > 0) {
+                    differences << Strings::shared().t(QStringLiteral("diff.layer.celPixels"))
+                                       .arg(layerLabel)
+                                       .arg(leftClip.name)
+                                       .arg(frameIndex)
+                                       .arg(pixels);
+                }
+            }
+        }
+    }
+    for (int i = layerCount; i < leftLayers.size(); ++i) {
+        differences << Strings::shared().t(QStringLiteral("diff.layers.onlyIn"))
+                           .arg(i)
+                           .arg(leftLabel)
+                           .arg(leftLayers.at(i).id)
+                           .arg(leftLayers.at(i).name);
+    }
+    for (int i = layerCount; i < rightLayers.size(); ++i) {
+        differences << Strings::shared().t(QStringLiteral("diff.layers.onlyIn"))
+                           .arg(i)
+                           .arg(rightLabel)
+                           .arg(rightLayers.at(i).id)
+                           .arg(rightLayers.at(i).name);
+    }
+
     const QList<Clip> &leftClips = left.clips();
     const QList<Clip> &rightClips = right.clips();
     if (leftClips.size() != rightClips.size()) {
@@ -97,49 +187,15 @@ QStringList documentDifferences(const Document &left, const Document &right,
                                .arg(theirs.fps)
                                .arg(rightLabel);
         }
-        if (mine.frames.size() != theirs.frames.size()) {
+        if (mine.frameCount != theirs.frameCount) {
             differences << Strings::shared().t(QStringLiteral("diff.clip.frameCount"))
                                .arg(clipLabel)
-                               .arg(mine.frames.size())
+                            .arg(mine.frameCount)
                                .arg(leftLabel)
-                               .arg(theirs.frames.size())
+                            .arg(theirs.frameCount)
                                .arg(rightLabel);
         }
 
-        const int frameCount = qMin(mine.frames.size(), theirs.frames.size());
-        for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
-            const Grid &mineFrame = mine.frames.at(frameIndex);
-            const Grid &theirFrame = theirs.frames.at(frameIndex);
-            if (mineFrame.columns() != theirFrame.columns()
-                || mineFrame.rows() != theirFrame.rows()) {
-                differences
-                    << Strings::shared().t(QStringLiteral("diff.clip.frameDimensions"))
-                           .arg(clipLabel)
-                           .arg(frameIndex)
-                           .arg(mineFrame.columns())
-                           .arg(mineFrame.rows())
-                           .arg(leftLabel)
-                           .arg(theirFrame.columns())
-                           .arg(theirFrame.rows())
-                           .arg(rightLabel);
-            }
-
-            int pixels = 0;
-            const int columns = qMax(mineFrame.columns(), theirFrame.columns());
-            const int rows = qMax(mineFrame.rows(), theirFrame.rows());
-            for (int y = 0; y < rows; ++y) {
-                for (int x = 0; x < columns; ++x) {
-                    if (mineFrame.at(x, y) != theirFrame.at(x, y))
-                        ++pixels;
-                }
-            }
-            if (pixels > 0) {
-                differences << Strings::shared().t(QStringLiteral("diff.clip.pixelsDiffer"))
-                                   .arg(clipLabel)
-                                   .arg(frameIndex)
-                                   .arg(pixels);
-            }
-        }
     }
     for (int i = clipCount; i < leftClips.size(); ++i) {
         differences << Strings::shared().t(QStringLiteral("diff.clips.onlyIn"))

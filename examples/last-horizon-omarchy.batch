@@ -1,7 +1,7 @@
 # The last-horizon photograph dissolving into the retro-82 omarchy
 # wallpaper, and back again. Generated -- see examples/README.md.
 #
-#   omapixel new last-horizon-omarchy.json --size 160x90
+#   omapixel new last-horizon-omarchy.json --size 160x90  # writes v2
 #   omapixel batch last-horizon-omarchy.json --script last-horizon-omarchy.batch
 
 # Out with the seventeen a new document starts with, and in with one ramp

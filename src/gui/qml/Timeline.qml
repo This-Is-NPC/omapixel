@@ -43,9 +43,9 @@ Item {
             }
         }
 
-        Chip { label: "+"; onClicked: doc.addClip(T.t("timeline.newClip").arg(doc.clipNames.length + 1)) }
+        Chip { label: T.t("timeline.addClip"); onClicked: doc.addClip(T.t("timeline.newClip").arg(doc.clipNames.length + 1)) }
         Chip {
-            label: "−"
+            label: T.t("timeline.removeClip")
             usable: doc.clipNames.length > 1
             role: theme.urgent
             onClicked: doc.removeClip(doc.clip)
@@ -66,8 +66,8 @@ Item {
                     width: 1; height: 20; color: theme.fill(theme.foreground, 0.18) }
 
         Label { anchors.verticalCenter: parent.verticalCenter; text: T.t("timeline.fps").arg(doc.fps) }
-        Chip { label: "−"; onClicked: doc.setFps(doc.fps - 1) }
-        Chip { label: "+"; onClicked: doc.setFps(doc.fps + 1) }
+        Chip { label: T.t("timeline.decreaseFps"); onClicked: doc.setFps(doc.fps - 1) }
+        Chip { label: T.t("timeline.increaseFps"); onClicked: doc.setFps(doc.fps + 1) }
     }
 
     // ------------------------------------------------------------- the frames
@@ -81,15 +81,15 @@ Item {
         spacing: 6
 
         Chip {
-            label: win.playing ? "❚❚" : "▶"
+            label: win.playing ? T.t("timeline.pause") : T.t("timeline.play")
             on: win.playing
             usable: doc.frameCount > 1
             onClicked: win.togglePlay()
         }
         Chip { label: T.t("timeline.addFrame"); onClicked: doc.addFrame(false) }
         Chip { label: T.t("timeline.duplicate"); onClicked: doc.addFrame(true) }
-        Chip { label: "◂"; usable: doc.frame > 0; onClicked: doc.moveFrame(-1) }
-        Chip { label: "▸"; usable: doc.frame < doc.frameCount - 1
+        Chip { label: T.t("timeline.previousFrame"); usable: doc.frame > 0; onClicked: doc.moveFrame(-1) }
+        Chip { label: T.t("timeline.nextFrame"); usable: doc.frame < doc.frameCount - 1
                onClicked: doc.moveFrame(1) }
         Chip { label: T.t("timeline.delete"); usable: doc.frameCount > 1; role: theme.urgent
                onClicked: doc.removeFrame() }

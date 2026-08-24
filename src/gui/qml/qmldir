@@ -15,3 +15,6 @@ Sheet 1.0 Sheet.qml
 Rule 1.0 Rule.qml
 Cmd 1.0 Cmd.qml
 Hints 1.0 Hints.qml
+LayerAction 1.0 LayerAction.qml
+LayerDock 1.0 LayerDock.qml
+LayerToolWindow 1.0 LayerToolWindow.qml

@@ -1,12 +1,14 @@
 #include "Strings.h"
 
 #include "Config.h"
+#include "Codec.h"
+#include "Output.h"
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QLocale>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
@@ -64,11 +66,20 @@ bool Strings::merge(const QString &language)
     if (language.isEmpty())
         return false;
     for (const QString &place : searchPath()) {
-        QFile file(place + QLatin1Char('/') + language + QStringLiteral(".json"));
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        const QString path = place + QLatin1Char('/') + language + QStringLiteral(".json");
+        QByteArray bytes;
+        if (!input::readRegularFile(path, Document::maxDocumentBytes, &bytes))
             continue;
-        const QJsonObject entries =
-            QJsonDocument::fromJson(file.readAll()).object();
+        if (bytes.size() > Document::maxDocumentBytes)
+            continue;
+        QString scanError;
+        if (Codec::rejectDuplicateJsonKeys(bytes, &scanError))
+            continue;
+        QJsonParseError parseError;
+        const QJsonDocument parsed = QJsonDocument::fromJson(bytes, &parseError);
+        if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
+            continue;
+        const QJsonObject entries = parsed.object();
         for (auto it = entries.constBegin(); it != entries.constEnd(); ++it) {
             if (it.value().isString() && !it.value().toString().isEmpty())
                 m_strings.insert(it.key(), it.value().toString());

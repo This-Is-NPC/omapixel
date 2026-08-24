@@ -23,8 +23,11 @@ SOURCES += \
     ../src/core/Codec.cpp \
     ../src/core/Ops.cpp \
     ../src/core/Render.cpp \
+    ../src/core/LayerOperations.cpp \
     ../src/core/Bridge.cpp \
     ../src/core/Sessions.cpp \
+    ../src/core/Output.cpp \
+    ../src/core/TextSafety.cpp \
     ../src/core/Strings.cpp \
     ../src/core/Toml.cpp \
     ../src/core/Config.cpp \
@@ -45,8 +48,11 @@ HEADERS += \
     ../src/core/Codec.h \
     ../src/core/Ops.h \
     ../src/core/Render.h \
+    ../src/core/LayerOperations.h \
     ../src/core/Bridge.h \
     ../src/core/Sessions.h \
+    ../src/core/Output.h \
+    ../src/core/TextSafety.h \
     ../src/core/Strings.h \
     ../src/core/Toml.h \
     ../src/core/Config.h \

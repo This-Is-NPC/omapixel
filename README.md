@@ -93,20 +93,38 @@ An agent that cannot see its own work is guessing, and you end up reviewing ever
 attempt by hand. Three commands answer "what is actually there?":
 
 ```bash
-omapixel text   heart.json                    # the raw grid, one letter per pixel
-omapixel show   heart.json                    # in the terminal, in colour
+omapixel text   heart.json                    # the composite, flattened to palette slots
+omapixel show   heart.json                    # the composite in the terminal
 omapixel render heart.json -o h.png --scale 12 --sheet
+omapixel render heart.json -o layer.png --isolated --layer-id hero
 ```
 
-`text` is the frame exactly as it is stored, which makes it the thing to diff,
-to grep, or to reason about. `show` prints half-block characters in 24-bit
-colour, two sprite rows per terminal row, so the drawing keeps its proportions
-instead of arriving twice as tall. `render` writes a PNG with no display
-attached, and `--sheet` lays every frame of the clip side by side, in one image
-that shows whether an animation holds together.
+These surfaces use the visible bottom-to-top composite by default. `--isolated
+--layer-id ID` or an exact `--layer NAME` renders one visible layer with its
+opacity, without its neighbours. The CLI never consumes Studio selection state.
+`text` keeps transparent pixels as `.`, while `show` and PNG retain composed RGBA;
+`--checker` is a final background for those visual surfaces and is never written
+into a layer. `render --sheet` applies the selected view to every frame side by
+side.
 
 Without these, a complete command set still leaves somebody screenshotting a
 running window. With them, the window is optional.
+
+Layer stack control is available without opening Studio:
+
+```bash
+omapixel layer heart.json list
+omapixel layer heart.json rename --layer-id hero --name "Main Hero"
+omapixel layer heart.json move --layer-id hero --index 1
+```
+
+Multilayer mutations require explicit layer identity. See [the CLI reference](docs/cli.md)
+for scope, lock/hidden safety, batch behavior, and `flatten` reports.
+
+The complete cross-surface layer gate is `mise run check`. It includes the
+offscreen Studio/CLI/`where` fixture, deterministic v2 property cases, i18n
+coverage, and the 60-second canonical performance benchmark. See [Native layer
+acceptance](docs/native-layers.md) for the workload, thresholds, and stop rule.
 
 ## The studio, for when you take over
 
@@ -146,6 +164,7 @@ Full docs live in [`docs/`](docs/).
 - **[The command line](docs/cli.md)**: every command, every flag, with examples.
 - **[The studio](docs/studio.md)**: the window, its panels and its keys.
 - **[The format](docs/format.md)**: what is in the file, and how to write one by hand.
+- **[The v2 layer contract](docs/format-v2.md)**: the clean-cut schema, layer rules, and migration inventory.
 - **[Settings and keys](docs/configuration.md)**: one TOML file, every setting, every binding.
 - **[Adding a language](docs/i18n.md)**: every word comes from a JSON file.
 - **[How it is built](docs/design.md)**: one core, two front ends, and why it is shaped this way.

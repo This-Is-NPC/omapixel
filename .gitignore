@@ -1,5 +1,6 @@
 build/
 build-tests/
+build-benchmark/
 *.o
 *.a
 moc_*.cpp
@@ -10,3 +11,4 @@ version.h
 dist/
 .temp/
 opencode.json
+__pycache__/

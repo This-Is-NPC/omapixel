@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omapixel.org/schemas/format-v2.schema.json",
+  "title": "Omapixel format v2 document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "canvas", "palette", "clips", "layers"],
+  "properties": {
+    "version": { "const": 2 },
+    "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1, "maximum": 2048 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 2048 }
+      }
+    },
+    "palette": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/paletteEntry" }
+    },
+    "clips": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/clip" }
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/layer" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "rgba": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{8}$"
+    },
+    "paletteEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot", "colour"],
+      "properties": {
+        "slot": {
+          "type": "string",
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f.\"\\\\]$"
+        },
+        "colour": { "$ref": "#/$defs/rgba" }
+      }
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "fps", "frameCount"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/name" },
+        "fps": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "frameCount": { "type": "integer", "minimum": 1, "maximum": 1024 }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2048,
+      "items": { "type": "string" }
+    },
+    "sharedCel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "rows"],
+      "properties": {
+        "scope": { "const": "all" },
+        "rows": { "$ref": "#/$defs/rows" }
+      }
+    },
+    "animatedCel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clip", "frame", "rows"],
+      "properties": {
+        "clip": { "$ref": "#/$defs/id" },
+        "frame": { "type": "integer", "minimum": 0 },
+        "rows": { "$ref": "#/$defs/rows" }
+      }
+    },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "visible", "locked", "opacity", "mode", "storage", "cels"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/name" },
+        "visible": { "type": "boolean" },
+        "locked": { "type": "boolean" },
+        "opacity": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "mode": { "enum": ["normal", "multiply", "screen"] },
+        "storage": { "enum": ["shared", "animated"] },
+        "cels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/sharedCel" },
+              { "$ref": "#/$defs/animatedCel" }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

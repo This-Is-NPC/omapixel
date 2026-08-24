@@ -28,8 +28,11 @@ HEADERS += \
     Codec.h \
     Ops.h \
     Render.h \
+    LayerOperations.h \
     Bridge.h \
-    Sessions.h
+    Sessions.h \
+    Output.h \
+    TextSafety.h
 
 SOURCES += \
     Strings.cpp \
@@ -42,5 +45,8 @@ SOURCES += \
     Codec.cpp \
     Ops.cpp \
     Render.cpp \
+    LayerOperations.cpp \
     Bridge.cpp \
-    Sessions.cpp
+    Sessions.cpp \
+    Output.cpp \
+    TextSafety.cpp

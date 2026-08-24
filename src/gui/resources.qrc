@@ -16,7 +16,10 @@
                 <file>qml/Sheet.qml</file>
                 <file>qml/Rule.qml</file>
                 <file>qml/Cmd.qml</file>
-                <file>qml/Hints.qml</file>
+        <file>qml/Hints.qml</file>
+        <file>qml/LayerAction.qml</file>
+        <file>qml/LayerDock.qml</file>
+        <file>qml/LayerToolWindow.qml</file>
         <file>qml/qmldir</file>
     </qresource>
 </RCC>

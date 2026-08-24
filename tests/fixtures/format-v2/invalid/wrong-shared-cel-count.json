@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "canvas": {"width": 1, "height": 1},
+  "palette": [],
+  "clips": [{"id": "idle", "name": "Idle", "fps": 8, "frameCount": 1}],
+  "layers": [{"id": "hero", "name": "Hero", "visible": true, "locked": false, "opacity": 255, "mode": "normal", "storage": "shared", "cels": [{"scope": "all", "rows": ["."]}, {"scope": "all", "rows": ["."]}]}]
+}

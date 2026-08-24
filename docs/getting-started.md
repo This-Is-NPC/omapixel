@@ -147,6 +147,14 @@ Press <kbd>Space</kbd> to play the animation, <kbd>b</kbd> to draw,
 <kbd>e</kbd> to erase, <kbd>Ctrl</kbd>+<kbd>S</kbd> to save.
 [The studio](studio.md) has the rest.
 
+For layered documents, the right-hand list is only the compact layer browser.
+Activate a row or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> to open or
+focus the independent Layer tool. It can be moved or resized onto another
+monitor; <kbd>Tab</kbd> reaches its actions, <kbd>Space</kbd> or <kbd>Enter</kbd>
+activates one, and <kbd>Esc</kbd> closes it and returns focus to the layer list.
+The command line remains explicit: `where` reports the Studio view, but no CLI
+command consumes the active row or tool-window focus as a default.
+
 Nothing is special about a file made on the command line. The window opens the
 same documents, saves the same format, and applies the same rules. Work in
 whichever suits the moment.
@@ -157,3 +165,7 @@ whichever suits the moment.
 - [The studio](studio.md): the window in detail
 - [The format](format.md): writing a document by hand, or generating one
 - [Settings and keys](configuration.md): one TOML file, window, canvas, every keybinding
+
+For the complete native-layer workflow, including animated/shared layers,
+`where`, isolated/composite rendering, safe flattening, and the CI benchmark,
+see [Native layer acceptance](native-layers.md).

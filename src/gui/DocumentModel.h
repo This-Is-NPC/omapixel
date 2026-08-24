@@ -54,6 +54,13 @@ class DocumentModel : public QObject
     Q_PROPERTY(int frame READ frame WRITE setFrame NOTIFY viewChanged)
     Q_PROPERTY(int frameCount READ frameCount NOTIFY changed)
     Q_PROPERTY(int fps READ fps NOTIFY changed)
+    Q_PROPERTY(QVariantList layers READ layers NOTIFY changed)
+    Q_PROPERTY(QString activeLayerId READ activeLayerId WRITE setActiveLayerId NOTIFY viewChanged)
+    Q_PROPERTY(QString activeLayerName READ activeLayerName NOTIFY activeLayerChanged)
+    Q_PROPERTY(bool activeLayerLocked READ activeLayerLocked NOTIFY activeLayerChanged)
+    Q_PROPERTY(QString activeLayerStorage READ activeLayerStorage NOTIFY activeLayerChanged)
+    Q_PROPERTY(QString editScope READ editScope WRITE setEditScope NOTIFY viewChanged)
+    Q_PROPERTY(QString pickerScope READ pickerScope WRITE setPickerScope NOTIFY viewChanged)
 
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(int selectionX READ selectionX NOTIFY selectionChanged)
@@ -95,6 +102,44 @@ public:
     void setFrame(int frame);
     int frameCount() const;
     int fps() const;
+    QVariantList layers() const;
+
+    QString activeLayerId() const { return m_activeLayerId; }
+    QString activeLayerName() const;
+    bool activeLayerLocked() const;
+    QString activeLayerStorage() const;
+    void setActiveLayerId(const QString &id);
+    QString editScope() const { return m_editScope; }
+    void setEditScope(const QString &scope);
+    QString pickerScope() const { return m_pickerScope; }
+    void setPickerScope(const QString &scope);
+
+    Q_INVOKABLE bool addLayer(const QString &id, const QString &name,
+                              const QString &storage = QStringLiteral("animated"));
+    Q_INVOKABLE bool removeLayer(const QString &id = QString());
+    Q_INVOKABLE bool renameLayer(const QString &id, const QString &name);
+    Q_INVOKABLE bool moveLayer(const QString &id, int index);
+    Q_INVOKABLE bool duplicateLayer(const QString &id, const QString &newId,
+                                    const QString &name);
+    Q_INVOKABLE bool setLayerVisible(const QString &id, bool visible);
+    Q_INVOKABLE bool setLayerLocked(const QString &id, bool locked);
+    Q_INVOKABLE bool setLayerOpacity(const QString &id, int opacity);
+    Q_INVOKABLE bool setLayerMode(const QString &id, const QString &mode);
+    Q_INVOKABLE bool setLayerStorage(const QString &id, const QString &storage,
+                                     bool anyway = false);
+    Q_INVOKABLE bool clearLayer(const QString &id, bool allFrames = false);
+    Q_INVOKABLE bool setLayersVisible(const QStringList &ids, bool visible);
+    Q_INVOKABLE bool setLayersLocked(const QStringList &ids, bool locked);
+    Q_INVOKABLE bool removeLayers(const QStringList &ids);
+    Q_INVOKABLE bool moveLayers(const QStringList &ids, int index);
+    Q_INVOKABLE QString nextLayerId() const;
+    Q_INVOKABLE QString nextLayerName() const;
+    Q_INVOKABLE QVariantMap layerStoragePreview(const QString &id,
+                                                const QString &storage) const;
+    Q_INVOKABLE QVariantMap mergeDownPreview(const QString &id) const;
+    Q_INVOKABLE bool mergeDown(const QString &id);
+    Q_INVOKABLE QVariantMap flattenPreview() const;
+    Q_INVOKABLE bool flatten();
 
     bool hasSelection() const { return m_selection.isValid(); }
     int selectionX() const { return m_selection.x(); }
@@ -157,6 +202,8 @@ public:
     // ---------------------------------------------------------------- drawing
 
     Q_INVOKABLE QString slotAt(int x, int y) const;
+    Q_INVOKABLE QString compositeSlotAt(int x, int y) const;
+    Q_INVOKABLE QString pickSlot(int x, int y, bool composite) const;
 
     /// A colour that will be seen against the pixel at (x, y).
     ///
@@ -243,7 +290,7 @@ public:
     Q_INVOKABLE void removeFrame();
     Q_INVOKABLE void moveFrame(int step);
 
-    Q_INVOKABLE int wouldLose(int columns, int rows) const;
+    Q_INVOKABLE qint64 wouldLose(int columns, int rows) const;
     Q_INVOKABLE void resize(int columns, int rows);
     Q_INVOKABLE QVariantMap trimPreview() const;
     Q_INVOKABLE bool trim(bool anyway = false);
@@ -292,6 +339,7 @@ public:
 signals:
     /// The document's contents changed: repaint, relist, everything.
     void changed();
+    void activeLayerChanged();
     /// Raster content changed. An empty clip or negative frame invalidates all
     /// renderers; otherwise only items showing that frame need repainting.
     void renderChanged(const QString &clip, int frame);
@@ -312,6 +360,13 @@ private:
     /// call site is how one of them eventually forgets the store.
     void editFrame(const std::function<void(Grid &)> &edit);
     QChar slotOf(const QString &text) const;
+    const Layer *activeLayer() const;
+    void reportError(const QString &error);
+    void emitRasterChanged();
+    bool commitLayerChange(const Document &before, const QString &error = QString(),
+                           const QString &previousActiveId = QString(),
+                           bool notifyActive = true);
+    void preserveActiveLayer(const Document &before);
 
     /// Files `before` as the state undo returns to, and drops the redo branch.
     /// Editing after undoing abandons what was undone -- which is what every
@@ -359,10 +414,15 @@ private:
     Document m_document;
     QList<Document> m_undo;
     QList<Document> m_redo;
+    QList<QString> m_undoActiveLayerIds;
+    QList<QString> m_redoActiveLayerIds;
     bool m_stroke = false;
     bool m_strokeRemembered = false;
     QString m_clip;
     int m_frame = 0;
+    QString m_activeLayerId;
+    QString m_editScope = QStringLiteral("frame");
+    QString m_pickerScope = QStringLiteral("active");
     QRect m_selection;
     QString m_path;
     /// The untitled window's backing file under the runtime directory, when

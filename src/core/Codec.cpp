@@ -1,15 +1,17 @@
 #include "Codec.h"
+#include "Output.h"
+#include "TextSafety.h"
 
 #include <QFile>
-#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
-#include <QSaveFile>
+#include <QRegularExpression>
 #include <QSet>
 
 #include <cmath>
+#include <limits>
 
 namespace omapixel {
 namespace {
@@ -20,195 +22,14 @@ bool fail(QString *error, const QString &path, const QString &message)
     return false;
 }
 
-QString objectPath(const QString &path, const QString &key)
-{
-    QString escaped = key;
-    escaped.replace(QChar(u'\\'), QStringLiteral("\\\\"));
-    escaped.replace(QChar(u'\"'), QStringLiteral("\\\""));
-    return QStringLiteral("%1[\"%2\"]").arg(path, escaped);
-}
-
 bool hasOnlyFields(const QJsonObject &object, const QStringList &allowed,
                    const QString &path, QString *error)
 {
     for (const QString &key : object.keys()) {
         if (!allowed.contains(key))
-            return fail(error, path + QStringLiteral(".") + key,
+            return fail(error, path + QLatin1Char('.') + key,
                         QStringLiteral("unknown field"));
     }
-    return true;
-}
-
-void skipJsonSpace(const QByteArray &json, int *position)
-{
-    while (*position < json.size()
-           && (json.at(*position) == ' ' || json.at(*position) == '\t'
-               || json.at(*position) == '\n' || json.at(*position) == '\r'))
-        ++*position;
-}
-
-bool scanJsonString(const QByteArray &json, int *position, QByteArray *token)
-{
-    if (*position >= json.size() || json.at(*position) != '"')
-        return false;
-
-    const int start = *position;
-    ++*position;
-    while (*position < json.size()) {
-        const char character = json.at(*position);
-        if (character == '\\') {
-            ++*position;
-            if (*position >= json.size())
-                return false;
-            ++*position;
-            continue;
-        }
-        ++*position;
-        if (character == '"') {
-            *token = json.mid(start, *position - start);
-            return true;
-        }
-    }
-    return false;
-}
-
-QString decodedJsonKey(const QByteArray &token)
-{
-    QJsonParseError parse;
-    const QJsonDocument document =
-        QJsonDocument::fromJson(QByteArray("{") + token + QByteArray(":null}"),
-                                &parse);
-    return document.object().keys().value(0);
-}
-
-bool scanJsonValue(const QByteArray &json, int *position, const QString &path,
-                   QString *error);
-
-bool scanJsonObject(const QByteArray &json, int *position, const QString &path,
-                    QString *error)
-{
-    ++*position; // '{'
-    skipJsonSpace(json, position);
-    if (*position < json.size() && json.at(*position) == '}') {
-        ++*position;
-        return true;
-    }
-
-    QSet<QString> keys;
-    while (*position < json.size()) {
-        QByteArray token;
-        if (!scanJsonString(json, position, &token))
-            return false;
-        const QString key = decodedJsonKey(token);
-        if (keys.contains(key))
-            return fail(error, objectPath(path, key),
-                        QStringLiteral("duplicate field"));
-        keys.insert(key);
-
-        skipJsonSpace(json, position);
-        if (*position >= json.size() || json.at(*position) != ':')
-            return false;
-        ++*position;
-        skipJsonSpace(json, position);
-        if (!scanJsonValue(json, position, objectPath(path, key), error))
-            return false;
-
-        skipJsonSpace(json, position);
-        if (*position < json.size() && json.at(*position) == '}') {
-            ++*position;
-            return true;
-        }
-        if (*position >= json.size() || json.at(*position) != ',')
-            return false;
-        ++*position;
-        skipJsonSpace(json, position);
-    }
-    return false;
-}
-
-bool scanJsonArray(const QByteArray &json, int *position, const QString &path,
-                   QString *error)
-{
-    ++*position; // '['
-    skipJsonSpace(json, position);
-    if (*position < json.size() && json.at(*position) == ']') {
-        ++*position;
-        return true;
-    }
-
-    int index = 0;
-    while (*position < json.size()) {
-        const QString childPath = QStringLiteral("%1[%2]").arg(path).arg(index);
-        if (!scanJsonValue(json, position, childPath, error))
-            return false;
-        ++index;
-        skipJsonSpace(json, position);
-        if (*position < json.size() && json.at(*position) == ']') {
-            ++*position;
-            return true;
-        }
-        if (*position >= json.size() || json.at(*position) != ',')
-            return false;
-        ++*position;
-        skipJsonSpace(json, position);
-    }
-    return false;
-}
-
-bool scanJsonValue(const QByteArray &json, int *position, const QString &path,
-                   QString *error)
-{
-    if (*position >= json.size())
-        return false;
-    switch (json.at(*position)) {
-    case '{':
-        return scanJsonObject(json, position, path, error);
-    case '[':
-        return scanJsonArray(json, position, path, error);
-    case '"': {
-        QByteArray token;
-        return scanJsonString(json, position, &token);
-    }
-    default:
-        // The JSON document has already been parsed successfully. For scalar
-        // values, advancing to the next structural delimiter is sufficient.
-        while (*position < json.size()) {
-            const char character = json.at(*position);
-            if (character == ',' || character == ']' || character == '}'
-                || character == ' ' || character == '\t'
-                || character == '\n' || character == '\r')
-                break;
-            ++*position;
-        }
-        return true;
-    }
-}
-
-bool rejectDuplicateJsonKeys(const QByteArray &json, QString *error)
-{
-    int position = 0;
-    skipJsonSpace(json, &position);
-    if (!scanJsonValue(json, &position, QStringLiteral("$"), error))
-        return !error->isEmpty(); // QJsonDocument already diagnosed the syntax.
-    return false;
-}
-
-bool integerValue(const QJsonValue &value, int minimum, int maximum, int *out,
-                  const QString &path, QString *error)
-{
-    if (!value.isDouble())
-        return fail(error, path, QStringLiteral("must be an integer number"));
-
-    const double number = value.toDouble();
-    if (!std::isfinite(number) || std::floor(number) != number
-        || number < minimum || number > maximum) {
-        return fail(error, path,
-                    QStringLiteral("must be an integer between %1 and %2")
-                        .arg(minimum)
-                        .arg(maximum));
-    }
-
-    *out = static_cast<int>(number);
     return true;
 }
 
@@ -216,231 +37,365 @@ bool required(const QJsonObject &object, const QString &key,
               const QString &path, QString *error)
 {
     if (!object.contains(key))
-        return fail(error, path + QStringLiteral(".") + key,
+        return fail(error, path + QLatin1Char('.') + key,
                     QStringLiteral("is required"));
     return true;
 }
 
-bool readPalette(const QJsonValue &value, Palette *palette,
-                 QString *error)
+bool integerValue(const QJsonValue &value, int minimum, int maximum, int *out,
+                  const QString &path, QString *error)
 {
-    if (!value.isArray() && !value.isObject())
-        return fail(error, QStringLiteral("$.palette"),
-                    QStringLiteral("must be an array or object"));
-
-    QSet<QChar> seen;
-    if (value.isArray()) {
-        const QJsonArray entries = value.toArray();
-        for (int i = 0; i < entries.size(); ++i) {
-            const QString path = QStringLiteral("$.palette[%1]").arg(i);
-            const QJsonValue entryValue = entries.at(i);
-            if (!entryValue.isObject())
-                return fail(error, path, QStringLiteral("must be an object"));
-
-            const QJsonObject entry = entryValue.toObject();
-            if (!hasOnlyFields(entry, {QStringLiteral("slot"),
-                                       QStringLiteral("colour")},
-                               path, error)
-                || !required(entry, QStringLiteral("slot"), path, error)
-                || !required(entry, QStringLiteral("colour"), path, error))
-                return false;
-
-            const QString slotPath = path + QStringLiteral(".slot");
-            const QJsonValue slotValue = entry.value(QStringLiteral("slot"));
-            if (!slotValue.isString())
-                return fail(error, slotPath,
-                            QStringLiteral("must be a string containing one QChar"));
-            const QString letter = slotValue.toString();
-            if (letter.size() != 1)
-                return fail(error, slotPath,
-                            QStringLiteral("must contain exactly one QChar"));
-
-            const QChar character = letter.at(0);
-            if (character == Grid::Empty)
-                return fail(error, slotPath,
-                            QStringLiteral("`.` is reserved for transparency"));
-            if (seen.contains(character))
-                return fail(error, slotPath,
-                            QStringLiteral("duplicates palette slot `%1`")
-                                .arg(letter));
-
-            const QString colourPath = path + QStringLiteral(".colour");
-            const QJsonValue colourValue =
-                entry.value(QStringLiteral("colour"));
-            if (!colourValue.isString())
-                return fail(error, colourPath,
-                            QStringLiteral("must be a colour string"));
-            const QColor colour(colourValue.toString());
-            if (!colour.isValid())
-                return fail(error, colourPath,
-                            QStringLiteral("is not a valid colour"));
-
-            seen.insert(character);
-            palette->set(character, colour);
-        }
-        return true;
-    }
-
-    const QJsonObject entries = value.toObject();
-    for (const QString &letter : entries.keys()) {
-        const QString path = objectPath(QStringLiteral("$.palette"), letter);
-        if (letter.size() != 1)
-            return fail(error, path,
-                        QStringLiteral("palette slot must contain exactly one QChar"));
-
-        const QChar character = letter.at(0);
-        if (character == Grid::Empty)
-            return fail(error, path,
-                        QStringLiteral("`.` is reserved for transparency"));
-        if (seen.contains(character))
-            return fail(error, path,
-                        QStringLiteral("duplicates palette slot `%1`")
-                            .arg(letter));
-
-        const QJsonValue colourValue = entries.value(letter);
-        if (!colourValue.isString())
-            return fail(error, path, QStringLiteral("must be a colour string"));
-        const QColor colour(colourValue.toString());
-        if (!colour.isValid())
-            return fail(error, path, QStringLiteral("is not a valid colour"));
-
-        seen.insert(character);
-        palette->set(character, colour);
-    }
+    if (!value.isDouble())
+        return fail(error, path, QStringLiteral("must be an integer number"));
+    const double number = value.toDouble();
+    if (!std::isfinite(number) || std::floor(number) != number
+        || number < minimum || number > maximum)
+        return fail(error, path,
+                    QStringLiteral("must be an integer between %1 and %2")
+                        .arg(minimum)
+                        .arg(maximum));
+    *out = static_cast<int>(number);
     return true;
 }
 
-bool readFrames(const QJsonValue &value, int columns, int rows,
-                const Palette &palette, const QString &path,
-                QList<Grid> *frames, QString *error)
+bool checkId(const QJsonValue &value, const QString &path, QString *error)
+{
+    if (!value.isString()
+        || !QRegularExpression(QStringLiteral("^[a-z][a-z0-9-]{0,63}$"))
+                .match(value.toString())
+                .hasMatch())
+        return fail(error, path,
+                    QStringLiteral("must match [a-z][a-z0-9-]{0,63}"));
+    return true;
+}
+
+bool checkName(const QJsonValue &value, const QString &path, QString *error)
+{
+    if (!value.isString() || value.toString().isEmpty()
+        || value.toString().size() > 128)
+        return fail(error, path,
+                    QStringLiteral("must be a non-empty string of at most 128 characters"));
+    if (!text::isSafe(value.toString(), false))
+        return fail(error, path,
+                    QStringLiteral("must not contain terminal control or unsafe Unicode characters"));
+    return true;
+}
+
+bool readRows(const QJsonValue &value, int columns, int rows,
+              const Palette &palette, const QString &path, Grid *grid,
+              QString *error)
 {
     if (!value.isArray())
         return fail(error, path, QStringLiteral("must be an array"));
-
-    const QJsonArray frameValues = value.toArray();
-    if (frameValues.isEmpty())
-        return fail(error, path, QStringLiteral("must not be empty"));
-
-    frames->reserve(frameValues.size());
-    for (int frameIndex = 0; frameIndex < frameValues.size(); ++frameIndex) {
-        const QString framePath =
-            QStringLiteral("%1[%2]").arg(path).arg(frameIndex);
-        const QJsonValue frameValue = frameValues.at(frameIndex);
-        if (!frameValue.isArray())
-            return fail(error, framePath, QStringLiteral("must be an array"));
-
-        const QJsonArray rowValues = frameValue.toArray();
-        if (rowValues.size() != rows)
-            return fail(error, framePath,
-                        QStringLiteral("must contain exactly %1 rows").arg(rows));
-
-        QStringList rowStrings;
-        rowStrings.reserve(rows);
-        for (int rowIndex = 0; rowIndex < rowValues.size(); ++rowIndex) {
-            const QString rowPath =
-                QStringLiteral("%1[%2]").arg(framePath).arg(rowIndex);
-            const QJsonValue rowValue = rowValues.at(rowIndex);
-            if (!rowValue.isString())
-                return fail(error, rowPath, QStringLiteral("must be a string"));
-
-            const QString row = rowValue.toString();
-            if (row.size() != columns)
-                return fail(error, rowPath,
-                            QStringLiteral("must contain exactly %1 QChars")
-                                .arg(columns));
-
-            for (int column = 0; column < row.size(); ++column) {
-                const QChar character = row.at(column);
-                if (character != Grid::Empty && !palette.has(character)) {
-                    return fail(error,
-                                QStringLiteral("%1[%2]")
-                                    .arg(rowPath)
-                                    .arg(column),
-                                QStringLiteral("uses undefined palette slot `%1`")
-                                    .arg(character));
-                }
-            }
-            rowStrings.append(row);
+    const QJsonArray values = value.toArray();
+    if (values.size() != rows)
+        return fail(error, path,
+                    QStringLiteral("must contain exactly %1 rows").arg(rows));
+    QStringList lines;
+    lines.reserve(rows);
+    for (int y = 0; y < rows; ++y) {
+        const QString rowPath = QStringLiteral("%1[%2]").arg(path).arg(y);
+        if (!values.at(y).isString())
+            return fail(error, rowPath, QStringLiteral("must be a string"));
+        const QString line = values.at(y).toString();
+        if (line.size() != columns)
+            return fail(error, rowPath,
+                        QStringLiteral("must contain exactly %1 characters")
+                            .arg(columns));
+        for (int x = 0; x < line.size(); ++x) {
+            const QChar slot = line.at(x);
+            if (slot != Grid::Empty && !palette.has(slot))
+                return fail(error, QStringLiteral("%1[%2]").arg(rowPath).arg(x),
+                            QStringLiteral("uses undefined palette slot `%1`")
+                                .arg(slot));
         }
-        frames->append(Grid::fromRows(rowStrings));
+        lines.append(line);
+    }
+    *grid = Grid::fromRows(lines);
+    return true;
+}
+
+bool readPalette(const QJsonValue &value, Palette *palette, QString *error)
+{
+    const QString path = QStringLiteral("$.palette");
+    if (!value.isArray())
+        return fail(error, path, QStringLiteral("must be an array"));
+    QSet<QChar> seen;
+    const QJsonArray entries = value.toArray();
+    for (int i = 0; i < entries.size(); ++i) {
+        const QString entryPath = QStringLiteral("%1[%2]").arg(path).arg(i);
+        if (!entries.at(i).isObject())
+            return fail(error, entryPath, QStringLiteral("must be an object"));
+        const QJsonObject entry = entries.at(i).toObject();
+        if (!hasOnlyFields(entry, {QStringLiteral("slot"), QStringLiteral("colour")},
+                           entryPath, error)
+            || !required(entry, QStringLiteral("slot"), entryPath, error)
+            || !required(entry, QStringLiteral("colour"), entryPath, error))
+            return false;
+        const QString slotPath = entryPath + QStringLiteral(".slot");
+        const QString slot = entry.value(QStringLiteral("slot")).toString();
+        if (!entry.value(QStringLiteral("slot")).isString() || slot.size() != 1
+            || !Palette::validSlot(slot.at(0)))
+            return fail(error, slotPath,
+                        QStringLiteral("must be one character and not `.`, `\"`, or `\\`"));
+        if (seen.contains(slot.at(0)))
+            return fail(error, slotPath,
+                        QStringLiteral("duplicates palette slot `%1`").arg(slot));
+        const QString colourPath = entryPath + QStringLiteral(".colour");
+        const QString colour = entry.value(QStringLiteral("colour")).toString();
+        if (!entry.value(QStringLiteral("colour")).isString()
+            || !QRegularExpression(QStringLiteral("^#[0-9A-Fa-f]{8}$"))
+                    .match(colour)
+                    .hasMatch())
+            return fail(error, colourPath, QStringLiteral("must be #RRGGBBAA"));
+        const int red = colour.mid(1, 2).toInt(nullptr, 16);
+        const int green = colour.mid(3, 2).toInt(nullptr, 16);
+        const int blue = colour.mid(5, 2).toInt(nullptr, 16);
+        const int alpha = colour.mid(7, 2).toInt(nullptr, 16);
+        if (!palette->set(slot.at(0), QColor(red, green, blue, alpha)))
+            return fail(error, slotPath, QStringLiteral("could not add palette slot"));
+        seen.insert(slot.at(0));
     }
     return true;
 }
 
-struct ParsedClip {
-    QString name;
-    int fps = 0;
-    QList<Grid> frames;
+QJsonArray rowsOf(const Grid &grid)
+{
+    QJsonArray rows;
+    for (const QString &row : grid.toRows())
+        rows.append(row);
+    return rows;
+}
+
+struct ScanLimits {
+    int depth = 0;
+    qint64 tokens = 0;
+    qint64 stringBytes = 0;
+    qint64 objectMembers = 0;
+    static constexpr int maxDepth = 64;
+    static constexpr int maxArrayItems = 65536;
+    static constexpr qint64 maxObjectMembers = 262144;
+    static constexpr qint64 maxTokens = 2'000'000;
+    static constexpr qint64 maxStringBytes = 4096;
+    static constexpr qint64 maxTotalStringBytes = Document::maxDocumentBytes;
 };
 
-bool readClip(const QJsonObject &clip, const QString &name, int columns,
-              int rows, const Palette &palette, const QString &path,
-              bool hasName, ParsedClip *parsed, QString *error)
+void skipSpace(const QByteArray &json, int *position)
 {
-    const QStringList allowed = hasName
-                                    ? QStringList{QStringLiteral("name"),
-                                                  QStringLiteral("fps"),
-                                                  QStringLiteral("frames")}
-                                    : QStringList{QStringLiteral("fps"),
-                                                  QStringLiteral("frames")};
-    if (!hasOnlyFields(clip, allowed, path, error)
-        || !required(clip, QStringLiteral("fps"), path, error)
-        || !required(clip, QStringLiteral("frames"), path, error))
-        return false;
+    while (*position < json.size()
+           && QByteArray(" \t\n\r").contains(json.at(*position)))
+        ++*position;
+}
 
-    int fps = 0;
-    if (!integerValue(clip.value(QStringLiteral("fps")), 1, 60, &fps,
-                      path + QStringLiteral(".fps"), error))
+bool scanString(const QByteArray &json, int *position, QByteArray *token,
+                QString *error, ScanLimits *limits)
+{
+    if (*position >= json.size() || json.at(*position) != '"')
         return false;
+    const int start = *position;
+    ++*position;
+    while (*position < json.size()) {
+        if (*position - start >= ScanLimits::maxStringBytes)
+            return fail(error, QStringLiteral("$"),
+                        QStringLiteral("string token exceeds %1 bytes")
+                            .arg(ScanLimits::maxStringBytes));
+        const char character = json.at(*position);
+        if (character == '\\') {
+            if (++*position >= json.size())
+                return false;
+            ++*position;
+        } else {
+            ++*position;
+            if (character == '"') {
+                *token = json.mid(start, *position - start);
+                limits->stringBytes += token->size();
+                if (limits->stringBytes > ScanLimits::maxTotalStringBytes)
+                    return fail(error, QStringLiteral("$"),
+                                QStringLiteral("string tokens exceed the total limit"));
+                if (++limits->tokens > ScanLimits::maxTokens)
+                    return fail(error, QStringLiteral("$"),
+                                QStringLiteral("JSON token count exceeds %1")
+                                    .arg(ScanLimits::maxTokens));
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
-    QList<Grid> frames;
-    if (!readFrames(clip.value(QStringLiteral("frames")), columns, rows,
-                    palette, path + QStringLiteral(".frames"), &frames,
-                    error))
+QString decodedKey(const QByteArray &token)
+{
+    QJsonParseError parse;
+    const QJsonDocument document =
+        QJsonDocument::fromJson(QByteArray("{") + token + QByteArray(":null}"), &parse);
+    return document.object().keys().value(0);
+}
+
+bool scanValue(const QByteArray &json, int *position, const QString &path,
+               QString *error, ScanLimits *limits);
+
+bool scanObject(const QByteArray &json, int *position, const QString &path,
+                QString *error, ScanLimits *limits)
+{
+    if (++limits->depth > ScanLimits::maxDepth)
+        return fail(error, path, QStringLiteral("nesting depth exceeds %1")
+                                   .arg(ScanLimits::maxDepth));
+    ++*position;
+    skipSpace(json, position);
+    QSet<QString> keys;
+    if (*position < json.size() && json.at(*position) == '}') {
+        ++*position;
+        --limits->depth;
+        return true;
+    }
+    while (*position < json.size()) {
+        QByteArray token;
+        if (++limits->objectMembers > ScanLimits::maxObjectMembers)
+            return fail(error, path, QStringLiteral("object has too many members"));
+        if (!scanString(json, position, &token, error, limits))
+            return false;
+        const QString key = decodedKey(token);
+        if (keys.contains(key))
+            return fail(error, path + QStringLiteral(".") + key,
+                        QStringLiteral("duplicate field"));
+        keys.insert(key);
+        skipSpace(json, position);
+        if (*position >= json.size() || json.at(*position) != ':')
+            return false;
+        ++*position;
+        skipSpace(json, position);
+        if (!scanValue(json, position, path + QStringLiteral(".") + key, error,
+                       limits))
+            return false;
+        skipSpace(json, position);
+        if (*position < json.size() && json.at(*position) == '}') {
+            ++*position;
+            --limits->depth;
+            return true;
+        }
+        if (*position >= json.size() || json.at(*position) != ',')
+            return false;
+        ++*position;
+        skipSpace(json, position);
+    }
+    return false;
+}
+
+bool scanArray(const QByteArray &json, int *position, const QString &path,
+               QString *error, ScanLimits *limits)
+{
+    if (++limits->depth > ScanLimits::maxDepth)
+        return fail(error, path, QStringLiteral("nesting depth exceeds %1")
+                                   .arg(ScanLimits::maxDepth));
+    ++*position;
+    skipSpace(json, position);
+    if (*position < json.size() && json.at(*position) == ']') {
+        ++*position;
+        --limits->depth;
+        return true;
+    }
+    int index = 0;
+    while (*position < json.size()) {
+        if (index >= ScanLimits::maxArrayItems)
+            return fail(error, path, QStringLiteral("array has too many items"));
+        if (!scanValue(json, position, QStringLiteral("%1[%2]").arg(path).arg(index++),
+                       error, limits))
+            return false;
+        skipSpace(json, position);
+        if (*position < json.size() && json.at(*position) == ']') {
+            ++*position;
+            --limits->depth;
+            return true;
+        }
+        if (*position >= json.size() || json.at(*position) != ',')
+            return false;
+        ++*position;
+        skipSpace(json, position);
+    }
+    return false;
+}
+
+bool scanValue(const QByteArray &json, int *position, const QString &path,
+               QString *error, ScanLimits *limits)
+{
+    if (*position >= json.size())
         return false;
-
-    parsed->name = name;
-    parsed->fps = fps;
-    parsed->frames = frames;
+    if (json.at(*position) == '{')
+        return scanObject(json, position, path, error, limits);
+    if (json.at(*position) == '[')
+        return scanArray(json, position, path, error, limits);
+    if (json.at(*position) == '"') {
+        QByteArray token;
+        return scanString(json, position, &token, error, limits);
+    }
+    const int start = *position;
+    while (*position < json.size()
+           && !QByteArray(",]} \t\n\r").contains(json.at(*position)))
+        ++*position;
+    if (*position == start)
+        return false;
+    if (*position - start > ScanLimits::maxStringBytes)
+        return fail(error, path, QStringLiteral("scalar token exceeds %1 bytes")
+                                      .arg(ScanLimits::maxStringBytes));
+    if (++limits->tokens > ScanLimits::maxTokens)
+        return fail(error, path, QStringLiteral("JSON token count exceeds %1")
+                                      .arg(ScanLimits::maxTokens));
     return true;
+}
+
+bool rejectDuplicateJsonKeysImpl(const QByteArray &json, QString *error)
+{
+    int position = 0;
+    skipSpace(json, &position);
+    ScanLimits limits;
+    if (!scanValue(json, &position, QStringLiteral("$"), error, &limits)) {
+        if (error->isEmpty())
+            *error = QStringLiteral("$: malformed JSON");
+        return true;
+    }
+    skipSpace(json, &position);
+    if (position != json.size())
+        return fail(error, QStringLiteral("$"), QStringLiteral("trailing JSON data"));
+    return false;
+}
+
+QString colourString(const QColor &colour)
+{
+    return QStringLiteral("#%1%2%3%4")
+        .arg(colour.red(), 2, 16, QLatin1Char('0'))
+        .arg(colour.green(), 2, 16, QLatin1Char('0'))
+        .arg(colour.blue(), 2, 16, QLatin1Char('0'))
+        .arg(colour.alpha(), 2, 16, QLatin1Char('0'))
+        .toUpper();
 }
 
 QStringList resourceWarnings(const Document &document, qint64 bytes,
                              const Codec::WarningLimits &limits)
 {
     QStringList warnings;
-    if (limits.fileBytes > 0 && bytes > limits.fileBytes) {
+    if (limits.fileBytes > 0 && bytes > limits.fileBytes)
         warnings << QStringLiteral("document is %1 MiB; warning threshold is %2 MiB")
                         .arg(double(bytes) / (1024.0 * 1024.0), 0, 'f', 1)
                         .arg(double(limits.fileBytes) / (1024.0 * 1024.0), 0, 'f', 1);
-    }
     if (limits.paletteSlots > 0
-        && document.palette().entries().size() > limits.paletteSlots) {
+        && document.palette().entries().size() > limits.paletteSlots)
         warnings << QStringLiteral("document has %1 palette slots; warning threshold is %2")
                         .arg(document.palette().entries().size())
                         .arg(limits.paletteSlots);
-    }
-    if (limits.clips > 0 && document.clips().size() > limits.clips) {
+    if (limits.clips > 0 && document.clips().size() > limits.clips)
         warnings << QStringLiteral("document has %1 clips; warning threshold is %2")
-                        .arg(document.clips().size())
-                        .arg(limits.clips);
-    }
+                        .arg(document.clips().size()).arg(limits.clips);
     qint64 totalFrames = 0;
     for (const Clip &clip : document.clips()) {
-        totalFrames += clip.frames.size();
-        if (limits.framesPerClip > 0
-            && clip.frames.size() > limits.framesPerClip) {
+        totalFrames += clip.frameCount;
+        if (limits.framesPerClip > 0 && clip.frameCount > limits.framesPerClip)
             warnings << QStringLiteral("clip %1 has %2 frames; warning threshold is %3")
-                            .arg(clip.name)
-                            .arg(clip.frames.size())
+                            .arg(clip.name).arg(clip.frameCount)
                             .arg(limits.framesPerClip);
-        }
     }
-    if (limits.totalFrames > 0 && totalFrames > limits.totalFrames) {
+    if (limits.totalFrames > 0 && totalFrames > limits.totalFrames)
         warnings << QStringLiteral("document has %1 frames; warning threshold is %2")
-                        .arg(totalFrames)
-                        .arg(limits.totalFrames);
-    }
+                        .arg(totalFrames).arg(limits.totalFrames);
     return warnings;
 }
 
@@ -454,175 +409,339 @@ Codec::Result Codec::read(const QByteArray &json)
 Codec::Result Codec::read(const QByteArray &json, const WarningLimits &limits)
 {
     Result result;
-
+    if (json.size() > Document::maxDocumentBytes) {
+        result.error = QStringLiteral("$: document exceeds hard limit of %1 MiB")
+                           .arg(Document::maxDocumentBytes / (1024 * 1024));
+        return result;
+    }
+    QString scanError;
+    if (Codec::rejectDuplicateJsonKeys(json, &scanError)) {
+        result.error = scanError;
+        return result;
+    }
     QJsonParseError parse;
     const QJsonDocument parsed = QJsonDocument::fromJson(json, &parse);
     if (parse.error != QJsonParseError::NoError) {
         result.error = QStringLiteral("invalid JSON at offset %1: %2")
-                           .arg(parse.offset)
-                           .arg(parse.errorString());
+                           .arg(parse.offset).arg(parse.errorString());
         return result;
     }
     QString error;
-    if (rejectDuplicateJsonKeys(json, &error)) {
-        result.error = error;
-        return result;
-    }
     if (!parsed.isObject()) {
         result.error = QStringLiteral("$: the document has to be a JSON object");
         return result;
     }
-
     const QJsonObject root = parsed.object();
-    if (!hasOnlyFields(root, {QStringLiteral("size"),
-                              QStringLiteral("palette"),
-                              QStringLiteral("clips")},
-                       QStringLiteral("$"), &error)
-        || !required(root, QStringLiteral("size"), QStringLiteral("$"),
-                     &error)
-        || !required(root, QStringLiteral("palette"), QStringLiteral("$"),
-                     &error)
-        || !required(root, QStringLiteral("clips"), QStringLiteral("$"),
-                     &error)) {
+    if (!hasOnlyFields(root, {QStringLiteral("version"), QStringLiteral("canvas"),
+                              QStringLiteral("palette"), QStringLiteral("clips"),
+                              QStringLiteral("layers")}, QStringLiteral("$"), &error)
+        || !required(root, QStringLiteral("version"), QStringLiteral("$"), &error)
+        || !required(root, QStringLiteral("canvas"), QStringLiteral("$"), &error)
+        || !required(root, QStringLiteral("palette"), QStringLiteral("$"), &error)
+        || !required(root, QStringLiteral("clips"), QStringLiteral("$"), &error)
+        || !required(root, QStringLiteral("layers"), QStringLiteral("$"), &error)) {
         result.error = error;
         return result;
     }
-
-    const QJsonValue sizeValue = root.value(QStringLiteral("size"));
-    if (!sizeValue.isObject()) {
-        result.error = QStringLiteral("$.size: must be an object");
-        return result;
-    }
-    const QJsonObject size = sizeValue.toObject();
-    if (!hasOnlyFields(size, {QStringLiteral("w"), QStringLiteral("h")},
-                       QStringLiteral("$.size"), &error)
-        || !required(size, QStringLiteral("w"), QStringLiteral("$.size"),
-                     &error)
-        || !required(size, QStringLiteral("h"), QStringLiteral("$.size"),
-                     &error)) {
+    int version = 0;
+    if (!integerValue(root.value(QStringLiteral("version")), 2, 2,
+                      &version, QStringLiteral("$.version"), &error)) {
         result.error = error;
         return result;
     }
+    Q_UNUSED(version);
 
+    const QJsonValue canvasValue = root.value(QStringLiteral("canvas"));
+    if (!canvasValue.isObject()) {
+        result.error = QStringLiteral("$.canvas: must be an object");
+        return result;
+    }
+    const QJsonObject canvas = canvasValue.toObject();
+    if (!hasOnlyFields(canvas, {QStringLiteral("width"), QStringLiteral("height")},
+                       QStringLiteral("$.canvas"), &error)
+        || !required(canvas, QStringLiteral("width"), QStringLiteral("$.canvas"), &error)
+        || !required(canvas, QStringLiteral("height"), QStringLiteral("$.canvas"), &error)) {
+        result.error = error;
+        return result;
+    }
     int columns = 0;
     int rows = 0;
-    if (!integerValue(size.value(QStringLiteral("w")), 1, Document::maxDimension,
-                      &columns, QStringLiteral("$.size.w"), &error)
-        || !integerValue(size.value(QStringLiteral("h")), 1, Document::maxDimension,
-                         &rows, QStringLiteral("$.size.h"), &error)) {
-        result.error = error;
-        return result;
-    }
-
-    Palette palette;
-    if (!readPalette(root.value(QStringLiteral("palette")), &palette, &error)) {
+    if (!integerValue(canvas.value(QStringLiteral("width")), 1, Document::maxDimension,
+                      &columns, QStringLiteral("$.canvas.width"), &error)
+        || !integerValue(canvas.value(QStringLiteral("height")), 1, Document::maxDimension,
+                         &rows, QStringLiteral("$.canvas.height"), &error)
+        || !root.value(QStringLiteral("palette")).isArray()
+        || root.value(QStringLiteral("palette")).toArray().size() > Document::maxPaletteSlots
+        || !readPalette(root.value(QStringLiteral("palette")), &result.document.palette(),
+                        &error)) {
+        if (error.isEmpty())
+            error = QStringLiteral("$.palette: exceeds hard limit of %1 slots")
+                        .arg(Document::maxPaletteSlots);
         result.error = error;
         return result;
     }
 
     const QJsonValue clipsValue = root.value(QStringLiteral("clips"));
-    if (!clipsValue.isArray() && !clipsValue.isObject()) {
-        result.error = QStringLiteral("$.clips: must be an array or object");
+    if (!clipsValue.isArray() || clipsValue.toArray().isEmpty()
+        || clipsValue.toArray().size() > Document::maxClips) {
+        result.error = QStringLiteral("$.clips: must be a non-empty array");
         return result;
     }
-
-    QList<ParsedClip> clips;
-    QSet<QString> names;
-    if (clipsValue.isArray()) {
-        const QJsonArray clipValues = clipsValue.toArray();
-        if (clipValues.isEmpty()) {
-            result.error = QStringLiteral("$.clips: must not be empty");
+    QList<Clip> clips;
+    QSet<QString> clipIds;
+    QSet<QString> clipNames;
+    for (int i = 0; i < clipsValue.toArray().size(); ++i) {
+        const QString path = QStringLiteral("$.clips[%1]").arg(i);
+        const QJsonValue value = clipsValue.toArray().at(i);
+        if (!value.isObject()) {
+            result.error = path + QStringLiteral(": must be an object");
             return result;
         }
-
-        clips.reserve(clipValues.size());
-        for (int i = 0; i < clipValues.size(); ++i) {
-            const QString path = QStringLiteral("$.clips[%1]").arg(i);
-            const QJsonValue clipValue = clipValues.at(i);
-            if (!clipValue.isObject()) {
-                result.error = path + QStringLiteral(": must be an object");
-                return result;
-            }
-            const QJsonObject clip = clipValue.toObject();
-            if (!hasOnlyFields(clip, {QStringLiteral("name"),
-                                      QStringLiteral("fps"),
-                                      QStringLiteral("frames")},
-                               path, &error)
-                || !required(clip, QStringLiteral("name"), path, &error)
-                || !required(clip, QStringLiteral("fps"), path, &error)
-                || !required(clip, QStringLiteral("frames"), path, &error)) {
-                result.error = error;
-                return result;
-            }
-
-            const QJsonValue nameValue = clip.value(QStringLiteral("name"));
-            if (!nameValue.isString()) {
-                result.error = path + QStringLiteral(".name: must be a string");
-                return result;
-            }
-            const QString name = nameValue.toString();
-            if (name.isEmpty()) {
-                result.error = path + QStringLiteral(".name: must not be empty");
-                return result;
-            }
-            if (names.contains(name)) {
-                result.error = path + QStringLiteral(".name: duplicate clip name `%1`")
-                                           .arg(name);
-                return result;
-            }
-
-            ParsedClip parsedClip;
-            if (!readClip(clip, name, columns, rows, palette, path, true,
-                          &parsedClip, &error)) {
-                result.error = error;
-                return result;
-            }
-            names.insert(name);
-            clips.append(parsedClip);
-        }
-    } else {
-        const QJsonObject clipValues = clipsValue.toObject();
-        if (clipValues.isEmpty()) {
-            result.error = QStringLiteral("$.clips: must not be empty");
+        const QJsonObject object = value.toObject();
+        if (!hasOnlyFields(object, {QStringLiteral("id"), QStringLiteral("name"),
+                                    QStringLiteral("fps"), QStringLiteral("frameCount")},
+                           path, &error)
+            || !required(object, QStringLiteral("id"), path, &error)
+            || !required(object, QStringLiteral("name"), path, &error)
+            || !required(object, QStringLiteral("fps"), path, &error)
+            || !required(object, QStringLiteral("frameCount"), path, &error)
+            || !checkId(object.value(QStringLiteral("id")), path + QStringLiteral(".id"), &error)
+            || !checkName(object.value(QStringLiteral("name")), path + QStringLiteral(".name"), &error)) {
+            result.error = error;
             return result;
         }
-
-        clips.reserve(clipValues.size());
-        for (const QString &name : clipValues.keys()) {
-            const QString path = objectPath(QStringLiteral("$.clips"), name);
-            if (name.isEmpty()) {
-                result.error = path + QStringLiteral(": clip name must not be empty");
-                return result;
-            }
-            const QJsonValue clipValue = clipValues.value(name);
-            if (!clipValue.isObject()) {
-                result.error = path + QStringLiteral(": must be an object");
-                return result;
-            }
-
-            ParsedClip parsedClip;
-            if (!readClip(clipValue.toObject(), name, columns, rows, palette,
-                          path, false, &parsedClip, &error)) {
-                result.error = error;
-                return result;
-            }
-            names.insert(name);
-            clips.append(parsedClip);
+        const QString id = object.value(QStringLiteral("id")).toString();
+        const QString name = object.value(QStringLiteral("name")).toString();
+        if (clipIds.contains(id)) {
+            result.error = QStringLiteral("%1.id: duplicates clip id `%2`").arg(path).arg(id);
+            return result;
         }
+        if (clipNames.contains(name)) {
+            result.error = QStringLiteral("%1.name: duplicates clip name `%2`").arg(path).arg(name);
+            return result;
+        }
+        Clip clip;
+        clip.id = id;
+        clip.name = name;
+        if (!integerValue(object.value(QStringLiteral("fps")), 1, 60, &clip.fps,
+                          path + QStringLiteral(".fps"), &error)
+            || !integerValue(object.value(QStringLiteral("frameCount")), 1,
+                             Document::maxFramesPerClip, &clip.frameCount,
+                             path + QStringLiteral(".frameCount"), &error)) {
+            result.error = error;
+            return result;
+        }
+        clips.append(clip);
+        clipIds.insert(id);
+        clipNames.insert(name);
     }
 
-    // All input has been checked before any Document mutation can normalize it.
+    const QJsonValue layersValue = root.value(QStringLiteral("layers"));
+    if (!layersValue.isArray() || layersValue.toArray().isEmpty()
+        || layersValue.toArray().size() > Document::maxLayers) {
+        result.error = QStringLiteral("$.layers: must be a non-empty array");
+        return result;
+    }
+    QList<Layer> layers;
+    QSet<QString> layerIds;
+    QSet<QString> layerNames;
+    const qint64 expectedAnimated = [&clips] {
+        qint64 count = 0;
+        for (const Clip &clip : clips)
+            count += clip.frameCount;
+        return count;
+    }();
+    if (expectedAnimated > Document::maxTotalFrames) {
+        result.error = QStringLiteral("$.clips: total frame count exceeds hard limit of %1")
+                           .arg(Document::maxTotalFrames);
+        return result;
+    }
+    qint64 expectedCels = 0;
+    for (const QJsonValue &layerValue : layersValue.toArray()) {
+        if (!layerValue.isObject())
+            continue;
+        const QJsonObject layerObject = layerValue.toObject();
+        const QJsonValue celsValue = layerObject.value(QStringLiteral("cels"));
+        if (!celsValue.isArray())
+            continue;
+        expectedCels += layerObject.value(QStringLiteral("storage")).toString()
+                            == QStringLiteral("shared")
+                        ? 1
+                        : expectedAnimated;
+        if (expectedCels > Document::maxTotalCels) {
+            result.error = QStringLiteral("$.layers: total cel count exceeds hard limit of %1")
+                               .arg(Document::maxTotalCels);
+            return result;
+        }
+    }
+    for (int i = 0; i < layersValue.toArray().size(); ++i) {
+        const QString path = QStringLiteral("$.layers[%1]").arg(i);
+        const QJsonValue value = layersValue.toArray().at(i);
+        if (!value.isObject()) {
+            result.error = path + QStringLiteral(": must be an object");
+            return result;
+        }
+        const QJsonObject object = value.toObject();
+        const QStringList fields{QStringLiteral("id"), QStringLiteral("name"),
+                                 QStringLiteral("visible"), QStringLiteral("locked"),
+                                 QStringLiteral("opacity"), QStringLiteral("mode"),
+                                 QStringLiteral("storage"), QStringLiteral("cels")};
+        if (!hasOnlyFields(object, fields, path, &error)) {
+            result.error = error;
+            return result;
+        }
+        for (const QString &field : fields) {
+            if (!required(object, field, path, &error)) {
+                result.error = error;
+                return result;
+            }
+        }
+        if (!checkId(object.value(QStringLiteral("id")), path + QStringLiteral(".id"), &error)
+            || !checkName(object.value(QStringLiteral("name")), path + QStringLiteral(".name"), &error)) {
+            result.error = error;
+            return result;
+        }
+        Layer layer;
+        layer.id = object.value(QStringLiteral("id")).toString();
+        layer.name = object.value(QStringLiteral("name")).toString();
+        if (layerIds.contains(layer.id)) {
+            result.error = QStringLiteral("%1.id: duplicates layer id `%2`").arg(path).arg(layer.id);
+            return result;
+        }
+        if (layerNames.contains(layer.name)) {
+            result.error = QStringLiteral("%1.name: duplicates layer name `%2`").arg(path).arg(layer.name);
+            return result;
+        }
+        if (!object.value(QStringLiteral("visible")).isBool()
+            || !object.value(QStringLiteral("locked")).isBool()) {
+            result.error = path + QStringLiteral(".visible: must be boolean");
+            return result;
+        }
+        layer.visible = object.value(QStringLiteral("visible")).toBool();
+        layer.locked = object.value(QStringLiteral("locked")).toBool();
+        if (!integerValue(object.value(QStringLiteral("opacity")), 0, 255, &layer.opacity,
+                          path + QStringLiteral(".opacity"), &error)) {
+            result.error = error;
+            return result;
+        }
+        layer.mode = object.value(QStringLiteral("mode")).toString();
+        if (!QStringList{QStringLiteral("normal"), QStringLiteral("multiply"),
+                         QStringLiteral("screen")}.contains(layer.mode)) {
+            result.error = path + QStringLiteral(".mode: must be normal, multiply, or screen");
+            return result;
+        }
+        layer.storage = object.value(QStringLiteral("storage")).toString();
+        if (layer.storage != QStringLiteral("shared")
+            && layer.storage != QStringLiteral("animated")) {
+            result.error = path + QStringLiteral(".storage: must be shared or animated");
+            return result;
+        }
+        const QJsonValue celsValue = object.value(QStringLiteral("cels"));
+        if (!celsValue.isArray()) {
+            result.error = path + QStringLiteral(".cels: must be an array");
+            return result;
+        }
+        const QJsonArray cels = celsValue.toArray();
+        const qint64 expected = layer.storage == QStringLiteral("shared") ? 1 : expectedAnimated;
+        if (cels.size() != expected) {
+            result.error = QStringLiteral("%1.cels: %2 storage requires exactly %3 cels")
+                               .arg(path).arg(layer.storage).arg(expected);
+            return result;
+        }
+        QSet<QString> seen;
+        for (int celIndex = 0; celIndex < cels.size(); ++celIndex) {
+            const QString celPath = QStringLiteral("%1.cels[%2]").arg(path).arg(celIndex);
+            if (!cels.at(celIndex).isObject()) {
+                result.error = celPath + QStringLiteral(": must be an object");
+                return result;
+            }
+            const QJsonObject celObject = cels.at(celIndex).toObject();
+            Cel cel;
+            if (layer.storage == QStringLiteral("shared")) {
+                if (!hasOnlyFields(celObject, {QStringLiteral("scope"), QStringLiteral("rows")},
+                                   celPath, &error)
+                    || !required(celObject, QStringLiteral("scope"), celPath, &error)
+                    || !required(celObject, QStringLiteral("rows"), celPath, &error)
+                    || celObject.value(QStringLiteral("scope")).toString() != QStringLiteral("all")) {
+                    result.error = error.isEmpty() ? celPath + QStringLiteral(".scope: must be `all`") : error;
+                    return result;
+                }
+                if (!readRows(celObject.value(QStringLiteral("rows")), columns, rows,
+                              result.document.palette(), celPath + QStringLiteral(".rows"),
+                              &cel.grid, &error)) {
+                    result.error = error;
+                    return result;
+                }
+            } else {
+                if (!hasOnlyFields(celObject, {QStringLiteral("clip"), QStringLiteral("frame"),
+                                               QStringLiteral("rows")}, celPath, &error)
+                    || !required(celObject, QStringLiteral("clip"), celPath, &error)
+                    || !required(celObject, QStringLiteral("frame"), celPath, &error)
+                    || !required(celObject, QStringLiteral("rows"), celPath, &error)
+                    || !checkId(celObject.value(QStringLiteral("clip")), celPath + QStringLiteral(".clip"), &error)) {
+                    result.error = error;
+                    return result;
+                }
+                cel.clip = celObject.value(QStringLiteral("clip")).toString();
+                const Clip *clip = nullptr;
+                for (const Clip &candidate : clips)
+                    if (candidate.id == cel.clip)
+                        clip = &candidate;
+                if (!clip) {
+                    result.error = celPath + QStringLiteral(".clip: unknown clip `%1`").arg(cel.clip);
+                    return result;
+                }
+                if (!integerValue(celObject.value(QStringLiteral("frame")), 0,
+                                  clip->frameCount - 1, &cel.frame,
+                                  celPath + QStringLiteral(".frame"), &error)
+                    || !readRows(celObject.value(QStringLiteral("rows")), columns, rows,
+                                 result.document.palette(), celPath + QStringLiteral(".rows"),
+                                 &cel.grid, &error)) {
+                    result.error = error;
+                    return result;
+                }
+                const QString key = QStringLiteral("%1:%2").arg(cel.clip).arg(cel.frame);
+                if (seen.contains(key)) {
+                    result.error = celPath + QStringLiteral(".frame: duplicates an animated cel");
+                    return result;
+                }
+                seen.insert(key);
+            }
+            layer.cels.append(cel);
+        }
+        if (layer.storage == QStringLiteral("animated")) {
+            for (const Clip &clip : clips) {
+                for (int frame = 0; frame < clip.frameCount; ++frame) {
+                    if (!seen.contains(QStringLiteral("%1:%2").arg(clip.id).arg(frame))) {
+                        result.error = path + QStringLiteral(".cels: must cover every clip/frame pair exactly once");
+                        return result;
+                    }
+                }
+            }
+        }
+        layers.append(layer);
+        layerIds.insert(layer.id);
+        layerNames.insert(layer.name);
+    }
+
     Document doc = Document::empty(columns, rows);
-    doc.palette() = palette;
-    for (const ParsedClip &clip : clips) {
+    doc.palette() = result.document.palette();
+    for (const Clip &clip : clips) {
         if (!doc.addClip(clip.name, clip.fps)) {
-            result.error = QStringLiteral("$.clips: could not add validated clip `%1`")
-                               .arg(clip.name);
+            result.error = QStringLiteral("$.clips: could not add validated clip `%1`").arg(clip.name);
             return result;
         }
-        doc.clip(clip.name)->frames = clip.frames;
+        doc.clip(clip.name)->id = clip.id;
+        doc.clip(clip.name)->frameCount = clip.frameCount;
     }
-
+    for (const Layer &layer : layers) {
+        if (!doc.addLayer(layer.id, layer.name, layer.storage)) {
+            result.error = QStringLiteral("$.layers: could not add validated layer `%1`").arg(layer.name);
+            return result;
+        }
+        Layer *target = doc.layerById(layer.id);
+        *target = layer;
+    }
     result.document = doc;
     result.warnings = resourceWarnings(doc, json.size(), limits);
     result.ok = true;
@@ -636,76 +755,111 @@ Codec::Result Codec::readFile(const QString &path)
 
 Codec::Result Codec::readFile(const QString &path, const WarningLimits &limits)
 {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
+    QByteArray bytes;
+    QString inputError;
+    if (!input::readRegularFile(path, Document::maxDocumentBytes, &bytes,
+                                &inputError)) {
         Result result;
-        result.error = QStringLiteral("%1: %2").arg(path, file.errorString());
+        result.error = inputError;
         return result;
     }
-    return read(file.readAll(), limits);
+    if (bytes.size() > Document::maxDocumentBytes) {
+        Result result;
+        result.error = QStringLiteral("%1: document exceeds hard limit of %2 MiB")
+                           .arg(path)
+                           .arg(Document::maxDocumentBytes / (1024 * 1024));
+        return result;
+    }
+    return read(bytes, limits);
 }
 
-QByteArray Codec::write(const Document &document)
+bool Codec::rejectDuplicateJsonKeys(const QByteArray &json, QString *error)
 {
-    QJsonObject size;
-    size.insert(QStringLiteral("w"), document.columns());
-    size.insert(QStringLiteral("h"), document.rows());
+    QString ignoredError;
+    return rejectDuplicateJsonKeysImpl(json, error ? error : &ignoredError);
+}
 
+QByteArray Codec::write(const Document &document, QString *error)
+{
+    const QStringList problems = document.problems();
+    if (!problems.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("document is invalid: %1")
+                         .arg(problems.first());
+        return QByteArray();
+    }
     QJsonArray palette;
     for (const Palette::Slot &slot : document.palette().entries()) {
         QJsonObject entry;
         entry.insert(QStringLiteral("slot"), QString(slot.letter));
-        entry.insert(QStringLiteral("colour"),
-                     slot.colour.name(QColor::HexRgb).toUpper());
+        entry.insert(QStringLiteral("colour"), colourString(slot.colour));
         palette.append(entry);
     }
-
     QJsonArray clips;
     for (const Clip &clip : document.clips()) {
-        QJsonArray frames;
-        for (const Grid &grid : clip.frames) {
-            QJsonArray rows;
-            for (const QString &row : grid.toRows())
-                rows.append(row);
-            frames.append(rows);
-        }
         QJsonObject entry;
+        entry.insert(QStringLiteral("id"), clip.id);
         entry.insert(QStringLiteral("name"), clip.name);
         entry.insert(QStringLiteral("fps"), clip.fps);
-        entry.insert(QStringLiteral("frames"), frames);
+        entry.insert(QStringLiteral("frameCount"), clip.frameCount);
         clips.append(entry);
     }
-
+    QJsonArray layers;
+    for (const Layer &layer : document.layers()) {
+        QJsonArray cels;
+        for (const Cel &cel : layer.cels) {
+            QJsonObject entry;
+            if (layer.storage == QStringLiteral("shared")) {
+                entry.insert(QStringLiteral("scope"), QStringLiteral("all"));
+            } else {
+                entry.insert(QStringLiteral("clip"), cel.clip);
+                entry.insert(QStringLiteral("frame"), cel.frame);
+            }
+            entry.insert(QStringLiteral("rows"), rowsOf(cel.grid));
+            cels.append(entry);
+        }
+        QJsonObject entry;
+        entry.insert(QStringLiteral("id"), layer.id);
+        entry.insert(QStringLiteral("name"), layer.name);
+        entry.insert(QStringLiteral("visible"), layer.visible);
+        entry.insert(QStringLiteral("locked"), layer.locked);
+        entry.insert(QStringLiteral("opacity"), layer.opacity);
+        entry.insert(QStringLiteral("mode"), layer.mode);
+        entry.insert(QStringLiteral("storage"), layer.storage);
+        entry.insert(QStringLiteral("cels"), cels);
+        layers.append(entry);
+    }
+    QJsonObject canvas;
+    canvas.insert(QStringLiteral("width"), document.columns());
+    canvas.insert(QStringLiteral("height"), document.rows());
     QJsonObject root;
-    root.insert(QStringLiteral("size"), size);
+    root.insert(QStringLiteral("version"), 2);
+    root.insert(QStringLiteral("canvas"), canvas);
     root.insert(QStringLiteral("palette"), palette);
     root.insert(QStringLiteral("clips"), clips);
+    root.insert(QStringLiteral("layers"), layers);
+    const QByteArray encoded = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    if (encoded.size() > Document::maxDocumentBytes) {
+        if (error)
+            *error = QStringLiteral("serialized document exceeds the hard limit of %1 MiB")
+                         .arg(Document::maxDocumentBytes / (1024 * 1024));
+        return QByteArray();
+    }
+    return encoded;
+}
 
-    return QJsonDocument(root).toJson(QJsonDocument::Indented);
+bool Codec::writeFile(const QString &path, const Document &document, QString *error)
+{
+    return writeFile(path, document, {}, error);
 }
 
 bool Codec::writeFile(const QString &path, const Document &document,
-                      QString *error)
+                      const QStringList &sources, QString *error)
 {
-    QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
-        if (error)
-            *error = QStringLiteral("%1: %2").arg(path, file.errorString());
+    const QByteArray encoded = write(document, error);
+    if (encoded.isEmpty())
         return false;
-    }
-    const QByteArray encoded = write(document);
-    if (file.write(encoded) != encoded.size()) {
-        if (error)
-            *error = QStringLiteral("%1: %2").arg(path, file.errorString());
-        file.cancelWriting();
-        return false;
-    }
-    if (!file.commit()) {
-        if (error)
-            *error = QStringLiteral("%1: %2").arg(path, file.errorString());
-        return false;
-    }
-    return true;
+    return output::writeAtomically(path, encoded, sources, error);
 }
 
 } // namespace omapixel

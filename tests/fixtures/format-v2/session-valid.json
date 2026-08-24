@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "pid": 1234,
+  "started": 1724457600,
+  "path": "/work/heart-v2.json",
+  "dirty": false,
+  "view": {"clip": "idle", "frame": 0, "layerId": "hero", "layerName": "Hero", "scope": "frame"},
+  "selection": {"clip": "idle", "frame": 0, "layerId": "hero", "layerName": "Hero", "x": 0, "y": 0, "width": 2, "height": 2, "count": 4}
+}

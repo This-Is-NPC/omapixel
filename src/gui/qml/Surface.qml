@@ -514,8 +514,9 @@ Item {
             z: win.referenceOnTop ? 2 : -1
         }
 
-        // The previous frame, underneath. Frame beside frame shows two poses;
-        // one on top of the other shows the path between them.
+        // The previous frame's COMPOSITE, underneath. Frame beside frame shows
+        // two poses; one on top of the other shows the path between them. The
+        // C++ surface composes all visible layers before this item is painted.
         PixelGridItem {
             anchors.fill: parent
             model: doc
@@ -569,7 +570,8 @@ Item {
                 if (col < 0 || row < 0 || col >= doc.columns || row >= doc.rows)
                     return
                 if (win.tool === "picker") {
-                    var found = doc.slotAt(col, row)
+                    var found = doc.pickSlot(col, row,
+                                             doc.pickerScope === "composite")
                     if (found !== ".") { win.slot = found; win.tool = "pencil" }
                     return
                 }

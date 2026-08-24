@@ -17,6 +17,7 @@ namespace omapixel {
 class Palette
 {
 public:
+    static constexpr int maxSlots = 256;
     struct Slot {
         QChar letter;
         QColor colour;
@@ -36,8 +37,12 @@ public:
     bool has(QChar letter) const;
     QColor colour(QChar letter) const;
 
+    /// A slot is a single printable JSON/terminal-safe character other than
+    /// transparency, quote, or backslash.
+    static bool validSlot(QChar letter, QString *error = nullptr);
+
     /// Adds at the end, or recolours in place if the letter is already there.
-    void set(QChar letter, const QColor &colour);
+    bool set(QChar letter, const QColor &colour);
     bool remove(QChar letter);
 
     /// Moves a slot to a new index, so the strip can be reordered.

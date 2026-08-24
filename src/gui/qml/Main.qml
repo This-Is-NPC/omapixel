@@ -41,21 +41,38 @@ Window {
     minimumWidth: 900
     minimumHeight: 560
     visible: true
-    title: (doc.dirty ? "• " : "") + (doc.path === "" ? T.t("file.untitled") : doc.path)
-           + " — omapixel"
+    title: (doc.dirty ? T.t("window.modified") : "")
+           + (doc.path === "" ? T.t("file.untitled") : doc.path)
+           + T.t("window.separator") + T.t("brand.name")
     color: theme.background
 
     property string tool: "pencil"
     property string slot: "I"
     property real zoom: 12
     function zoomLabel() {
-        return (Math.round(zoom * 100) / 100) + "×"
+        return T.t("status.zoom").arg(Math.round(zoom * 100) / 100)
     }
     property bool onion: cfg.settings["canvas.onion"]
     property bool mesh: cfg.settings["canvas.grid"]
     property bool playing: false
     property string pendingAction: ""
     property bool allowClosing: false
+
+    // The inspector is a real layout column, not a fixed decoration. Its
+    // default follows the config architecture, while the value itself belongs
+    // to this window so a drag remains stable for the rest of the session.
+    readonly property int inspectorMinimumWidth: 260
+    readonly property int inspectorMaximumWidth: 520
+    property real inspectorWidth: clampInspectorWidth(cfg.settings["window.inspector_width"])
+    function clampInspectorWidth(value) {
+        return Math.max(inspectorMinimumWidth,
+                        Math.min(inspectorMaximumWidth, value))
+    }
+    onInspectorWidthChanged: {
+        var bounded = clampInspectorWidth(inspectorWidth)
+        if (inspectorWidth !== bounded)
+            inspectorWidth = bounded
+    }
 
     /// Whether ▶ starts the clip over at the end. `playback.loop` in the
     /// config, and **View → Loop playback** while the window is open: a loop is
@@ -313,6 +330,22 @@ Window {
 
     function focusCanvas() {
         keys.forceActiveFocus()
+    }
+
+    // Layer rows own navigation; this shortcut is the deterministic escape
+    // hatch for reopening the one independent tool after it has been moved.
+    Shortcut {
+        sequence: cfg.shortcuts.layer_tool
+        onActivated: layerDock.openCurrent()
+    }
+
+    LayerToolWindow {
+        id: layerTool
+        structuralIds: layerDock.selectedIds
+        returnFocusItem: layerDock
+        onConfirmationRequested: function (kind, layerId, report) {
+            layerSheet.show(kind, layerId, report)
+        }
     }
 
     function pastePixels() {
@@ -642,7 +675,15 @@ Window {
     C.Action { id: actOnion; text: T.t("menu.onion"); checkable: true; checked: win.onion
              onTriggered: win.onion = !win.onion }
     C.Action { id: actMesh; text: T.t("menu.grid"); checkable: true; checked: win.mesh
-             onTriggered: win.mesh = !win.mesh }
+              onTriggered: win.mesh = !win.mesh }
+    C.Action { id: actPickerActive; text: T.t("menu.pickerActive")
+              onTriggered: doc.pickerScope = "active" }
+    C.Action { id: actPickerComposite; text: T.t("menu.pickerComposite")
+              onTriggered: doc.pickerScope = "composite" }
+    C.Action { id: actScopeFrame; text: T.t("menu.scopeFrame")
+              onTriggered: doc.editScope = "frame" }
+    C.Action { id: actScopeAllFrames; text: T.t("menu.scopeAllFrames")
+              onTriggered: doc.editScope = "all-frames" }
     C.Action { id: actReference; text: T.t("menu.reference")
              onTriggered: referenceDialog.open() }
     C.Action { id: actColour; text: T.t("menu.chooseColour")
@@ -975,7 +1016,7 @@ Window {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "omapixel"
+                    text: T.t("brand.name")
                     color: theme.foreground
                     font.family: theme.fontFamily
                     font.pixelSize: 12
@@ -1058,9 +1099,14 @@ Window {
                     Cmd { action: actFit }
                     Cmd { action: actGoToPixel; shownShortcut: cfg.keys.go_to_pixel }
                     Rule {}
-                    Cmd { action: actOnion }
-                    Cmd { action: actMesh }
-                    Cmd { action: actLoop }
+                     Cmd { action: actOnion }
+                     Cmd { action: actMesh }
+                     Rule {}
+                     Cmd { action: actScopeFrame }
+                     Cmd { action: actScopeAllFrames }
+                     Cmd { action: actPickerActive }
+                     Cmd { action: actPickerComposite }
+                     Cmd { action: actLoop }
                     Rule {}
                     Cmd { action: actReference }
                     Rule {}
@@ -1221,7 +1267,7 @@ Window {
 
                             Text {
                                 anchors.centerIn: parent
-                                text: "?"
+                                text: T.t("tool.roulette")
                                 color: theme.urgent
                                 font.family: theme.fontFamily
                                 font.pixelSize: 16
@@ -1266,7 +1312,8 @@ Window {
                 // window, and sit as far from the drawing as the layout allows.
                 Item {
                     id: middle
-                    width: parent.width - tools.width - dockPanel.width - 2
+                    width: parent.width - tools.width - dockPanel.width
+                           - dockSplitter.width - 2
                     height: parent.height
 
                     Surface {
@@ -1300,8 +1347,55 @@ Window {
                 // --------------------------------------------------- the dock
 
                 Rectangle {
+                    id: dockSplitter
+                    objectName: "dockSplitter"
+                    width: 7
+                    height: parent.height
+                    color: splitterHover.hovered
+                           ? theme.fill(theme.accent, 0.22)
+                           : theme.fill(theme.foreground, 0.06)
+                    border.width: 1
+                    border.color: splitterHover.hovered
+                                  ? theme.accent
+                                  : theme.fill(theme.foreground, 0.12)
+                    activeFocusOnTab: true
+                    Accessible.name: T.t("accessibility.layers.resizeInspector")
+                    Accessible.description: T.t("accessibility.layers.resizeHelp")
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 3
+                        Rectangle {
+                            width: 10
+                            height: 1
+                            color: splitterHover.hovered ? theme.accent : theme.dim
+                        }
+                        Rectangle {
+                            width: 10
+                            height: 1
+                            color: splitterHover.hovered ? theme.accent : theme.dim
+                        }
+                    }
+
+                    HoverHandler { id: splitterHover; cursorShape: Qt.SizeHorCursor }
+                    Keys.onLeftPressed: win.inspectorWidth = win.clampInspectorWidth(
+                                             win.inspectorWidth + 12)
+                    Keys.onRightPressed: win.inspectorWidth = win.clampInspectorWidth(
+                                              win.inspectorWidth - 12)
+                    property real dragStartWidth: 0
+                    DragHandler {
+                        target: null
+                        onActiveChanged: if (active) dockSplitter.dragStartWidth = win.inspectorWidth
+                        onTranslationChanged: if (active)
+                            win.inspectorWidth = win.clampInspectorWidth(
+                                dockSplitter.dragStartWidth - translation.x)
+                    }
+                }
+
+                Rectangle {
                     id: dockPanel
-                    width: 268
+                    objectName: "dockPanel"
+                    width: win.inspectorWidth
                     height: parent.height
                     color: theme.panel
 
@@ -1317,6 +1411,14 @@ Window {
                             id: panels
                             width: dock.width
                             spacing: 6
+
+                            LayerDock {
+                                id: layerDock
+                                width: parent.width
+                                onLayerActivated: function (layerId) {
+                                    layerTool.openFor(layerId)
+                                }
+                            }
 
                             Section {
                                 id: paletteSection
@@ -1780,7 +1882,7 @@ Window {
         id: goToSheet
         objectName: "goToSheet"
         title: T.t("sheet.goToPixel")
-        onClosed: win.focusCanvas()
+        onClosed: layerTool.focusAfterConfirmation()
 
         property string columnText: "0"
         property string rowText: "0"
@@ -1935,6 +2037,81 @@ Window {
                 Chip {
                     label: T.t("action.cancel")
                     onClicked: trimSheet.close()
+                }
+            }
+        ]
+    }
+
+    Sheet {
+        id: layerSheet
+        objectName: "layerSheet"
+        title: kind === "storage" ? T.t("panel.layers")
+                                   : (kind === "merge-down" ? T.t("panel.layers.mergeDown")
+                                                         : T.t("panel.layers.flatten"))
+        onClosed: layerTool.focusAfterConfirmation()
+
+        property string kind: ""
+        property string layerId: ""
+        property var report: ({})
+
+        function show(action, id, consequence) {
+            kind = action
+            layerId = id
+            report = consequence
+            open()
+        }
+        function message() {
+            if (kind === "storage") {
+                var target = report.storage === "shared" ? T.t("panel.layers.shared")
+                                                           : T.t("panel.layers.animated")
+                return T.t("sheet.layers.storage").arg(report.id).arg(target)
+                    .arg(report.lost || 0)
+            }
+            return T.t(kind === "merge-down" ? "sheet.layers.merge" : "sheet.layers.flatten")
+                       .arg(report.affectedPixels || 0).arg(report.removedLayers || 0)
+        }
+        function apply() {
+            if (kind === "storage")
+                doc.setLayerStorage(report.id, report.storage, true)
+            else if (kind === "merge-down")
+                doc.mergeDown(layerId)
+            else
+                doc.flatten()
+            close()
+        }
+
+        body: [
+            Label {
+                width: 330
+                wrapMode: Text.Wrap
+                text: layerSheet.message()
+            },
+            Label {
+                width: 330
+                wrapMode: Text.Wrap
+                visible: (layerSheet.report.approximatedPixels || 0) > 0
+                color: theme.urgent
+                text: T.t("sheet.layers.approximated")
+                      .arg(layerSheet.report.approximatedPixels || 0)
+            },
+            Label {
+                width: 330
+                wrapMode: Text.Wrap
+                visible: layerSheet.report.ok === false
+                color: theme.urgent
+                text: layerSheet.report.error || ""
+            },
+            Row {
+                spacing: 6
+                Chip {
+                    label: T.t("sheet.layers.confirm")
+                    on: true
+                    role: theme.urgent
+                    onClicked: layerSheet.apply()
+                }
+                Chip {
+                    label: T.t("action.cancel")
+                    onClicked: layerSheet.close()
                 }
             }
         ]

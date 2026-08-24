@@ -128,6 +128,7 @@ const QList<QPair<QString, QVariant>> &Config::settings()
 
         {QStringLiteral("window.width"), 1280},
         {QStringLiteral("window.height"), 820},
+        {QStringLiteral("window.inspector_width"), 320},
         {QStringLiteral("window.hints"), true},
 
         {QStringLiteral("canvas.zoom"), QStringLiteral("fit")},
@@ -232,6 +233,7 @@ const QList<QPair<QString, QString>> &Config::actions()
         {QStringLiteral("toggle_onion"), QStringLiteral("o")},
         {QStringLiteral("toggle_hints"), QString()},
         {QStringLiteral("toggle_loop"), QString()},
+        {QStringLiteral("layer_tool"), QStringLiteral("ctrl+shift+l")},
         {QStringLiteral("menus"), QStringLiteral("f10")},
     };
     return only;
@@ -494,6 +496,7 @@ void Config::load()
         if ((key == QLatin1String("window.width")
              || key == QLatin1String("window.height")
              || key == QLatin1String("canvas.big_step")
+             || key == QLatin1String("window.inspector_width")
              || key == QLatin1String("history.depth"))
             && !integerIn(1, std::numeric_limits<int>::max(),
                           QStringLiteral("wants a positive integer")))

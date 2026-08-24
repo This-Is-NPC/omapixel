@@ -38,7 +38,7 @@ Item {
             id: caret
             x: 6
             anchors.verticalCenter: parent.verticalCenter
-            text: section.open ? "▼" : "▶"
+            text: section.open ? T.t("section.open") : T.t("section.closed")
             color: theme.dim
             font.family: theme.fontFamily
             font.pixelSize: 9

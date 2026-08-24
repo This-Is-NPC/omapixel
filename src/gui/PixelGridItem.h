@@ -9,14 +9,15 @@ class QSGNode;
 
 namespace omapixel {
 
-/// Draws one frame of a document.
+/// Draws one composed frame of a document (or one explicitly isolated layer).
 ///
 /// It paints through `render::toImage` rather than laying out rectangles of its
 /// own. The studio and PNG therefore cannot disagree: there is one renderer and
 /// this is a nearest-neighbour blit of its result.
 ///
 /// Everything that shows pixels goes through here: the drawing surface, the
-/// timeline thumbnails, the true-size strip, the onion skin.
+/// timeline thumbnails, the true-size strip, and the composite onion skin. QML
+/// never creates a raster item per document layer.
 class PixelGridItem : public QQuickItem
 {
     Q_OBJECT
@@ -25,6 +26,7 @@ class PixelGridItem : public QQuickItem
     Q_PROPERTY(omapixel::DocumentModel *model READ model WRITE setModel NOTIFY modelChanged)
     Q_PROPERTY(QString clip READ clip WRITE setClip NOTIFY specChanged)
     Q_PROPERTY(int frame READ frame WRITE setFrame NOTIFY specChanged)
+    Q_PROPERTY(QString isolatedLayer READ isolatedLayer WRITE setIsolatedLayer NOTIFY specChanged)
     Q_PROPERTY(qreal cell READ cell WRITE setCell NOTIFY specChanged)
     Q_PROPERTY(bool checker READ checker WRITE setChecker NOTIFY specChanged)
     Q_PROPERTY(bool mesh READ mesh WRITE setMesh NOTIFY specChanged)
@@ -42,6 +44,8 @@ public:
     void setClip(const QString &clip);
     int frame() const { return m_frame; }
     void setFrame(int frame);
+    QString isolatedLayer() const { return m_isolatedLayer; }
+    void setIsolatedLayer(const QString &layer);
     qreal cell() const { return m_cell; }
     void setCell(qreal cell);
     bool checker() const { return m_checker; }
@@ -68,6 +72,7 @@ private:
     DocumentModel *m_model = nullptr;
     QString m_clip;
     int m_frame = 0;
+    QString m_isolatedLayer;
     qreal m_cell = 1;
     bool m_checker = false;
     bool m_mesh = false;

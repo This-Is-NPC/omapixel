@@ -66,9 +66,9 @@ QSet<QChar> Grid::slotsUsed() const
     return used;
 }
 
-int Grid::drawnCount() const
+qint64 Grid::drawnCount() const
 {
-    int drawn = 0;
+    qint64 drawn = 0;
     for (QChar cell : m_cells) {
         if (cell != Empty)
             ++drawn;

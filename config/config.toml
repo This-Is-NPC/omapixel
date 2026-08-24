@@ -18,6 +18,9 @@
 # How big the studio opens.
 # width = 1280
 # height = 820
+# Width of the resizable Studio inspector column. The in-window splitter clamps
+# this to a usable range for the current layout.
+# inspector_width = 320
 
 # The bar of keys along the bottom of the drawing. Turn it off once you know
 # them; the studio says the same things in the menus either way.
@@ -69,15 +72,19 @@
 # depth = 80
 
 [warnings]
-# These are warnings, not limits. Set one to 0 to disable it. The operation
-# continues after warning because omapixel assumes its users know their own
-# workload; arithmetic overflow and impossible allocations are still errors.
+# These are advisory thresholds. Hard safety limits cannot be disabled: they
+# reject impossible allocations and pathological document amplification.
 # file_mib = 16
 # clips = 256
 # frames_per_clip = 1024
 # frames_total = 4096
 # palette_slots = 256
 # render_megapixels = 64
+
+# Hard limits are fixed by the v2 format contract: canvas 2048x2048, 64 clips,
+# 64 layers, 1024 frames per clip, 4096 total frames, and 16384 total cels.
+# Render output is capped at 64 million pixels / 256 MiB before QImage allocation.
+# Clipboard input is capped at 4 MiB, 2048 rows x 2048 columns, and 1,000,000 cells.
 
 [keys]
 # An action on the left, the keys that fire it on the right. Several keys for
@@ -177,6 +184,8 @@
 # toggle_onion = "o"
 # toggle_hints = ""
 # toggle_loop = ""
+# Open or focus the independent layer tool window.
+# layer_tool = "ctrl+shift+l"
 
 # The keyboard onto the menu bar, where the arrows walk it.
 # menus = "f10"

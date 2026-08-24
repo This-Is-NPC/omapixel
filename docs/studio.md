@@ -52,6 +52,40 @@ scrolling past a panel you are not using is worse than closing it. What you fold
 stays folded while you work. Each header carries the fact you would have opened
 it for: the palette's slot count, the sprite's size, the reference's opacity.
 
+The **Layers** section is the native layer browser. Rows are bottom-to-top and
+show an isolated current-cel thumbnail, visibility and lock state, storage, and
+opacity. The active row has an accent rail, a stronger surface, and an explicit
+**PAINT TARGET** label; the header repeats its name. Clicking or activating a row
+chooses the one paint target and opens or focuses the independent **Layer tool**
+window. The bracket control at the left creates a structural selection; multiple
+rows can be moved, hidden, locked, or deleted, but painting never uses that
+selection. Add controls stay with the browser. The tool window contains rename,
+scope, opacity, blend, visibility, lock, duplicate, reorder, conversion,
+merge, flatten, clear, and destructive actions for the active layer or selected
+rows. Current-frame and all-frames scope is explicit; shared rows show all-frames
+as fixed.
+
+The Layer tool is a real non-modal top-level Qt window, not a popup or drawer. It
+starts beside the Studio, remembers its independent geometry while open, and can
+be moved or resized by the window manager onto another monitor. `transientParent`
+keeps it associated with the Studio without making it a child surface. Some
+platform window managers may clamp a requested position to a visible work area;
+that is platform placement policy, not application clipping. Closing it returns
+focus to the active layer row. `Ctrl+Shift+L` (config key `layer_tool`) opens or
+focuses it.
+
+Every layer control is keyboard reachable with Tab and activates with Space or
+Enter. Up and Down navigate rows; Enter or Space opens/focuses the tool; Ctrl+Space
+changes structural selection; Escape closes the tool and returns focus to the
+list. Focus rings remain visible, and icon-only structural selection controls
+show concise hover help and expose names to assistive technology. Destructive
+storage conversion, merge-down, and flatten-visible actions display their staged
+consequence report before the user can apply them. The divider beside the layer
+browser is keyboard reachable and drag-resizable between usable bounds; its
+session width starts from `window.inspector_width`. The browser remains
+scrollable rather than clipping rows at constrained widths, while the canvas and
+onion skin continue to use the single composed raster surface.
+
 **The timeline** is two rows because it answers two questions: the top one picks
 and names the clip and sets its speed, the bottom one is the sequence itself.
 
@@ -223,8 +257,12 @@ or at the keyboard cursor when there is no selection, or at `0,0` when neither
 exists. `null` erases what is underneath. Existing destination colours are
 reused regardless of their slot letters; new colours receive new slots. The
 matrix is cropped at the right and bottom canvas edges, and the pasted area
-becomes the selection. Invalid, ragged, or unrepresentable input changes
-nothing, and a paste that changes pixels is one undo step.
+becomes the selection. Copy and paste enforce bounded rows, columns, cells, and
+serialized bytes. Qt's clipboard API has no size-only query, so acquisition must
+materialize the advertised text MIME payload before the byte guard can run; no
+JSON parsing or document edit happens before that guard. Invalid, ragged, or
+unrepresentable input changes nothing, and a paste that changes pixels is one
+undo step.
 
 Nothing here needs a pointer. <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd>
 walk every control in the window (tools, colours, panel headers, the timeline,
@@ -559,6 +597,14 @@ so the flow above works before any save: open the studio, tell an agent to
 draw, watch it land. The backing is tmpfs and dies with the session — the
 window keeps saying unsaved and closing still asks — because an address is
 not a save.
+
+## Native layer acceptance
+
+The layer dock and the CLI share the v2 codec and compositor. A cross-surface
+fixture creates animated and shared layers, edits one by ID, observes the active
+layer with `where`, edits through the Studio model, undoes, saves and reloads,
+then compares composite and isolated renders before flattening to a separate
+document. Run `mise run layers-e2e`; it is also part of `mise run check`.
 
 ## Looking at the window without a screen
 

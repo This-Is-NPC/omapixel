@@ -54,7 +54,7 @@ public:
     QSet<QChar> slotsUsed() const;
 
     /// How many pixels are not `Empty`.
-    int drawnCount() const;
+    qint64 drawnCount() const;
 
     bool operator==(const Grid &other) const;
     bool operator!=(const Grid &other) const { return !(*this == other); }
