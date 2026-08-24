@@ -28,17 +28,20 @@ Rectangle {
         if (chip.usable) { chip.clicked(); event.accepted = true }
     }
 
-    // The focus ring is drawn outside the control rather than as its border,
-    // which is already carrying the on/off state. Two meanings on one line is
-    // how you end up unable to tell them apart.
+    // Keep the focus ring inside the control. Chips routinely sit at the edge
+    // of clipped Flickables, where an outside ring loses its left and bottom
+    // edges. The inset keeps it separate from the state border with a one-pixel
+    // gap while remaining visible in every panel.
     Rectangle {
+        objectName: "chipFocusRing"
         anchors.fill: parent
-        anchors.margins: -3
-        radius: theme.rounding + 2
+        anchors.margins: 2
+        radius: Math.max(0, theme.rounding - 1)
         color: "transparent"
         border.width: 1
         border.color: theme.accent
         visible: chip.activeFocus
+        z: 2
     }
 
     implicitWidth: caption.implicitWidth + 20

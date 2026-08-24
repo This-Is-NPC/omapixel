@@ -17,6 +17,11 @@ Item {
     property string hint: ""          // a word on the right, e.g. the size
     default property alias content: body.data
 
+    function focusHeader() {
+        open = true
+        header.forceActiveFocus()
+    }
+
     width: parent ? parent.width : 0
     implicitHeight: header.height + (open ? body.implicitHeight + 12 : 0)
     height: implicitHeight
@@ -80,13 +85,15 @@ Item {
         }
 
         Rectangle {
+            objectName: "sectionFocusRing"
             anchors.fill: parent
-            anchors.margins: -2
-            radius: theme.rounding
+            anchors.margins: 2
+            radius: Math.max(0, theme.rounding - 1)
             color: "transparent"
             border.width: 1
             border.color: theme.accent
             visible: header.activeFocus
+            z: 2
         }
     }
 

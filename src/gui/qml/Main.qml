@@ -100,6 +100,8 @@ Window {
     // for placing one pixel exactly; -1 means it has not been used yet and
     // nothing is drawn for it.
     property bool showHints: cfg.settings["window.hints"]
+    readonly property bool commandPaletteOpen: commandPalette.opened
+    readonly property bool navigationMode: navigationOverlay.visible
 
     /// The colour the picker is currently on. Published so a test can read it
     /// without reaching into a popup's insides.
@@ -343,6 +345,7 @@ Window {
         id: layerTool
         structuralIds: layerDock.selectedIds
         returnFocusItem: layerDock
+        onCommandRequested: function (commandId) { win.runCommand(commandId) }
         onConfirmationRequested: function (kind, layerId, report) {
             layerSheet.show(kind, layerId, report)
         }
@@ -590,6 +593,10 @@ Window {
             exportSheet.open()
         else if (shotSheet === "goto")
             goToSheet.show()
+        else if (shotSheet === "commands")
+            win.openCommandPalette()
+        else if (shotSheet === "navigate")
+            navigationOverlay.show()
     }
 
     Timer {
@@ -712,8 +719,452 @@ Window {
              onTriggered: doc.moveFrame(1) }
 
     C.Action { id: actHints; text: T.t("menu.keyHints"); checkable: true; checked: win.showHints
-             shortcut: cfg.shortcuts.toggle_hints
-             onTriggered: win.showHints = !win.showHints }
+              shortcut: cfg.shortcuts.toggle_hints
+              onTriggered: win.showHints = !win.showHints }
+
+    // ------------------------------------------------------ command registry
+
+    function command(id, label, group, shortcut, enabled, keywords) {
+        return {
+            id: id,
+            label: label,
+            group: group,
+            shortcut: shortcut || "",
+            enabled: enabled !== false,
+            keywords: keywords || ""
+        }
+    }
+
+    property var commandEntries: []
+
+    function buildCommandEntries() {
+        var entries = []
+        function add(id, label, group, shortcut, enabled, keywords) {
+            entries.push(win.command(id, label, group, shortcut, enabled, keywords))
+        }
+        var navigation = T.t("command.group.navigation")
+        var file = T.t("command.group.file")
+        var edit = T.t("command.group.edit")
+        var canvas = T.t("command.group.canvas")
+        var view = T.t("command.group.view")
+        var layers = T.t("command.group.layers")
+        var inspector = T.t("command.group.inspector")
+        var timelineGroup = T.t("command.group.timeline")
+
+        add("navigate", T.t("command.navigate"), navigation, "", true,
+            T.t("command.navigate.keywords"))
+        add("navigate.canvas", T.t("command.navigate.canvas"), navigation, "1")
+        add("navigate.inspector", T.t("command.navigate.inspector"), navigation, "2")
+        add("navigate.timeline", T.t("command.navigate.timeline"), navigation, "3")
+        add("navigate.controls", T.t("hint.controls"), navigation, "Tab")
+        add("navigate.menus", T.t("hint.menus"), navigation, cfg.keys.menus)
+
+        add("file.new", actNew.text, file, cfg.keys.new, actNew.enabled)
+        add("file.open", actOpen.text, file, cfg.keys.open, actOpen.enabled)
+        add("file.save", actSave.text, file, cfg.keys.save, actSave.enabled)
+        add("file.saveAs", actSaveAs.text, file, cfg.keys.save_as, actSaveAs.enabled)
+        add("file.export", actExport.text, file, cfg.keys.export_png, actExport.enabled)
+        add("file.exportSheet", actExportSheet.text, file, cfg.keys.export_sheet,
+            actExportSheet.enabled)
+        add("file.quit", actQuit.text, file, cfg.keys.quit, actQuit.enabled)
+
+        add("edit.undo", actUndo.text, edit, cfg.keys.undo, actUndo.enabled)
+        add("edit.redo", actRedo.text, edit, cfg.keys.redo, actRedo.enabled)
+        add("edit.copy", actCopyPixels.text, edit, cfg.keys.copy_pixels,
+            actCopyPixels.enabled)
+        add("edit.paste", actPastePixels.text, edit, cfg.keys.paste_pixels,
+            actPastePixels.enabled)
+        add("edit.clear", actClear.text, edit, cfg.keys.clear_frame, actClear.enabled)
+        add("edit.flipX", actFlipX.text, edit, "", actFlipX.enabled)
+        add("edit.flipY", actFlipY.text, edit, "", actFlipY.enabled)
+        add("edit.trim", actTrim.text, edit, cfg.keys.trim, actTrim.enabled)
+
+        add("canvas.tool.pencil", T.t("tool.pencil"), canvas, cfg.keys.tool_pencil)
+        add("canvas.tool.eraser", T.t("tool.eraser"), canvas, cfg.keys.tool_eraser)
+        add("canvas.tool.bucket", T.t("tool.bucket"), canvas, cfg.keys.tool_bucket)
+        add("canvas.tool.picker", T.t("tool.picker"), canvas, cfg.keys.tool_picker)
+        add("canvas.tool.hand", T.t("tool.pan"), canvas, cfg.keys.tool_hand)
+        add("canvas.moveLeft", T.t("command.canvas.moveLeft"), canvas, cfg.keys.caret_left)
+        add("canvas.moveRight", T.t("command.canvas.moveRight"), canvas, cfg.keys.caret_right)
+        add("canvas.moveUp", T.t("command.canvas.moveUp"), canvas, cfg.keys.caret_up)
+        add("canvas.moveDown", T.t("command.canvas.moveDown"), canvas, cfg.keys.caret_down)
+        add("canvas.selectLeft", T.t("command.canvas.selectLeft"), canvas,
+            cfg.keys.select_left)
+        add("canvas.selectRight", T.t("command.canvas.selectRight"), canvas,
+            cfg.keys.select_right)
+        add("canvas.selectUp", T.t("command.canvas.selectUp"), canvas,
+            cfg.keys.select_up)
+        add("canvas.selectDown", T.t("command.canvas.selectDown"), canvas,
+            cfg.keys.select_down)
+        add("canvas.jumpLeft", T.t("command.canvas.jumpLeft").arg(win.bigStep), canvas,
+            cfg.keys.caret_left_far)
+        add("canvas.jumpRight", T.t("command.canvas.jumpRight").arg(win.bigStep), canvas,
+            cfg.keys.caret_right_far)
+        add("canvas.jumpUp", T.t("command.canvas.jumpUp").arg(win.bigStep), canvas,
+            cfg.keys.caret_up_far)
+        add("canvas.jumpDown", T.t("command.canvas.jumpDown").arg(win.bigStep), canvas,
+            cfg.keys.caret_down_far)
+        add("canvas.extendLeft", T.t("command.canvas.extendLeft").arg(win.bigStep), canvas,
+            cfg.keys.select_left_far)
+        add("canvas.extendRight", T.t("command.canvas.extendRight").arg(win.bigStep), canvas,
+            cfg.keys.select_right_far)
+        add("canvas.extendUp", T.t("command.canvas.extendUp").arg(win.bigStep), canvas,
+            cfg.keys.select_up_far)
+        add("canvas.extendDown", T.t("command.canvas.extendDown").arg(win.bigStep), canvas,
+            cfg.keys.select_down_far)
+        add("canvas.paint", T.t("command.canvas.paint"), canvas, cfg.keys.paint,
+            doc.hasSelection || win.caretColumn >= 0)
+        add("canvas.erase", T.t("command.canvas.erase"), canvas, cfg.keys.erase,
+            doc.hasSelection || win.caretColumn >= 0)
+        add("canvas.drawMode", T.t("hint.drawAsYouMove"), canvas, cfg.keys.draw_mode)
+        add("canvas.pickMode", T.t("hint.pickColours"), canvas, cfg.keys.pick_mode)
+        add("canvas.linePoint", T.t("hint.straightLine"), canvas, cfg.keys.line_point)
+        add("canvas.chooseSlot", T.t("hint.changeColour"), canvas, cfg.keys.slot_leader)
+        add("canvas.chooseColour", actColour.text, canvas, cfg.keys.choose_colour)
+        add("canvas.replaceColour", actReplace.text, canvas, cfg.keys.replace_colour,
+            actReplace.enabled)
+        add("canvas.roulette", actRoulette.text, canvas, cfg.keys.roulette)
+        add("canvas.cancel", T.t("action.cancel"), canvas, cfg.keys.cancel)
+
+        add("view.zoomIn", actZoomIn.text, view, cfg.keys.zoom_in)
+        add("view.zoomOut", actZoomOut.text, view, cfg.keys.zoom_out)
+        add("view.fit", actFit.text, view, cfg.keys.zoom_fit)
+        add("view.goTo", actGoToPixel.text, view, cfg.keys.go_to_pixel)
+        add("view.onion", actOnion.text, view, cfg.keys.toggle_onion)
+        add("view.grid", actMesh.text, view, cfg.keys.toggle_grid)
+        add("view.hints", actHints.text, view, cfg.keys.toggle_hints)
+        add("view.loop", actLoop.text, view, cfg.keys.toggle_loop)
+        add("view.pickerActive", actPickerActive.text, view)
+        add("view.pickerComposite", actPickerComposite.text, view)
+        add("view.scopeFrame", actScopeFrame.text, view)
+        add("view.scopeAll", actScopeAllFrames.text, view)
+
+        add("layers.addAnimated", T.t("panel.layers.addAnimated"), layers)
+        add("layers.addShared", T.t("panel.layers.addShared"), layers)
+        add("layers.openTool", T.t("panel.layers.toolOpen"), layers,
+            cfg.keys.layer_tool, doc.activeLayerId !== "")
+        add("layers.visibility", T.t("accessibility.layers.visibilityAll"), layers,
+            "", doc.activeLayerId !== "")
+        add("layers.lock", T.t("accessibility.layers.lockAll"), layers,
+            "", doc.activeLayerId !== "")
+        add("layers.closeTool", T.t("accessibility.layers.closeTool"), layers,
+            "", layerTool.visible)
+        add("layers.duplicate", T.t("panel.layers.duplicate"), layers,
+            "", doc.activeLayerId !== "")
+        add("layers.moveUp", T.t("accessibility.layers.moveUp"), layers,
+            "", layerTool.activeIndex() > 0)
+        add("layers.moveDown", T.t("accessibility.layers.moveDown"), layers,
+            "", layerTool.activeIndex() >= 0
+                && layerTool.activeIndex() < doc.layers.length - layerTool.actionIds().length)
+        add("layers.delete", T.t("accessibility.layers.delete"), layers,
+            "", doc.layers.length > 1)
+        add("layers.clearFrame", T.t("panel.layers.clearFrame"), layers,
+            "", doc.activeLayerId !== "")
+        add("layers.clearAll", T.t("panel.layers.clearAll"), layers,
+            "", doc.activeLayerId !== "")
+        add("layers.mode.normal", T.t("panel.layers.normal"), layers,
+            "", doc.activeLayerId !== "")
+        add("layers.mode.multiply", T.t("panel.layers.multiply"), layers,
+            "", doc.activeLayerId !== "")
+        add("layers.mode.screen", T.t("panel.layers.screen"), layers,
+            "", doc.activeLayerId !== "")
+        add("layers.scope.frame", T.t("accessibility.layers.frameScope"), layers,
+            "", doc.activeLayerStorage !== "shared")
+        add("layers.scope.all", T.t("accessibility.layers.allFramesScope"), layers,
+            "", doc.activeLayerStorage !== "shared")
+        add("layers.convertAnimated", T.t("accessibility.layers.convertAnimated"), layers,
+            "", doc.activeLayerStorage === "shared")
+        add("layers.convertShared", T.t("accessibility.layers.convertShared"), layers,
+            "", doc.activeLayerStorage === "animated")
+        add("layers.mergeDown", T.t("panel.layers.mergeDown"), layers,
+            "", layerTool.activeIndex() > 0)
+        add("layers.flatten", T.t("panel.layers.flatten"), layers,
+            "", doc.layers.length > 1)
+
+        add("inspector.layers", T.t("panel.layers"), inspector)
+        add("inspector.palette", T.t("panel.palette"), inspector)
+        add("inspector.preview", T.t("panel.preview"), inspector)
+        add("inspector.sprite", T.t("panel.sprite"), inspector)
+        add("inspector.reference", T.t("panel.reference"), inspector)
+        add("inspector.history", T.t("panel.history"), inspector)
+        add("inspector.paletteRows", paletteSection.showAll
+            ? T.t("panel.palette.showNine")
+            : T.t("panel.palette.showAll").arg(doc.palette.length), inspector)
+        add("inspector.canvasSize", actResize.text, inspector, "", actResize.enabled)
+        add("inspector.resize", T.t("panel.sprite.resize"), inspector,
+            "", win.sizeChanged)
+        add("inspector.reference.choose", T.t("panel.reference.choose"), inspector)
+        add("inspector.reference.position", win.referenceOnTop
+            ? T.t("panel.reference.behind") : T.t("panel.reference.onTop"), inspector,
+            "", win.referencePath !== "")
+        add("inspector.reference.clear", T.t("panel.reference.clear"), inspector,
+            "", win.referencePath !== "")
+
+        add("timeline.addClip", actAddClip.text, timelineGroup)
+        add("timeline.removeClip", actRemoveClip.text, timelineGroup, "",
+            actRemoveClip.enabled)
+        add("timeline.fpsDown", T.t("timeline.decreaseFps"), timelineGroup)
+        add("timeline.fpsUp", T.t("timeline.increaseFps"), timelineGroup)
+        add("timeline.play", actPlay.text, timelineGroup, cfg.keys.play, actPlay.enabled)
+        add("timeline.addFrame", actAddFrame.text, timelineGroup, cfg.keys.frame_add)
+        add("timeline.duplicateFrame", actDupFrame.text, timelineGroup,
+            cfg.keys.frame_duplicate)
+        add("timeline.moveBack", actFrameBack.text, timelineGroup,
+            cfg.keys.frame_move_back, actFrameBack.enabled)
+        add("timeline.moveOn", actFrameOn.text, timelineGroup,
+            cfg.keys.frame_move_on, actFrameOn.enabled)
+        add("timeline.deleteFrame", actDelFrame.text, timelineGroup, "", actDelFrame.enabled)
+        add("timeline.previousFrame", T.t("command.timeline.previousFrame"), timelineGroup,
+            cfg.keys.frame_previous, doc.frame > 0)
+        add("timeline.nextFrame", T.t("command.timeline.nextFrame"), timelineGroup,
+            cfg.keys.frame_next, doc.frame < doc.frameCount - 1)
+        add("timeline.previousClip", actPrevClip.text, timelineGroup,
+            cfg.keys.clip_previous, actPrevClip.enabled)
+        add("timeline.nextClip", actNextClip.text, timelineGroup,
+            cfg.keys.clip_next, actNextClip.enabled)
+
+        for (var layerIndex = 0; layerIndex < doc.layers.length; ++layerIndex)
+            add("layers.toggleSelection." + layerIndex,
+                T.t("command.layers.toggleSelection").arg(doc.layers[layerIndex].name), layers)
+        for (layerIndex = 0; layerIndex < doc.layers.length; ++layerIndex)
+            add("layers.select." + layerIndex,
+                T.t("command.layers.select").arg(doc.layers[layerIndex].name), layers)
+        for (var paletteIndex = 0; paletteIndex < doc.palette.length; ++paletteIndex)
+            add("palette.select." + paletteIndex,
+                T.t("command.palette.selectSlot").arg(doc.palette[paletteIndex].slot),
+                inspector, "", true, String(doc.palette[paletteIndex].colour))
+        for (var clipIndex = 0; clipIndex < doc.clipNames.length; ++clipIndex)
+            add("timeline.clip." + clipIndex,
+                T.t("command.timeline.selectClip").arg(doc.clipNames[clipIndex]),
+                timelineGroup)
+        for (var frameIndex = 0; frameIndex < doc.frameCount; ++frameIndex)
+            add("timeline.frame." + frameIndex,
+                T.t("command.timeline.selectFrame").arg(frameIndex + 1), timelineGroup)
+        var presets = doc.sizePresets()
+        for (var presetIndex = 0; presetIndex < presets.length; ++presetIndex)
+            add("inspector.preset." + presetIndex,
+                T.t("command.inspector.size").arg(presets[presetIndex].w)
+                    .arg(presets[presetIndex].h), inspector)
+        for (var alpha = 0; alpha <= 100; alpha += 25)
+            add("inspector.reference.alpha." + alpha,
+                T.t("command.inspector.referenceOpacity").arg(alpha), inspector,
+                "", win.referencePath !== "")
+
+        return entries
+    }
+
+    function openCommandPalette() {
+        win.requestActivate()
+        commandEntries = buildCommandEntries()
+        Qt.callLater(function () { commandPalette.show() })
+    }
+
+    function cancelCanvasState() {
+        if (doc.hasSelection)
+            doc.clearSelection()
+        else if (win.linePoints.length > 0)
+            win.linePoints = []
+        else if (win.mode !== "") {
+            win.releaseHeld()
+            win.mode = ""
+        } else {
+            win.caretColumn = -1
+            win.caretRow = -1
+        }
+    }
+
+    function paintAtCaret(which) {
+        if (!doc.hasSelection && win.caretColumn < 0)
+            return
+        if (win.linePoints.length > 0) {
+            win.commitLine(which)
+            return
+        }
+        doc.beginStroke()
+        doc.paint(win.caretColumn, win.caretRow, which)
+        doc.endStroke()
+    }
+
+    function focusInspectorSection(section) {
+        dock.contentY = Math.max(0, section.y)
+        section.focusHeader()
+    }
+
+    function commandIndex(id, prefix) {
+        var suffix = id.substring(prefix.length)
+        return /^\d+$/.test(suffix) ? Number(suffix) : -1
+    }
+
+    function runCommand(id) {
+        switch (id) {
+        case "navigate": navigationOverlay.show(); return
+        case "navigate.canvas": navigationOverlay.choose(1); return
+        case "navigate.inspector": navigationOverlay.choose(2); return
+        case "navigate.timeline": navigationOverlay.choose(3); return
+        case "navigate.controls": toolsFirst.forceActiveFocus(); return
+        case "navigate.menus": menus.forceActiveFocus(); return
+        case "file.new": actNew.trigger(); return
+        case "file.open": actOpen.trigger(); return
+        case "file.save": actSave.trigger(); return
+        case "file.saveAs": actSaveAs.trigger(); return
+        case "file.export": actExport.trigger(); return
+        case "file.exportSheet": actExportSheet.trigger(); return
+        case "file.quit": actQuit.trigger(); return
+        case "edit.undo": actUndo.trigger(); return
+        case "edit.redo": actRedo.trigger(); return
+        case "edit.copy": actCopyPixels.trigger(); return
+        case "edit.paste": actPastePixels.trigger(); return
+        case "edit.clear": actClear.trigger(); return
+        case "edit.flipX": actFlipX.trigger(); return
+        case "edit.flipY": actFlipY.trigger(); return
+        case "edit.trim": actTrim.trigger(); return
+        case "canvas.tool.pencil": win.tool = "pencil"; return
+        case "canvas.tool.eraser": win.tool = "eraser"; return
+        case "canvas.tool.bucket": win.tool = "bucket"; return
+        case "canvas.tool.picker": win.tool = "picker"; return
+        case "canvas.tool.hand": win.tool = "hand"; return
+        case "canvas.moveLeft": win.moveCaret(-1, 0); return
+        case "canvas.moveRight": win.moveCaret(1, 0); return
+        case "canvas.moveUp": win.moveCaret(0, -1); return
+        case "canvas.moveDown": win.moveCaret(0, 1); return
+        case "canvas.selectLeft": win.moveCaret(-1, 0, true); return
+        case "canvas.selectRight": win.moveCaret(1, 0, true); return
+        case "canvas.selectUp": win.moveCaret(0, -1, true); return
+        case "canvas.selectDown": win.moveCaret(0, 1, true); return
+        case "canvas.jumpLeft": win.moveCaret(-win.bigStep, 0); return
+        case "canvas.jumpRight": win.moveCaret(win.bigStep, 0); return
+        case "canvas.jumpUp": win.moveCaret(0, -win.bigStep); return
+        case "canvas.jumpDown": win.moveCaret(0, win.bigStep); return
+        case "canvas.extendLeft": win.moveCaret(-win.bigStep, 0, true); return
+        case "canvas.extendRight": win.moveCaret(win.bigStep, 0, true); return
+        case "canvas.extendUp": win.moveCaret(0, -win.bigStep, true); return
+        case "canvas.extendDown": win.moveCaret(0, win.bigStep, true); return
+        case "canvas.paint": win.paintAtCaret(win.slot); return
+        case "canvas.erase": win.paintAtCaret("."); return
+        case "canvas.drawMode":
+            if (win.caretColumn < 0) win.moveCaret(0, 0)
+            win.mode = win.mode === "draw" ? "" : "draw"; return
+        case "canvas.pickMode":
+            if (win.mode === "pick") win.mode = ""
+            else {
+                doc.clearSelection()
+                if (win.caretColumn < 0) win.moveCaret(0, 0)
+                win.mode = "pick"
+            }
+            return
+        case "canvas.linePoint":
+            if (win.caretColumn < 0) win.moveCaret(0, 0)
+            win.linePoints = win.linePoints.concat(
+                [{ c: win.caretColumn, r: win.caretRow }]); return
+        case "canvas.chooseSlot": win.awaitingSlot = true; win.focusCanvas(); return
+        case "canvas.chooseColour": actColour.trigger(); return
+        case "canvas.replaceColour": actReplace.trigger(); return
+        case "canvas.roulette": actRoulette.trigger(); return
+        case "canvas.cancel": win.cancelCanvasState(); win.focusCanvas(); return
+        case "view.zoomIn": actZoomIn.trigger(); return
+        case "view.zoomOut": actZoomOut.trigger(); return
+        case "view.fit": actFit.trigger(); return
+        case "view.goTo": actGoToPixel.trigger(); return
+        case "view.onion": actOnion.trigger(); return
+        case "view.grid": actMesh.trigger(); return
+        case "view.hints": actHints.trigger(); return
+        case "view.loop": actLoop.trigger(); return
+        case "view.pickerActive": actPickerActive.trigger(); return
+        case "view.pickerComposite": actPickerComposite.trigger(); return
+        case "view.scopeFrame": actScopeFrame.trigger(); return
+        case "view.scopeAll": actScopeAllFrames.trigger(); return
+        case "layers.addAnimated": layerDock.add("animated"); return
+        case "layers.addShared": layerDock.add("shared"); return
+        case "layers.openTool": layerDock.openCurrent(); return
+        case "layers.visibility": layerTool.toggleVisibility(); return
+        case "layers.lock": layerTool.toggleLock(); return
+        case "layers.closeTool": layerTool.closeTool(); return
+        case "layers.duplicate": layerTool.duplicate(); return
+        case "layers.moveUp": layerTool.move(-1); return
+        case "layers.moveDown": layerTool.move(1); return
+        case "layers.delete": doc.removeLayers(layerTool.actionIds()); return
+        case "layers.clearFrame": layerTool.clearLayer(false); return
+        case "layers.clearAll": layerTool.clearLayer(true); return
+        case "layers.mode.normal": doc.setLayerMode(doc.activeLayerId, "normal"); return
+        case "layers.mode.multiply": doc.setLayerMode(doc.activeLayerId, "multiply"); return
+        case "layers.mode.screen": doc.setLayerMode(doc.activeLayerId, "screen"); return
+        case "layers.scope.frame": doc.editScope = "frame"; return
+        case "layers.scope.all": doc.editScope = "all-frames"; return
+        case "layers.convertAnimated": layerTool.convert("animated"); return
+        case "layers.convertShared": layerTool.convert("shared"); return
+        case "layers.mergeDown": layerTool.merge(); return
+        case "layers.flatten": layerTool.flatten(); return
+        case "inspector.layers": dock.contentY = 0; layerDock.focusList(); return
+        case "inspector.palette": win.focusInspectorSection(paletteSection); return
+        case "inspector.preview": win.focusInspectorSection(previewSection); return
+        case "inspector.sprite": win.focusInspectorSection(spriteSection); return
+        case "inspector.reference": win.focusInspectorSection(referenceSection); return
+        case "inspector.history": win.focusInspectorSection(historySection); return
+        case "inspector.paletteRows": paletteSection.showAll = !paletteSection.showAll; return
+        case "inspector.canvasSize": actResize.trigger(); return
+        case "inspector.resize": doc.resize(win.wantColumns, win.wantRows); return
+        case "inspector.reference.choose": referenceDialog.open(); return
+        case "inspector.reference.position": win.referenceOnTop = !win.referenceOnTop; return
+        case "inspector.reference.clear": win.referencePath = ""; return
+        case "timeline.addClip": actAddClip.trigger(); return
+        case "timeline.removeClip": actRemoveClip.trigger(); return
+        case "timeline.fpsDown": doc.setFps(doc.fps - 1); return
+        case "timeline.fpsUp": doc.setFps(doc.fps + 1); return
+        case "timeline.play": actPlay.trigger(); return
+        case "timeline.addFrame": actAddFrame.trigger(); return
+        case "timeline.duplicateFrame": actDupFrame.trigger(); return
+        case "timeline.moveBack": actFrameBack.trigger(); return
+        case "timeline.moveOn": actFrameOn.trigger(); return
+        case "timeline.deleteFrame": actDelFrame.trigger(); return
+        case "timeline.previousFrame": doc.frame = Math.max(0, doc.frame - 1); return
+        case "timeline.nextFrame": doc.frame = Math.min(doc.frameCount - 1, doc.frame + 1); return
+        case "timeline.previousClip": actPrevClip.trigger(); return
+        case "timeline.nextClip": actNextClip.trigger(); return
+        }
+
+        var index
+        if (id.indexOf("layers.select.") === 0) {
+            index = win.commandIndex(id, "layers.select.")
+            if (index >= 0 && index < doc.layers.length)
+                layerDock.activate(doc.layers[index].id)
+        } else if (id.indexOf("layers.toggleSelection.") === 0) {
+            index = win.commandIndex(id, "layers.toggleSelection.")
+            if (index >= 0 && index < doc.layers.length)
+                layerDock.toggleStructural(doc.layers[index].id)
+        } else if (id.indexOf("palette.select.") === 0) {
+            index = win.commandIndex(id, "palette.select.")
+            if (index >= 0 && index < doc.palette.length) {
+                win.slot = doc.palette[index].slot
+                if (win.tool === "eraser")
+                    win.tool = "pencil"
+            }
+        } else if (id.indexOf("timeline.clip.") === 0) {
+            index = win.commandIndex(id, "timeline.clip.")
+            if (index >= 0 && index < doc.clipNames.length)
+                doc.clip = doc.clipNames[index]
+        } else if (id.indexOf("timeline.frame.") === 0) {
+            index = win.commandIndex(id, "timeline.frame.")
+            if (index >= 0 && index < doc.frameCount)
+                doc.frame = index
+        } else if (id.indexOf("inspector.preset.") === 0) {
+            index = win.commandIndex(id, "inspector.preset.")
+            var presets = doc.sizePresets()
+            if (index >= 0 && index < presets.length) {
+                win.wantColumns = presets[index].w
+                win.wantRows = presets[index].h
+            }
+        } else if (id.indexOf("inspector.reference.alpha.") === 0) {
+            var alpha = win.commandIndex(id, "inspector.reference.alpha.")
+            if (alpha >= 0 && alpha <= 100 && alpha % 25 === 0)
+                win.referenceAlpha = alpha / 100
+        }
+    }
+
+    Shortcut {
+        sequence: cfg.shortcuts.command_palette
+        context: Qt.ApplicationShortcut
+        onActivated: win.openCommandPalette()
+    }
 
     // ------------------------------------------------------------- the window
 
@@ -796,63 +1247,50 @@ Window {
             // config file is the map between the two, so a rebind changes one
             // line of TOML rather than a case label in here.
             switch (act) {
-            case "tool_pencil": win.tool = "pencil"; break
-            case "tool_eraser": win.tool = "eraser"; break
-            case "tool_bucket": win.tool = "bucket"; break
-            case "tool_picker": win.tool = "picker"; break
-            case "tool_hand": win.tool = "hand"; break
-            case "toggle_onion": win.onion = !win.onion; break
-            case "toggle_grid": win.mesh = !win.mesh; break
-            case "toggle_hints": win.showHints = !win.showHints; break
-            case "toggle_loop": win.loop = !win.loop; break
+            case "tool_pencil": win.runCommand("canvas.tool.pencil"); break
+            case "tool_eraser": win.runCommand("canvas.tool.eraser"); break
+            case "tool_bucket": win.runCommand("canvas.tool.bucket"); break
+            case "tool_picker": win.runCommand("canvas.tool.picker"); break
+            case "tool_hand": win.runCommand("canvas.tool.hand"); break
+            case "toggle_onion": win.runCommand("view.onion"); break
+            case "toggle_grid": win.runCommand("view.grid"); break
+            case "toggle_hints": win.runCommand("view.hints"); break
+            case "toggle_loop": win.runCommand("view.loop"); break
             // The arrows walk the drawing, Shift extends a rectangle, and Ctrl
             // jumps by canvas.big_step. Frames use comma and full stop, where
             // every other sprite editor puts them -- the arrows are worth more
             // here, and stepping through frames is not something you do while
             // your hand is on the canvas.
-            case "caret_left":  win.moveCaret(-1, 0); break
-            case "caret_right": win.moveCaret(1, 0); break
-            case "caret_up":    win.moveCaret(0, -1); break
-            case "caret_down":  win.moveCaret(0, 1); break
-            case "select_left":  win.moveCaret(-1, 0, true); break
-            case "select_right": win.moveCaret(1, 0, true); break
-            case "select_up":    win.moveCaret(0, -1, true); break
-            case "select_down":  win.moveCaret(0, 1, true); break
-            case "select_left_far":  win.moveCaret(-win.bigStep, 0, true); break
-            case "select_right_far": win.moveCaret(win.bigStep, 0, true); break
-            case "select_up_far":    win.moveCaret(0, -win.bigStep, true); break
-            case "select_down_far":  win.moveCaret(0, win.bigStep, true); break
-            case "caret_left_far":  win.moveCaret(-win.bigStep, 0); break
-            case "caret_right_far": win.moveCaret(win.bigStep, 0); break
-            case "caret_up_far":    win.moveCaret(0, -win.bigStep); break
-            case "caret_down_far":  win.moveCaret(0, win.bigStep); break
-            case "go_to_pixel": goToSheet.show(); break
+            case "caret_left":  win.runCommand("canvas.moveLeft"); break
+            case "caret_right": win.runCommand("canvas.moveRight"); break
+            case "caret_up":    win.runCommand("canvas.moveUp"); break
+            case "caret_down":  win.runCommand("canvas.moveDown"); break
+            case "select_left":  win.runCommand("canvas.selectLeft"); break
+            case "select_right": win.runCommand("canvas.selectRight"); break
+            case "select_up":    win.runCommand("canvas.selectUp"); break
+            case "select_down":  win.runCommand("canvas.selectDown"); break
+            case "select_left_far":  win.runCommand("canvas.extendLeft"); break
+            case "select_right_far": win.runCommand("canvas.extendRight"); break
+            case "select_up_far":    win.runCommand("canvas.extendUp"); break
+            case "select_down_far":  win.runCommand("canvas.extendDown"); break
+            case "caret_left_far":  win.runCommand("canvas.jumpLeft"); break
+            case "caret_right_far": win.runCommand("canvas.jumpRight"); break
+            case "caret_up_far":    win.runCommand("canvas.jumpUp"); break
+            case "caret_down_far":  win.runCommand("canvas.jumpDown"); break
+            case "go_to_pixel": win.runCommand("view.goTo"); break
 
-            case "frame_previous":  doc.frame = Math.max(0, doc.frame - 1); break
-            case "frame_next":
-                doc.frame = Math.min(doc.frameCount - 1, doc.frame + 1); break
+            case "frame_previous": win.runCommand("timeline.previousFrame"); break
+            case "frame_next": win.runCommand("timeline.nextFrame"); break
 
             // Draw where the cursor is. Return paints, backspace clears, and
             // both work on the pixel you can see the outline around.
             // Paint with the colour in hand: the pending line if there is one,
             // otherwise the pixel under the cursor.
             case "paint":
-                if (!doc.hasSelection && win.caretColumn < 0)
-                    break
-                if (win.linePoints.length > 0) {
-                    win.commitLine(win.slot)
-                } else {
-                    doc.beginStroke()
-                    doc.paint(win.caretColumn, win.caretRow, win.slot)
-                    doc.endStroke()
-                }
+                win.runCommand("canvas.paint")
                 break
             case "erase":
-                if (doc.hasSelection || win.caretColumn >= 0) {
-                    doc.beginStroke()
-                    doc.paint(win.caretColumn, win.caretRow, ".")
-                    doc.endStroke()
-                }
+                win.runCommand("canvas.erase")
                 break
             // Escape undoes one thing at a time, most recent first: the line
             // you were about to draw, then the pen, then the cursor. One key
@@ -867,29 +1305,19 @@ Window {
                     event.accepted = true
                     return
                 }
-                if (doc.hasSelection) {
-                    doc.clearSelection()
-                } else if (win.linePoints.length > 0) {
-                    win.linePoints = []
-                } else if (win.mode !== "") {
-                    win.releaseHeld()
-                    win.mode = ""
-                } else {
-                    win.caretColumn = -1
-                    win.caretRow = -1
-                }
+                win.runCommand("canvas.cancel")
                 break
 
             // The leader. Semicolon rather than the comma, which is already the
             // previous frame and worth more there.
-            case "slot_leader": win.awaitingSlot = true; break
+            case "slot_leader": win.runCommand("canvas.chooseSlot"); break
 
             // A colour you do not know the name of yet.
-            case "choose_colour": colourSheet.show("assign"); break
-            case "replace_colour": colourSheet.show("replace"); break
+            case "choose_colour": win.runCommand("canvas.chooseColour"); break
+            case "replace_colour": win.runCommand("canvas.replaceColour"); break
 
             // And one nobody knows.
-            case "roulette": win.russianRoulette(); break
+            case "roulette": win.runCommand("canvas.roulette"); break
 
 
 
@@ -897,23 +1325,14 @@ Window {
             // is held down. Moving and drawing are the same gesture with and
             // without your other hand on a number.
             case "draw_mode":
-                if (win.caretColumn < 0)
-                    win.moveCaret(0, 0)
-                win.mode = win.mode === "draw" ? "" : "draw"
+                win.runCommand("canvas.drawMode")
                 break
 
             // Pick mode: the digits stop choosing a colour and start
             // collecting one. Point at a pixel, press a number, and that
             // colour is on that number.
             case "pick_mode":
-                if (win.mode === "pick") {
-                    win.mode = ""
-                } else {
-                    doc.clearSelection()
-                    if (win.caretColumn < 0)
-                        win.moveCaret(0, 0)
-                    win.mode = "pick"
-                }
+                win.runCommand("canvas.pickMode")
                 break
 
             // A line: once to drop the anchor, again to draw from it. Between
@@ -924,10 +1343,7 @@ Window {
             // colour, so a right angle is two corners and one press instead of
             // two lines whose ends you have to line up by hand.
             case "line_point":
-                if (win.caretColumn < 0)
-                    win.moveCaret(0, 0)
-                win.linePoints = win.linePoints.concat(
-                    [{ c: win.caretColumn, r: win.caretRow }])
+                win.runCommand("canvas.linePoint")
                 break
 
             // Tab is left alone, so it walks the window's controls the way it
@@ -937,11 +1353,11 @@ Window {
             // from anywhere, and it is the key people already press to leave
             // something.
             case "zoom_in":
-                stage.zoomStep(stage.width / 2, stage.height / 2, true); break
+                win.runCommand("view.zoomIn"); break
             case "zoom_out":
-                stage.zoomStep(stage.width / 2, stage.height / 2, false); break
+                win.runCommand("view.zoomOut"); break
             case "zoom_fit":
-                stage.touched = false; stage.fit(); break
+                win.runCommand("view.fit"); break
             default:
                 // The digits: a colour each. Shift puts the current colour on
                 // one, plain uses it -- and painting on use, so choosing a
@@ -1121,6 +1537,7 @@ Window {
             // ----------------------------------------------------------- body
 
             Row {
+                id: body
                 width: parent.width
                 height: parent.height - header.height - timeline.height - status.height - 2
                 spacing: 0
@@ -1153,21 +1570,22 @@ Window {
                         anchors.horizontalCenter: parent.horizontalCenter
                         spacing: 4
 
-                        ToolButton { glyph: "B"; key: "B"; caption: T.t("tool.pencil")
+                        ToolButton { id: toolsFirst; objectName: "toolsFirstControl"
+                                     glyph: "B"; key: "B"; caption: T.t("tool.pencil")
                                      on: win.tool === "pencil"
-                                     onClicked: win.tool = "pencil" }
+                                     onClicked: win.runCommand("canvas.tool.pencil") }
                         ToolButton { glyph: "E"; key: "E"; caption: T.t("tool.eraser")
                                      on: win.tool === "eraser"
-                                     onClicked: win.tool = "eraser" }
+                                     onClicked: win.runCommand("canvas.tool.eraser") }
                         ToolButton { glyph: "F"; key: "F"; caption: T.t("tool.bucket")
                                      on: win.tool === "bucket"
-                                     onClicked: win.tool = "bucket" }
+                                     onClicked: win.runCommand("canvas.tool.bucket") }
                         ToolButton { glyph: "I"; key: "I"; caption: T.t("tool.picker")
                                      on: win.tool === "picker"
-                                     onClicked: win.tool = "picker" }
+                                     onClicked: win.runCommand("canvas.tool.picker") }
                         ToolButton { glyph: "H"; key: "H"; caption: T.t("tool.pan")
                                      on: win.tool === "hand"
-                                     onClicked: win.tool = "hand" }
+                                     onClicked: win.runCommand("canvas.tool.hand") }
 
                         Rectangle { width: 24; height: 1; x: 5
                                     color: theme.fill(theme.foreground, 0.18) }
@@ -1275,7 +1693,7 @@ Window {
                             }
 
                             HoverHandler { id: gambleHover }
-                            TapHandler { onTapped: win.russianRoulette() }
+                            TapHandler { onTapped: win.runCommand("canvas.roulette") }
 
                             Rectangle {
                                 visible: gambleHover.hovered
@@ -1415,6 +1833,9 @@ Window {
                             LayerDock {
                                 id: layerDock
                                 width: parent.width
+                                onCommandRequested: function (commandId) {
+                                    win.runCommand(commandId)
+                                }
                                 onLayerActivated: function (layerId) {
                                     layerTool.openFor(layerId)
                                 }
@@ -1463,6 +1884,7 @@ Window {
 
                                     delegate: Rectangle {
                                         id: pip
+                                        required property int index
                                         required property string slot
                                         required property color colour
                                         width: 24
@@ -1512,7 +1934,7 @@ Window {
 
                                         TapHandler {
                                             onTapped: {
-                                                win.slot = pip.slot
+                                                win.runCommand("palette.select." + pip.index)
                                                 if (win.tool === "eraser")
                                                     win.tool = "pencil"
                                             }
@@ -1529,7 +1951,7 @@ Window {
                                            : T.t("panel.palette.showAll")
                                                  .arg(doc.palette.length)
                                     on: paletteSection.showAll
-                                    onClicked: paletteSection.showAll = !paletteSection.showAll
+                                    onClicked: win.runCommand("inspector.paletteRows")
                                 }
 
                                 Row {
@@ -1583,6 +2005,7 @@ Window {
                             }
 
                             Section {
+                                id: previewSection
                                 title: T.t("panel.preview")
                                 hint: win.zoomLabel()
 
@@ -1687,13 +2110,11 @@ Window {
 
                                         Chip {
                                             required property var modelData
+                                            required property int index
                                             label: modelData.w + "×" + modelData.h
                                             on: win.wantColumns === modelData.w
                                                 && win.wantRows === modelData.h
-                                            onClicked: {
-                                                win.wantColumns = modelData.w
-                                                win.wantRows = modelData.h
-                                            }
+                                            onClicked: win.runCommand("inspector.preset." + index)
                                         }
                                     }
                                 }
@@ -1740,11 +2161,12 @@ Window {
                                     on: win.sizeChanged
                                     usable: win.sizeChanged
                                     role: win.wouldLose > 0 ? theme.urgent : theme.accent
-                                    onClicked: doc.resize(win.wantColumns, win.wantRows)
+                                    onClicked: win.runCommand("inspector.resize")
                                 }
                             }
 
                             Section {
+                                id: referenceSection
                                 title: T.t("panel.reference")
                                 hint: win.referencePath === ""
                                       ? T.t("panel.reference.none")
@@ -1753,7 +2175,7 @@ Window {
 
                                 Chip {
                                     label: T.t("panel.reference.choose")
-                                    onClicked: referenceDialog.open()
+                                    onClicked: win.runCommand("inspector.reference.choose")
                                 }
 
                                 Flow {
@@ -1767,7 +2189,8 @@ Window {
                                             required property int modelData
                                             label: modelData + "%"
                                             on: Math.round(win.referenceAlpha * 100) === modelData
-                                            onClicked: win.referenceAlpha = modelData / 100
+                                            onClicked: win.runCommand(
+                                                "inspector.reference.alpha." + modelData)
                                         }
                                     }
                                 }
@@ -1778,17 +2201,18 @@ Window {
                                         label: win.referenceOnTop ? T.t("panel.reference.onTop") : T.t("panel.reference.behind")
                                         on: win.referenceOnTop
                                         usable: win.referencePath !== ""
-                                        onClicked: win.referenceOnTop = !win.referenceOnTop
+                                        onClicked: win.runCommand("inspector.reference.position")
                                     }
                                     Chip {
                                         label: T.t("panel.reference.clear")
                                         usable: win.referencePath !== ""
-                                        onClicked: win.referencePath = ""
+                                        onClicked: win.runCommand("inspector.reference.clear")
                                     }
                                 }
                             }
 
                             Section {
+                                id: historySection
                                 title: T.t("panel.history")
                                 hint: doc.changes.count > 0
                                       ? String(doc.changes.count)
@@ -1865,6 +2289,7 @@ Window {
             Timeline {
                 id: timeline
                 width: parent.width
+                onCommandRequested: function (commandId) { win.runCommand(commandId) }
             }
 
             StatusBar {
@@ -1876,7 +2301,149 @@ Window {
         }
     }
 
+    // A short-lived spatial chooser. It does not rearrange the Studio; it lays
+    // the three stable work regions over their real geometry, then hands focus
+    // to the selected region.
+    Item {
+        id: navigationOverlay
+        objectName: "navigationOverlay"
+        anchors.fill: parent
+        visible: false
+        z: 100
+        focus: visible
+        property var previousFocusItem: null
+
+        function show() {
+            previousFocusItem = win.activeFocusItem
+            visible = true
+            forceActiveFocus()
+        }
+
+        function choose(region) {
+            visible = false
+            if (region === 1) {
+                win.focusCanvas()
+            } else if (region === 2) {
+                dock.contentY = 0
+                layerDock.focusList()
+            } else if (region === 3) {
+                timeline.focusFirst()
+            }
+        }
+
+        function cancel() {
+            visible = false
+            if (previousFocusItem)
+                previousFocusItem.forceActiveFocus()
+            else
+                win.focusCanvas()
+        }
+
+        Keys.onPressed: function (event) {
+            if (event.key >= Qt.Key_1 && event.key <= Qt.Key_3) {
+                navigationOverlay.choose(event.key - Qt.Key_0)
+                event.accepted = true
+            } else if (event.key === Qt.Key_Escape) {
+                navigationOverlay.cancel()
+                event.accepted = true
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: theme.fill(theme.background, 0.72)
+        }
+
+        Rectangle {
+            x: body.x
+            y: body.y
+            width: dockSplitter.x
+            height: body.height
+            color: theme.fill(theme.accent, 0.10)
+            border.width: 2
+            border.color: theme.accent
+            radius: theme.rounding
+            Text {
+                anchors.centerIn: parent
+                text: String(1) + "\n" + T.t("command.navigate.canvasRegion")
+                horizontalAlignment: Text.AlignHCenter
+                color: theme.foreground
+                font.family: theme.fontFamily
+                font.pixelSize: 22
+                font.bold: true
+            }
+            TapHandler { onTapped: navigationOverlay.choose(1) }
+        }
+
+        Rectangle {
+            x: dockPanel.x
+            y: body.y
+            width: dockPanel.width
+            height: body.height
+            color: theme.fill(theme.accent, 0.10)
+            border.width: 2
+            border.color: theme.accent
+            radius: theme.rounding
+            Text {
+                anchors.centerIn: parent
+                text: String(2) + "\n" + T.t("command.navigate.inspectorRegion")
+                horizontalAlignment: Text.AlignHCenter
+                color: theme.foreground
+                font.family: theme.fontFamily
+                font.pixelSize: 22
+                font.bold: true
+            }
+            TapHandler { onTapped: navigationOverlay.choose(2) }
+        }
+
+        Rectangle {
+            x: timeline.x
+            y: timeline.y
+            width: timeline.width
+            height: timeline.height
+            color: theme.fill(theme.accent, 0.10)
+            border.width: 2
+            border.color: theme.accent
+            radius: theme.rounding
+            Text {
+                anchors.centerIn: parent
+                text: String(3) + "\n" + T.t("command.navigate.timelineRegion")
+                horizontalAlignment: Text.AlignHCenter
+                color: theme.foreground
+                font.family: theme.fontFamily
+                font.pixelSize: 22
+                font.bold: true
+            }
+            TapHandler { onTapped: navigationOverlay.choose(3) }
+        }
+
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.top
+            anchors.topMargin: 36
+            width: navigationHelp.implicitWidth + 20
+            height: 26
+            radius: theme.rounding
+            color: theme.panel
+            border.width: 1
+            border.color: theme.accent
+            Label {
+                id: navigationHelp
+                anchors.centerIn: parent
+                text: T.t("command.navigate.help")
+                color: theme.foreground
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- dialogs
+
+    CommandPalette {
+        id: commandPalette
+        hostWindow: win
+        commands: win.commandEntries
+        onCommandRequested: function (commandId) { win.runCommand(commandId) }
+    }
 
     Sheet {
         id: goToSheet

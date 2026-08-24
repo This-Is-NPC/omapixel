@@ -20,6 +20,7 @@
         <file>qml/LayerAction.qml</file>
         <file>qml/LayerDock.qml</file>
         <file>qml/LayerToolWindow.qml</file>
+        <file>qml/CommandPalette.qml</file>
         <file>qml/qmldir</file>
     </qresource>
 </RCC>

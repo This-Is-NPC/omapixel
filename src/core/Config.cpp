@@ -234,6 +234,7 @@ const QList<QPair<QString, QString>> &Config::actions()
         {QStringLiteral("toggle_hints"), QString()},
         {QStringLiteral("toggle_loop"), QString()},
         {QStringLiteral("layer_tool"), QStringLiteral("ctrl+shift+l")},
+        {QStringLiteral("command_palette"), QStringLiteral("ctrl+k")},
         {QStringLiteral("menus"), QStringLiteral("f10")},
     };
     return only;

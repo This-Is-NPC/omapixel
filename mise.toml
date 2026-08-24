@@ -376,18 +376,29 @@ WAYLAND_DISPLAY="$wayland_display" DISPLAY="$x_display" \
 '''
 
 [tasks.studio-smoke]
-description = "Launch the Studio, render one frame, and exit"
+description = "Launch the Studio and its keyboard overlays, render frames, and exit"
 depends = ["build"]
 run = '''
-shot="${TMPDIR:-/tmp}/omapixel-studio-smoke-$$.png"
-trap 'rm -f "$shot"' EXIT
+base="${TMPDIR:-/tmp}/omapixel-studio-smoke-$$"
+normal="$base-normal.png"
+commands="$base-commands.png"
+navigate="$base-navigate.png"
+trap 'rm -f "$normal" "$commands" "$navigate"' EXIT
 
-OMAPIXEL_SHOT="$shot" mise run studio
-if [ ! -s "$shot" ]; then
-  echo "Studio startup produced no screenshot" >&2
-  exit 1
-fi
-echo "Studio startup is green ($shot)"
+render() {
+  mode="$1"
+  shot="$2"
+  OMAPIXEL_SHOT="$shot" OMAPIXEL_SHOT_SHEET="$mode" mise run studio
+  if [ ! -s "$shot" ]; then
+    echo "Studio startup produced no $mode screenshot" >&2
+    exit 1
+  fi
+}
+
+render "normal" "$normal"
+render "commands" "$commands"
+render "navigate" "$navigate"
+echo "Studio startup and keyboard overlays are green"
 '''
 
 [tasks.install]

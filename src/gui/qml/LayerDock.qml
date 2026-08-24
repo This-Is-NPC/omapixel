@@ -11,6 +11,7 @@ Item {
     property var selectedIds: doc.activeLayerId === "" ? [] : [doc.activeLayerId]
     property int rowHeight: 64
     signal layerActivated(string layerId)
+    signal commandRequested(string commandId)
 
     implicitHeight: content.implicitHeight
     height: implicitHeight
@@ -134,12 +135,12 @@ Item {
             spacing: 5
             Chip {
                 label: T.t("panel.layers.addAnimated")
-                onClicked: dock.add("animated")
+                onClicked: dock.commandRequested("layers.addAnimated")
                 Accessible.name: T.t("accessibility.layers.addAnimated")
             }
             Chip {
                 label: T.t("panel.layers.addShared")
-                onClicked: dock.add("shared")
+                onClicked: dock.commandRequested("layers.addShared")
                 Accessible.name: T.t("accessibility.layers.addShared")
             }
             Label {
@@ -250,7 +251,7 @@ Item {
                     tooltip: T.t("accessibility.layers.select").arg(modelData.name)
                     glyph: activePaintTarget ? "[*]" : (dock.has(modelData.id) ? "[x]" : "[ ]")
                     checked: dock.has(modelData.id)
-                    onClicked: dock.toggleStructural(modelData.id)
+                    onClicked: dock.commandRequested("layers.toggleSelection." + index)
                 }
 
                 PixelGridItem {

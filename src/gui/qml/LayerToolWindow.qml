@@ -132,6 +132,7 @@ Window {
     }
 
     signal confirmationRequested(string kind, string layerId, var report)
+    signal commandRequested(string commandId)
 
     onVisibleChanged: {
         if (!visible && wasVisible)
@@ -168,25 +169,35 @@ Window {
                 spacing: 8
 
                 Rectangle {
+                    id: targetCard
+                    objectName: "layerToolTargetCard"
                     width: parent.width
-                    height: targetText.implicitHeight + 22
+                    height: targetColumn.implicitHeight + 20
                     radius: theme.rounding
                     color: theme.fill(theme.accent, 0.14)
                     border.width: 1
                     border.color: theme.accent
                     Column {
-                        anchors.fill: parent
-                        anchors.margins: 10
+                        id: targetColumn
+                        x: 10
+                        y: 10
+                        width: parent.width - 20
                         spacing: 3
                         Text {
                             id: targetText
+                            objectName: "layerToolTargetText"
+                            width: parent.width
                             text: T.t("panel.layers.toolTarget").arg(doc.activeLayerName)
                             color: theme.foreground
                             font.family: theme.fontFamily
                             font.pixelSize: 14
                             font.bold: true
+                            wrapMode: Text.Wrap
                         }
                         Label {
+                            objectName: "layerToolStructuralTargetText"
+                            width: parent.width
+                            wrapMode: Text.Wrap
                             text: T.t("panel.layers.structuralTarget").arg((structuralIds || []).length)
                         }
                     }
@@ -200,7 +211,7 @@ Window {
                         label: T.t("panel.layers.visibility")
                         on: currentLayer().visible
                         usable: doc.activeLayerId !== ""
-                        onClicked: tool.toggleVisibility()
+                        onClicked: tool.commandRequested("layers.visibility")
                         Accessible.name: T.t("accessibility.layers.visibilityAll")
                     }
                     Chip {
@@ -208,13 +219,13 @@ Window {
                         label: T.t("panel.layers.lock")
                         on: currentLayer().locked
                         usable: doc.activeLayerId !== ""
-                        onClicked: tool.toggleLock()
+                        onClicked: tool.commandRequested("layers.lock")
                         Accessible.name: T.t("accessibility.layers.lockAll")
                     }
                     Chip {
                         objectName: "toolCloseAction"
                         label: T.t("action.close")
-                        onClicked: tool.closeTool()
+                        onClicked: tool.commandRequested("layers.closeTool")
                         Accessible.name: T.t("accessibility.layers.closeTool")
                     }
                 }
@@ -275,7 +286,7 @@ Window {
                             label: T.t("panel.layers.normal")
                             on: currentLayer().mode === "normal"
                             usable: doc.activeLayerId !== ""
-                            onClicked: doc.setLayerMode(doc.activeLayerId, "normal")
+                            onClicked: tool.commandRequested("layers.mode.normal")
                             Accessible.name: T.t("accessibility.layers.mode") + ": " + T.t("panel.layers.normal")
                         }
                         Chip {
@@ -283,7 +294,7 @@ Window {
                             label: T.t("panel.layers.multiply")
                             on: currentLayer().mode === "multiply"
                             usable: doc.activeLayerId !== ""
-                            onClicked: doc.setLayerMode(doc.activeLayerId, "multiply")
+                            onClicked: tool.commandRequested("layers.mode.multiply")
                             Accessible.name: T.t("accessibility.layers.mode") + ": " + T.t("panel.layers.multiply")
                         }
                         Chip {
@@ -291,7 +302,7 @@ Window {
                             label: T.t("panel.layers.screen")
                             on: currentLayer().mode === "screen"
                             usable: doc.activeLayerId !== ""
-                            onClicked: doc.setLayerMode(doc.activeLayerId, "screen")
+                            onClicked: tool.commandRequested("layers.mode.screen")
                             Accessible.name: T.t("accessibility.layers.mode") + ": " + T.t("panel.layers.screen")
                         }
                     }
@@ -308,7 +319,7 @@ Window {
                             label: T.t("panel.layers.frame")
                             on: doc.editScope === "frame"
                             usable: doc.activeLayerStorage !== "shared"
-                            onClicked: doc.editScope = "frame"
+                            onClicked: tool.commandRequested("layers.scope.frame")
                             Accessible.name: T.t("accessibility.layers.frameScope")
                         }
                         Chip {
@@ -316,7 +327,7 @@ Window {
                             label: T.t("panel.layers.allFrames")
                             on: doc.activeLayerStorage === "shared" || doc.editScope === "all-frames"
                             usable: doc.activeLayerStorage !== "shared"
-                            onClicked: doc.editScope = "all-frames"
+                            onClicked: tool.commandRequested("layers.scope.all")
                             Accessible.name: T.t("accessibility.layers.allFramesScope")
                         }
                     }
@@ -338,21 +349,21 @@ Window {
                             objectName: "toolDuplicateAction"
                             label: T.t("panel.layers.duplicate")
                             usable: doc.activeLayerId !== ""
-                            onClicked: tool.duplicate()
+                            onClicked: tool.commandRequested("layers.duplicate")
                             Accessible.name: T.t("accessibility.layers.duplicate")
                         }
                         Chip {
                             objectName: "toolMoveUpAction"
                             label: T.t("panel.layers.up")
                             usable: doc.activeLayerId !== ""
-                            onClicked: tool.move(-1)
+                            onClicked: tool.commandRequested("layers.moveUp")
                             Accessible.name: T.t("accessibility.layers.moveUp")
                         }
                         Chip {
                             objectName: "toolMoveDownAction"
                             label: T.t("panel.layers.down")
                             usable: doc.activeLayerId !== ""
-                            onClicked: tool.move(1)
+                            onClicked: tool.commandRequested("layers.moveDown")
                             Accessible.name: T.t("accessibility.layers.moveDown")
                         }
                         Chip {
@@ -360,7 +371,7 @@ Window {
                             label: T.t("panel.layers.delete")
                             role: theme.urgent
                             usable: doc.layers.length > 1
-                            onClicked: doc.removeLayers(tool.actionIds())
+                            onClicked: tool.commandRequested("layers.delete")
                             Accessible.name: T.t("accessibility.layers.delete")
                         }
                     }
@@ -375,14 +386,14 @@ Window {
                             objectName: "toolClearFrameAction"
                             label: T.t("panel.layers.clearFrame")
                             usable: doc.activeLayerId !== ""
-                            onClicked: tool.clearLayer(false)
+                            onClicked: tool.commandRequested("layers.clearFrame")
                             Accessible.name: T.t("accessibility.layers.clearFrame")
                         }
                         Chip {
                             objectName: "toolClearAllAction"
                             label: T.t("panel.layers.clearAll")
                             usable: doc.activeLayerId !== ""
-                            onClicked: tool.clearLayer(true)
+                            onClicked: tool.commandRequested("layers.clearAll")
                             Accessible.name: T.t("accessibility.layers.clearAll")
                         }
                     }
@@ -403,14 +414,14 @@ Window {
                             objectName: "toolConvertAnimatedAction"
                             label: T.t("panel.layers.convertAnimated")
                             usable: doc.activeLayerStorage === "shared"
-                            onClicked: tool.convert("animated")
+                            onClicked: tool.commandRequested("layers.convertAnimated")
                             Accessible.name: T.t("accessibility.layers.convertAnimated")
                         }
                         Chip {
                             objectName: "toolConvertSharedAction"
                             label: T.t("panel.layers.convertShared")
                             usable: doc.activeLayerStorage === "animated"
-                            onClicked: tool.convert("shared")
+                            onClicked: tool.commandRequested("layers.convertShared")
                             Accessible.name: T.t("accessibility.layers.convertShared")
                         }
                     }
@@ -426,7 +437,7 @@ Window {
                             objectName: "toolMergeAction"
                             label: T.t("panel.layers.mergeDown")
                             usable: tool.activeIndex() > 0
-                            onClicked: tool.merge()
+                            onClicked: tool.commandRequested("layers.mergeDown")
                             Accessible.name: T.t("accessibility.layers.mergeDown")
                         }
                         Chip {
@@ -434,7 +445,7 @@ Window {
                             label: T.t("panel.layers.flatten")
                             role: theme.urgent
                             usable: doc.layers.length > 1
-                            onClicked: tool.flatten()
+                            onClicked: tool.commandRequested("layers.flatten")
                             Accessible.name: T.t("accessibility.layers.flatten")
                         }
                     }

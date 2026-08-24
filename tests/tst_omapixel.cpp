@@ -3437,6 +3437,71 @@ private slots:
         QVERIFY(tool->isVisible());
     }
 
+    void layerToolTextAndFocusRingsStayInsideTheirCards()
+    {
+        QTest::failOnWarning();
+        registerQmlTypes();
+        DocumentModel document;
+        QVERIFY(document.renameLayer(
+            QStringLiteral("layer"),
+            QStringLiteral("A deliberately long animated foreground layer name")));
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+        static InputLog quiet(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &quiet);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent component(&engine,
+            QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> root(component.create());
+        auto *studio = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(studio);
+        studio->resize(900, 700);
+        studio->show();
+        QVERIFY(QTest::qWaitForWindowExposed(studio));
+
+        auto *dock = studio->findChild<QQuickItem *>(QStringLiteral("layerDock"));
+        auto *tool = studio->findChild<QQuickWindow *>(QStringLiteral("layerToolWindow"));
+        QVERIFY(dock);
+        QVERIFY(tool);
+        QVERIFY(QMetaObject::invokeMethod(dock, "activate",
+                                          Q_ARG(QVariant, QStringLiteral("layer"))));
+        QTRY_VERIFY_WITH_TIMEOUT(tool->isVisible(), 1000);
+
+        auto *card = tool->findChild<QQuickItem *>(QStringLiteral("layerToolTargetCard"));
+        auto *target = tool->findChild<QQuickItem *>(QStringLiteral("layerToolTargetText"));
+        auto *structural = tool->findChild<QQuickItem *>(
+            QStringLiteral("layerToolStructuralTargetText"));
+        QVERIFY(card);
+        QVERIFY(target);
+        QVERIFY(structural);
+        QCoreApplication::processEvents();
+        const QPointF targetAt = target->mapToItem(card, QPointF());
+        const QPointF structuralAt = structural->mapToItem(card, QPointF());
+        QVERIFY(target->height() > 20.0);
+        QVERIFY(targetAt.y() >= 0.0);
+        QVERIFY(targetAt.y() + target->height() <= card->height() + 0.5);
+        QVERIFY(structuralAt.y() + structural->height() <= card->height() + 0.5);
+
+        const auto insideParent = [](QQuickItem *ring) {
+            QQuickItem *owner = ring ? ring->parentItem() : nullptr;
+            return owner && ring->x() >= 0.0 && ring->y() >= 0.0
+                   && ring->x() + ring->width() <= owner->width() + 0.5
+                   && ring->y() + ring->height() <= owner->height() + 0.5;
+        };
+        auto *chipRing = tool->findChild<QQuickItem *>(QStringLiteral("chipFocusRing"));
+        auto *sectionRing = tool->findChild<QQuickItem *>(QStringLiteral("sectionFocusRing"));
+        QVERIFY(chipRing);
+        QVERIFY(sectionRing);
+        QVERIFY(insideParent(chipRing));
+        QVERIFY(insideParent(sectionRing));
+    }
+
     void layerToolLifecycleKeepsOnePublishedSessionAndStableCliState()
     {
         registerQmlTypes();
@@ -5166,6 +5231,119 @@ private slots:
         QTest::keyClick(window, Qt::Key_Right);
         QVERIFY2(root->property("caretColumn").toInt() >= 0,
                  "escape did not hand the keyboard back to the drawing");
+    }
+
+    void commandPaletteSearchesRunsAndNavigatesEveryRegion()
+    {
+        QTest::failOnWarning();
+        registerQmlTypes();
+        QQmlEngine engine;
+        DocumentModel document;
+        document.addFrame(false);
+        Theme theme;
+        static InputLog quiet(false);
+        engine.rootContext()->setContextProperty(QStringLiteral("doc"), &document);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("cfg"), &Config::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("T"), &Strings::shared());
+        engine.rootContext()->setContextProperty(QStringLiteral("log"), &quiet);
+        engine.rootContext()->setContextProperty(QStringLiteral("shotSheet"), QString());
+
+        QQmlComponent main(&engine,
+                           QUrl::fromLocalFile(QStringLiteral(SOURCE_DIR "/src/gui/qml/Main.qml")));
+        QVERIFY2(main.isReady(), qPrintable(main.errorString()));
+        QScopedPointer<QObject> root(main.create());
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        window->resize(1100, 800);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        auto *palette = window->findChild<QObject *>(QStringLiteral("commandPalette"));
+        auto *search = window->findChild<QQuickItem *>(QStringLiteral("commandPaletteSearch"));
+        auto *overlay = window->findChild<QQuickItem *>(QStringLiteral("navigationOverlay"));
+        auto *layerList = window->findChild<QQuickItem *>(QStringLiteral("layerList"));
+        auto *timelineFirst = window->findChild<QQuickItem *>(
+            QStringLiteral("timelineFirstControl"));
+        auto *canvasKeys = window->findChild<QQuickItem *>(QStringLiteral("canvas keys"));
+        QVERIFY(palette);
+        QVERIFY(search);
+        QVERIFY(overlay);
+        QVERIFY(layerList);
+        QVERIFY(timelineFirst);
+        QVERIFY(canvasKeys);
+
+        QVERIFY(QMetaObject::invokeMethod(root.data(), "openCommandPalette"));
+        QTRY_VERIFY_WITH_TIMEOUT(root->property("commandPaletteOpen").toBool(), 1000);
+        const QVariantList commands = root->property("commandEntries").toList();
+        QVERIFY(commands.size() > 70);
+        QSet<QString> ids;
+        for (const QVariant &value : commands)
+            ids.insert(value.toMap().value(QStringLiteral("id")).toString());
+        const QSet<QString> required{
+            QStringLiteral("navigate"), QStringLiteral("file.save"),
+            QStringLiteral("canvas.tool.pencil"), QStringLiteral("layers.addAnimated"),
+            QStringLiteral("layers.flatten"), QStringLiteral("inspector.reference.choose"),
+            QStringLiteral("inspector.canvasSize"), QStringLiteral("timeline.addFrame"),
+            QStringLiteral("timeline.frame.0")};
+        for (const QString &id : required)
+            QVERIFY2(ids.contains(id), qPrintable(id));
+        QTest::keyClick(window, Qt::Key_Escape);
+        QTRY_VERIFY_WITH_TIMEOUT(!root->property("commandPaletteOpen").toBool(), 1000);
+
+        const auto type = [window](const QString &text) {
+            for (const QChar character : text)
+                QTest::keyClick(window, character.toLatin1());
+        };
+        const auto openNavigate = [&] {
+            QTest::keyClick(window, Qt::Key_K, Qt::ControlModifier);
+            QTRY_VERIFY_WITH_TIMEOUT(root->property("commandPaletteOpen").toBool(), 1000);
+            QVERIFY(window->activeFocusItem());
+            QVERIFY(window->activeFocusItem()->inherits("QQuickTextInput"));
+            type(QStringLiteral("navigate"));
+            QTRY_VERIFY_WITH_TIMEOUT(palette->property("resultCount").toInt() >= 4, 1000);
+            QTest::keyClick(window, Qt::Key_Return);
+            QTRY_VERIFY_WITH_TIMEOUT(root->property("navigationMode").toBool(), 1000);
+        };
+
+        openNavigate();
+        QTest::keyClick(window, Qt::Key_2);
+        QTRY_VERIFY_WITH_TIMEOUT(layerList->hasActiveFocus(), 1000);
+
+        openNavigate();
+        QTest::keyClick(window, Qt::Key_3);
+        QTRY_VERIFY_WITH_TIMEOUT(timelineFirst->hasActiveFocus(), 1000);
+
+        openNavigate();
+        QTest::keyClick(window, Qt::Key_1);
+        QTRY_VERIFY_WITH_TIMEOUT(canvasKeys->hasActiveFocus(), 1000);
+
+        const int layersBefore = document.layers().size();
+        QTest::keyClick(window, Qt::Key_K, Qt::ControlModifier);
+        QTRY_VERIFY_WITH_TIMEOUT(root->property("commandPaletteOpen").toBool(), 1000);
+        type(QStringLiteral("add animated layer"));
+        QTRY_COMPARE(palette->property("resultCount").toInt(), 1);
+        QTest::keyClick(window, Qt::Key_Return);
+        QTRY_COMPARE(document.layers().size(), layersBefore + 1);
+
+        root->setProperty("tool", QStringLiteral("eraser"));
+        QVERIFY(QMetaObject::invokeMethod(root.data(), "runCommand",
+                                          Q_ARG(QVariant, QStringLiteral("palette.select.1"))));
+        QCOMPARE(root->property("tool").toString(), QStringLiteral("pencil"));
+
+        document.setFrame(0);
+        QVERIFY(QMetaObject::invokeMethod(root.data(), "runCommand",
+            Q_ARG(QVariant, QStringLiteral("timeline.frame.1junk"))));
+        QCOMPARE(document.frame(), 0);
+        root->setProperty("referenceAlpha", 0.5);
+        QVERIFY(QMetaObject::invokeMethod(root.data(), "runCommand",
+            Q_ARG(QVariant, QStringLiteral("inspector.reference.alpha.125"))));
+        QCOMPARE(root->property("referenceAlpha").toDouble(), 0.5);
+
+        QTest::keyClick(window, Qt::Key_K, Qt::ControlModifier);
+        QTRY_VERIFY_WITH_TIMEOUT(root->property("commandPaletteOpen").toBool(), 1000);
+        QTest::keyClick(window, Qt::Key_Escape);
+        QTRY_VERIFY_WITH_TIMEOUT(!root->property("commandPaletteOpen").toBool(), 1000);
     }
 
     void theColourPanelIsDrivenFromTheKeyboardAlone()

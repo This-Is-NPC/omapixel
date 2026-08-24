@@ -186,6 +186,8 @@
 # toggle_loop = ""
 # Open or focus the independent layer tool window.
 # layer_tool = "ctrl+shift+l"
+# Search every executable Studio command.
+# command_palette = "ctrl+k"
 
 # The keyboard onto the menu bar, where the arrows walk it.
 # menus = "f10"

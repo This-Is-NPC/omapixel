@@ -18,3 +18,4 @@ Hints 1.0 Hints.qml
 LayerAction 1.0 LayerAction.qml
 LayerDock 1.0 LayerDock.qml
 LayerToolWindow 1.0 LayerToolWindow.qml
+CommandPalette 1.0 CommandPalette.qml
