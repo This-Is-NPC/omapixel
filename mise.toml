@@ -125,7 +125,10 @@ run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 description = "Everything CI would run"
 depends = ["build", "test", "format-v2", "properties-v2", "cli-layers",
            "layers-e2e", "i18n", "i18n-surface", "benchmark-layers"]
-run = "echo 'build and tests are green'"
+run = """
+mise run studio-smoke
+echo 'build, tests, and Studio startup are green'
+"""
 
 # ---------------------------------------------------------------------- dist
 
@@ -310,7 +313,53 @@ run = '"$BUILD_DIR/bin/omapixel" "$@"'
 [tasks.studio]
 description = "Open the studio — mise run studio -- drawing.json"
 depends = ["build"]
-run = '"$BUILD_DIR/bin/omapixel-studio" "$@"'
+run = '''
+platform=""
+
+if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+  case "$WAYLAND_DISPLAY" in
+    /*) wayland_socket="$WAYLAND_DISPLAY" ;;
+    *)  wayland_socket="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ;;
+  esac
+  [ -S "$wayland_socket" ] && platform="wayland"
+fi
+
+if [ -z "$platform" ] && [ -n "${DISPLAY:-}" ]; then
+  display_number="${DISPLAY#:}"
+  display_number="${display_number%%.*}"
+  [ -S "/tmp/.X11-unix/X$display_number" ] && platform="xcb"
+fi
+
+# Screenshot smoke tests are useful in headless CI. An interactive invocation
+# without a display should fail here with the real cause instead of Qt's long
+# platform-plugin fallback error.
+if [ -z "$platform" ] && [ -n "${OMAPIXEL_SHOT:-}" ]; then
+  platform="offscreen"
+fi
+if [ -z "$platform" ]; then
+  echo "no live Wayland or X11 display is available" >&2
+  echo "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} DISPLAY=${DISPLAY:-} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}" >&2
+  exit 1
+fi
+
+QT_QPA_PLATFORM="$platform" QT_QPA_PLATFORMTHEME= \
+  "$BUILD_DIR/bin/omapixel-studio" "$@"
+'''
+
+[tasks.studio-smoke]
+description = "Launch the Studio, render one frame, and exit"
+depends = ["build"]
+run = '''
+shot="${TMPDIR:-/tmp}/omapixel-studio-smoke-$$.png"
+trap 'rm -f "$shot"' EXIT
+
+OMAPIXEL_SHOT="$shot" mise run studio
+if [ ! -s "$shot" ]; then
+  echo "Studio startup produced no screenshot" >&2
+  exit 1
+fi
+echo "Studio startup is green ($shot)"
+'''
 
 [tasks.install]
 description = "Install the binaries, the language files and the default config"
