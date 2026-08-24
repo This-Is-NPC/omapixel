@@ -315,17 +315,45 @@ description = "Open the studio — mise run studio -- drawing.json"
 depends = ["build"]
 run = '''
 platform=""
+wayland_display="${WAYLAND_DISPLAY:-}"
+x_display="${DISPLAY:-}"
 
-if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
-  case "$WAYLAND_DISPLAY" in
-    /*) wayland_socket="$WAYLAND_DISPLAY" ;;
-    *)  wayland_socket="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ;;
+# Long-lived shells can outlive a compositor restart and lose or retain stale
+# display variables. The user manager owns the current desktop environment, so
+# recover from it before looking at sockets directly.
+if [ -z "$wayland_display" ] || [ -z "$x_display" ]; then
+  manager_environment="$(systemctl --user show-environment 2>/dev/null || true)"
+  while IFS='=' read -r key value; do
+    case "$key" in
+      WAYLAND_DISPLAY) [ -z "$wayland_display" ] && wayland_display="$value" ;;
+      DISPLAY)         [ -z "$x_display" ] && x_display="$value" ;;
+    esac
+  done <<EOF
+$manager_environment
+EOF
+fi
+
+if [ -n "$wayland_display" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+  case "$wayland_display" in
+    /*) wayland_socket="$wayland_display" ;;
+    *)  wayland_socket="$XDG_RUNTIME_DIR/$wayland_display" ;;
   esac
   [ -S "$wayland_socket" ] && platform="wayland"
 fi
 
-if [ -z "$platform" ] && [ -n "${DISPLAY:-}" ]; then
-  display_number="${DISPLAY#:}"
+# The manager may be unavailable in a minimal shell. A Wayland socket is owned
+# by this user and is sufficient to recover its display name.
+if [ -z "$platform" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+  for candidate in "$XDG_RUNTIME_DIR"/wayland-*; do
+    [ -S "$candidate" ] || continue
+    wayland_display="${candidate##*/}"
+    platform="wayland"
+    break
+  done
+fi
+
+if [ -z "$platform" ] && [ -n "$x_display" ]; then
+  display_number="${x_display#:}"
   display_number="${display_number%%.*}"
   [ -S "/tmp/.X11-unix/X$display_number" ] && platform="xcb"
 fi
@@ -338,11 +366,12 @@ if [ -z "$platform" ] && [ -n "${OMAPIXEL_SHOT:-}" ]; then
 fi
 if [ -z "$platform" ]; then
   echo "no live Wayland or X11 display is available" >&2
-  echo "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} DISPLAY=${DISPLAY:-} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}" >&2
+  echo "WAYLAND_DISPLAY=$wayland_display DISPLAY=$x_display XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}" >&2
   exit 1
 fi
 
-QT_QPA_PLATFORM="$platform" QT_QPA_PLATFORMTHEME= \
+WAYLAND_DISPLAY="$wayland_display" DISPLAY="$x_display" \
+  QT_QPA_PLATFORM="$platform" QT_QPA_PLATFORMTHEME= \
   "$BUILD_DIR/bin/omapixel-studio" "$@"
 '''
 
