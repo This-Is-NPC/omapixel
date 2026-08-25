@@ -5,36 +5,34 @@ mise run studio              # an empty document, 32×24 unless you said otherwi
 mise run studio heart.json   # open a file
 ```
 
-The window is the same core as [the command line](cli.md) behind a mouse. It
-edits the same documents and obeys the same rules; there is nothing it can do
-that the terminal cannot, and nothing the terminal can do that it refuses.
+The window and [command line](cli.md) share the same document model and mutation
+rules. Studio focuses on interactive editing; the CLI additionally provides
+batch, interchange, plugin and headless rendering workflows.
 
 ## The layout
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ File  Edit  Sprite  View     omapixel     heart.json         │
-├───┬──────────────────────────────────────────┬───────────────┤
-│ B │                                          │ ▼ Palette  17 │
-│ E │                                          │ ▼ Preview  12×│
-│ F │          the open frame                  │ ▶ Sprite      │
-│ I │                                          │ ▶ Reference   │
-│ H │                                          │               │
-│ ─ │                                          │               │
-│ 1 │                                          │               │
-│ 2 │                                          │               │
-│ … │                                          │               │
-│   ├──────────────────────────────────────────┤               │
-│ ? │ arrows draw · b e f i h tools · ^S save  │               │
-├───┴──────────────────────────────────────────┴───────────────┤
-│ clip  [idle] + −   idle          8 fps − +                   │
+│ File  Edit  Sprite  View       omapixel       heart.json     │
+├───┬───────────────────────────────┬───────────┬──────────────┤
+│ B │                               │ Layers    │ ▼ Palette 17 │
+│ E │                               │ eye Hero  │ ▼ Preview   │
+│ F │        the open frame         │ eye Ink   │ ▶ Sprite    │
+│ I │                               │ eye Paper │ ▶ Reference │
+│ H │                               │           │ ▼ History   │
+│ ─ │                               │           │              │
+│ 1 │                               │           │              │
+│ … ├───────────────────────────────┤           │              │
+│ ? │ arrows draw · b/e tools · ^S save         │              │
+├───┴───────────────────────────────┴───────────┴──────────────┤
+│ clip [idle] + −   idle  8 fps − +                            │
 │ ▶  + frame  duplicate  ◂ ▸  delete   1  2  3  4              │
 ├──────────────────────────────────────────────────────────────┤
 │ 32×24  4,17  slot I  12×  idle · 4 frames · 8 fps    saved   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Six places, each answering one question.
+Seven places, each answering one question.
 
 **The menu bar** has every command the studio has, named and grouped, with its
 key beside it. Nothing is reachable only by knowing a shortcut, and nothing
@@ -65,14 +63,10 @@ merge, flatten, clear, and destructive actions for the active layer or selected
 rows. Current-frame and all-frames scope is explicit; shared rows show all-frames
 as fixed.
 
-The Layer tool is a real non-modal top-level Qt window, not a popup or drawer. It
-starts beside the Studio, remembers its independent geometry while open, and can
-be moved or resized by the window manager onto another monitor. `transientParent`
-keeps it associated with the Studio without making it a child surface. Some
-platform window managers may clamp a requested position to a visible work area;
-that is platform placement policy, not application clipping. Closing it returns
-focus to the active layer row. `Ctrl+Shift+L` (config key `layer_tool`) opens or
-focuses it.
+The Layer tool is an independent non-modal window rather than a popup or drawer.
+It starts beside Studio and can be moved or resized onto another monitor. Closing
+it returns focus to the active layer row. `Ctrl+Shift+L` (config key
+`layer_tool`) opens or focuses it.
 
 Every layer control is keyboard reachable with Tab and activates with Space or
 Enter. Up and Down navigate rows; Enter or Space opens/focuses the tool; Ctrl+Space
@@ -81,10 +75,8 @@ list. Focus rings remain visible, and icon-only structural selection controls
 show concise hover help and expose names to assistive technology. Destructive
 storage conversion, merge-down, and flatten-visible actions display their staged
 consequence report before the user can apply them. The divider beside the layer
-browser is keyboard reachable and drag-resizable between usable bounds; its
-session width starts from `window.inspector_width`. The browser remains
-scrollable rather than clipping rows at constrained widths, while the canvas and
-onion skin continue to use the single composed raster surface.
+browser is keyboard reachable and drag-resizable; the browser scrolls rather
+than clipping rows at constrained widths.
 
 **The timeline** is two rows because it answers two questions: the top one picks
 and names the clip and sets its speed, the bottom one is the sequence itself.
@@ -194,10 +186,10 @@ drawing shows whatever you bound, not what is printed here.
 | <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>0</kbd> | put the current colour on that digit |
 | <kbd>c</kbd> | find a colour by name or hex, and put it on a number |
 | <kbd>Shift</kbd>+<kbd>c</kbd> | replace every pixel of the colour in focus |
-| <kbd>r</kbd> | Russian roulette: paint with a colour nobody chose |
+| <kbd>r</kbd> | random colour: paint with a colour nobody chose |
 | <kbd>;</kbd> then a letter | choose that palette slot, and paint the cursor with it |
 | <kbd>Backspace</kbd>, <kbd>Delete</kbd> | erase the selection, or the pixel at the cursor |
-| <kbd>Ctrl</kbd>+<kbd>Delete</kbd> | clear the whole frame |
+| <kbd>Ctrl</kbd>+<kbd>Delete</kbd> | clear the active layer |
 | <kbd>Esc</kbd> | put the cursor away |
 | <kbd>,</kbd> <kbd>.</kbd> | previous and next frame |
 | <kbd>+</kbd> <kbd>−</kbd> | zoom, 1 to 40 screen pixels per sprite pixel |
@@ -411,10 +403,10 @@ some other part of the drawing shares that slot on purpose, it keeps its colour.
 The emptied slot is dropped from the palette, so replacing repeatedly does not
 silt it up with entries no pixel refers to.
 
-## Russian roulette
+## Random colour
 
-<kbd>r</kbd>, the `?` at the bottom of the tool strip, or **Sprite → Russian
-roulette**. It paints the pixel under the cursor with a colour nobody chose,
+<kbd>r</kbd>, the `?` at the bottom of the tool strip, or **Sprite → Random
+colour**. It paints the pixel under the cursor with a colour nobody chose,
 drawn out of the whole of RGB, not out of the palette, because picking from what
 is already in the document would be a shuffle, and a shuffle is not a gamble.
 
@@ -453,9 +445,11 @@ dialog rather than a path you type.
 |---|---|
 | New… | <kbd>Ctrl</kbd>+<kbd>N</kbd>, size presets or your own numbers |
 | Open… | <kbd>Ctrl</kbd>+<kbd>O</kbd> |
+| Import Image… | PNG, JPEG or WebP as a layer, a new document, or a new window |
 | Save · Save as… | <kbd>Ctrl</kbd>+<kbd>S</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> |
 | Export PNG… | <kbd>Ctrl</kbd>+<kbd>E</kbd>, the open frame at a scale you pick |
 | Export sprite sheet… | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>, every frame side by side |
+| Export GIF… | every frame of the open clip, with scale, FPS and loop controls |
 
 New, Open, Quit and closing the window protect a changed document with the same
 **Save / Discard / Cancel** choice. Save continues only after the write succeeds;
@@ -465,6 +459,16 @@ history and unsaved state untouched.
 Export goes through the same `render::` call `omapixel render` uses, so a
 picture out of the studio and a picture out of the command line are the same
 picture. The dialog says the pixel size you will get before you commit to it.
+
+Image import offers either a source-pixel scale or an exact resolution. Exact
+resolution can contain, crop, or stretch the source. Adding a layer is one undo
+step and merges colours into the existing palette; opening a document in the
+current window uses the normal unsaved-changes guard. Opening in a new window
+starts an independent Studio process and leaves the current document untouched.
+
+GIF uses the same composed clip as playback and CLI rendering. It stores a
+deterministic global palette and binary transparency because the format cannot
+represent partial alpha.
 
 ## The dock: palette, preview, sprite, reference
 
@@ -565,7 +569,7 @@ a time and obvious when you look through them.
 The window reads the active omarchy theme's colours and Hyprland's corner
 rounding, and follows a theme change live: `omarchy theme set <name>` recolours
 it without a restart. On a machine that is not running omarchy it opens on its
-built-in defaults. The details are in [how it is built](design.md#the-theme).
+built-in defaults. The details are in [how it is built](design.md#desktop-integration).
 
 The desktop theme never touches the **document's** palette. Your art does not
 change colour because you changed themes.
@@ -597,14 +601,6 @@ so the flow above works before any save: open the studio, tell an agent to
 draw, watch it land. The backing is tmpfs and dies with the session — the
 window keeps saying unsaved and closing still asks — because an address is
 not a save.
-
-## Native layer acceptance
-
-The layer dock and the CLI share the v2 codec and compositor. A cross-surface
-fixture creates animated and shared layers, edits one by ID, observes the active
-layer with `where`, edits through the Studio model, undoes, saves and reloads,
-then compares composite and isolated renders before flattening to a separate
-document. Run `mise run layers-e2e`; it is also part of `mise run check`.
 
 ## Looking at the window without a screen
 

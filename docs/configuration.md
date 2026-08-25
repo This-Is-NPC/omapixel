@@ -4,8 +4,8 @@ Everything the studio decides for you lives in one file, and there is one way to
 disagree with it:
 
 ```bash
-omapixel config write     # ~/.config/omapixel/config.toml, annotated
-$EDITOR ~/.config/omapixel/config.toml
+omapixel config write     # write the annotated defaults
+omapixel config           # print the resolved path
 ```
 
 Saving the file is enough. The studio re-reads it and rebinds itself while it is
@@ -21,7 +21,7 @@ commented out at the value the program uses.
 | | |
 |---|---|
 | `$OMAPIXEL_CONFIG_PATH` | if set, exactly this file and nowhere else |
-| `~/.config/omapixel/config.toml` | otherwise |
+| Qt `AppConfigLocation` | otherwise; normally `$XDG_CONFIG_HOME/omapixel/config.toml`, falling back to `~/.config/omapixel/config.toml` |
 
 `omapixel config` says which of those it used, and what in it differs from the
 defaults.
@@ -158,8 +158,8 @@ leader key: for one press, the alphabet stops being commands.
 omapixel config check
 ```
 
-```
-~/.config/omapixel/config.toml:
+```text
+/resolved/config/path/omapixel/config.toml:
   Backspace is on both tool_eraser and erase — one of them wins
   line 12: canvas.grid — wants true or false
   line 19: keys.tool_hnad — no such action

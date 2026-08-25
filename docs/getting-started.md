@@ -132,6 +132,19 @@ is visible:
 omapixel render heart.json -o sheet.png --scale 8 --sheet --checker
 ```
 
+An animated GIF of the complete clip:
+
+```bash
+omapixel render heart.json -o heart.gif --format gif --scale 8 --fps 4 --loop
+```
+
+You can also start from an existing image. This turns each 8×8 source block into
+one logical pixel and creates a normal Omapixel document:
+
+```bash
+omapixel import-image photo.png -o photo.json --scale 8
+```
+
 ## The same file in the window
 
 ```bash
@@ -166,6 +179,5 @@ whichever suits the moment.
 - [The format](format.md): writing a document by hand, or generating one
 - [Settings and keys](configuration.md): one TOML file, window, canvas, every keybinding
 
-For the complete native-layer workflow, including animated/shared layers,
-`where`, isolated/composite rendering, safe flattening, and the CI benchmark,
-see [Native layer acceptance](native-layers.md).
+Contributors can find the complete test matrix and performance gate in [How it
+is built](design.md#tests-and-acceptance).

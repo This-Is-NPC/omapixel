@@ -66,7 +66,7 @@ New here? Start with [Getting started](docs/getting-started.md).
 | Command | What it does |
 | :--- | :--- |
 | `new` `info` `check` | make one, describe one, say what is wrong with one |
-| `show` `text` `render` | look at one: in the terminal, as letters, as a PNG |
+| `show` `text` `render` | look at one: in the terminal, as letters, as PNG or animated GIF |
 | `paint` `line` `rect` `fill` | draw |
 | `edit` | `clear` `shift` `flip` `swap` over a whole frame |
 | `clip` `frame` | `add` `dup` `rm` `move` `rename` `fps` |
@@ -75,17 +75,16 @@ New here? Start with [Getting started](docs/getting-started.md).
 | `batch` | many commands over one document, read once and written once |
 | `diff` | what differs between two documents |
 | `import` `export` | read and write somebody else's sprite catalog |
+| `import-image` | turn PNG, JPEG or WebP into a new document or layer |
 | `config` `i18n` | the settings file, and what a translation is missing |
 
 `--clip` and `--frame` default to the first clip and frame 0, so a document with
 one clip needs no flags at all. Exit `1` means the answer was no; exit `2` means
 the command was wrong.
 
-> **`batch` is not an optimisation, it is the way to generate art.** Every
-> separate invocation starts a Qt application, parses the whole document and
-> writes it back. Turning a photograph into a 160×90 picture one command at a
-> time took 3621 processes and **4 minutes 26 seconds**; the identical
-> document through `batch` takes **0.1 seconds**.
+> **Use `batch` for generated art.** It applies many commands after one read and
+> commits once, instead of starting a process and rewriting the document for
+> every operation.
 
 ## Looking at what got drawn
 
@@ -97,6 +96,7 @@ omapixel text   heart.json                    # the composite, flattened to pale
 omapixel show   heart.json                    # the composite in the terminal
 omapixel render heart.json -o h.png --scale 12 --sheet
 omapixel render heart.json -o layer.png --isolated --layer-id hero
+omapixel render heart.json -o animation.gif --format gif --fps 12 --loop
 ```
 
 These surfaces use the visible bottom-to-top composite by default. `--isolated
@@ -121,10 +121,10 @@ omapixel layer heart.json move --layer-id hero --index 1
 Multilayer mutations require explicit layer identity. See [the CLI reference](docs/cli.md)
 for scope, lock/hidden safety, batch behavior, and `flatten` reports.
 
-The complete cross-surface layer gate is `mise run check`. It includes the
-offscreen Studio/CLI/`where` fixture, deterministic v2 property cases, i18n
-coverage, and the 60-second canonical performance benchmark. See [Native layer
-acceptance](docs/native-layers.md) for the workload, thresholds, and stop rule.
+The complete cross-surface gate is `mise run check`. It includes offscreen
+Studio/CLI fixtures, deterministic v2 properties, i18n coverage and the canonical
+performance benchmark. The workload and stop limits are in [How it is
+built](docs/design.md#tests-and-acceptance).
 
 ## The studio, for when you take over
 
@@ -135,8 +135,8 @@ omapixel-studio person.json
 ![the studio](docs/studio.png)
 
 Tools and the ten colours in hand down the left, the drawing in the middle,
-panels on the right, the clip and its frames along the bottom, and a bar of live
-keys under the canvas.
+layers and inspector panels on the right, the clip and its frames along the
+bottom, and a bar of live keys under the canvas.
 
 - **Every control is reachable from the keyboard.** A cursor walks the drawing a
   pixel at a time and paints where it stands; <kbd>Tab</kbd> walks the window;
@@ -163,10 +163,10 @@ Full docs live in [`docs/`](docs/).
 - **[Getting started](docs/getting-started.md)**: draw, animate and export something, start to finish.
 - **[The command line](docs/cli.md)**: every command, every flag, with examples.
 - **[The studio](docs/studio.md)**: the window, its panels and its keys.
-- **[The format](docs/format.md)**: what is in the file, and how to write one by hand.
-- **[The v2 layer contract](docs/format-v2.md)**: the clean-cut schema, layer rules, and migration inventory.
+- **[The format](docs/format.md)**: the schema, composition rules, and layer behavior.
+- **[Plugins](docs/plugins.md)**: install, inspect, run, or author an API 1 export plugin.
 - **[Settings and keys](docs/configuration.md)**: one TOML file, every setting, every binding.
-- **[Adding a language](docs/i18n.md)**: every word comes from a JSON file.
+- **[Adding a language](docs/i18n.md)**: translate the JSON catalogue and check its coverage.
 - **[How it is built](docs/design.md)**: one core, two front ends, and why it is shaped this way.
 - **[Releasing](docs/releasing.md)**: push a tag, and how the package reaches Omarchy.
 

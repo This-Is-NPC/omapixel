@@ -167,7 +167,7 @@ depends = ["build", "test"]
 run = 'python3 "{{config_root}}/tests/test_layers_e2e.py"'
 
 [tasks.benchmark-layers]
-description = "Build and run the disposable v2 multilayer feasibility benchmark"
+description = "Build and run the canonical multilayer performance gate"
 depends = ["deps"]
 run = """
 mkdir -p "{{config_root}}/build-benchmark"
@@ -227,6 +227,7 @@ install -m644 "{{config_root}}/LICENSE"              "$root/share/licenses/omapi
 install -m644 "{{config_root}}/README.md"            "$root/share/doc/omapixel/README.md"
 install -m644 "{{config_root}}"/docs/*.md            "$root/share/doc/omapixel/docs/"
 install -m644 "{{config_root}}"/docs/*.schema.json   "$root/share/doc/omapixel/docs/"
+install -m644 "{{config_root}}/docs/studio.png"      "$root/share/doc/omapixel/docs/"
 
 tar -czf "$root.tar.gz" -C "$out" "omapixel-$version-$arch"
 echo "$root.tar.gz"

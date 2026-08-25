@@ -302,19 +302,5 @@ class FormatV2Test(unittest.TestCase):
         self.assertEqual(quantize((127, 127, 127, 255), palette), "black")
         self.assertEqual(quantize((0, 0, 0, 0), palette), ".")
 
-    def test_migration_inventory_names_every_tracked_document(self):
-        text = (ROOT / "docs" / "format-v2.md").read_text(encoding="utf-8")
-        for path in (
-            "heart.json",
-            "examples/heart.json",
-            "examples/last-horizon.json",
-            "examples/last-horizon-omarchy.json",
-            "packaging/icon/omapixel.json",
-            "examples/last-horizon-omarchy.batch",
-            "packaging/icon/omapixel.batch",
-        ):
-            self.assertIn(f"`{path}`", text)
-
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)

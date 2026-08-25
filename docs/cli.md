@@ -1,8 +1,8 @@
 # The command line
 
-Everything the studio can do, the command line can do. That is deliberate: it is
-what lets a script, a Makefile, or an agent produce and inspect art without a
-window, and it is why there is no operation that exists only behind a button.
+The command line and Studio use the same document model and mutation rules. The
+CLI additionally provides headless rendering, batch, interchange and plugin
+workflows for scripts, Makefiles and agents.
 
 ```
 omapixel <command> <file> [sub-command] [arguments] [--flags]
@@ -34,11 +34,27 @@ The split matters for scripting: `2` means fix your command, `1` means fix your
 art. `check` and `diff` deliberately return `1` on a finding so they work in a
 shell `if` or a CI step.
 
+Layer and frame targeting failures use stable diagnostics and never write the
+document. Common cases are:
+
+| Condition | Exit | Diagnostic |
+|---|---:|---|
+| missing or unknown option | 2 | `E_USAGE: ...` |
+| unknown clip | 1 | `E_CLIP_NOT_FOUND: --clip=<id-or-name>` |
+| omitted layer on a multilayer mutation | 2 | `E_LAYER_TARGET_REQUIRED: ...` |
+| unknown layer ID or name | 2 | `E_LAYER_NOT_FOUND: ...` |
+| conflicting layer ID and name | 2 | `E_LAYER_TARGET_CONFLICT: ...` |
+| hidden target without `--include-hidden` | 1 | `E_LAYER_HIDDEN: ...` |
+| animated edit without frame or scope | 2 | `E_FRAME_SCOPE_REQUIRED: ...` |
+| frame outside the clip | 2 | `E_FRAME_OUT_OF_RANGE: ...` |
+| locked mutation | 1 | `E_LAYER_LOCKED: ...` |
+
 ## Picking a clip and a frame
 
-Almost every command takes `--clip <name>` and `--frame <index>`. Both default to
-the first clip and frame `0`, so a document with one clip and one frame needs
-neither.
+Almost every command takes `--clip <id-or-name>` and `--frame <index>`. A stable
+clip ID is preferred for automation; an exact clip name is also accepted. Both
+default to the first clip and frame `0`, so a document with one clip and one
+frame needs neither.
 
 ```bash
 omapixel show heart.json --clip walk --frame 3
@@ -100,11 +116,12 @@ The raw grid, one character per pixel, `.` for empty. This is the frame exactly
 as it is stored, which makes it the right thing to `diff`, to grep, or to paste
 into a bug report.
 
-### `render` — write a PNG
+### `render` — write a PNG or animated GIF
 
 ```bash
 omapixel render heart.json -o heart.png --scale 8
 omapixel render heart.json -o sheet.png --scale 8 --sheet --checker
+omapixel render heart.json -o heart.gif --format gif --scale 8 --fps 12 --loop
 ```
 
 | | |
@@ -115,9 +132,23 @@ omapixel render heart.json -o sheet.png --scale 8 --sheet --checker
 | `--checker` | checkerboard behind transparency instead of alpha |
 | `--isolated --layer-id <id>` | render exactly one layer, instead of the composite |
 | `--isolated --layer "Exact Name"` | exact name form, including spaces |
+| `--format png\|gif` | output format; `.gif` also selects GIF automatically |
+| `--fps <n>` | GIF speed, defaulting to the clip FPS |
+| `--loop` / `--no-loop` | repeat forever (default), or play once |
 
 Scaling is nearest-neighbour, so a pixel stays a square. It works with no
 display attached.
+
+GIF exports every frame of the selected clip. It uses one deterministic global
+palette, up to 255 opaque colours plus transparency. GIF transparency is binary:
+alpha below 128 becomes transparent and alpha at or above 128 becomes opaque.
+`--frame`, sprite sheets, checkerboards and isolated-layer rendering remain PNG
+operations and are rejected for GIF rather than silently ignored.
+
+GIF FPS is limited to `1..100`. Scaled sides must fit GIF's 65,535-pixel field,
+each rendered frame remains under the normal 64-million-pixel render limit, the
+animation is capped at 256 million rendered pixels, and encoded output is capped
+at 256 MiB. These are hard failures before the destination is replaced.
 
 `show` and `text` use the same composite default and isolated target options.
 The CLI never reads a selected layer or frame from a Studio session.
@@ -128,9 +159,9 @@ The CLI never reads a selected layer or frame from a Studio session.
 omapixel diff mine.json theirs.json
 ```
 
-Compares the complete document: dimensions, palette values and order, clip names
-and order, FPS, frame counts, frame dimensions and pixels. Exit `1` if anything
-differs.
+Compares the complete document: dimensions, palette values and order, clip and
+layer identity, order and metadata, storage, cels, FPS, frame counts and pixels.
+Exit `1` if anything differs.
 
 ### `where` — which live studios hold a document
 
@@ -391,7 +422,7 @@ frame dup --clip walk
 Only commands that work on the open document are allowed: `info`, `check`,
 `show`, `text`, `resize`, `trim`, `clip`, `frame`, `palette`, `paint`, `line`, `rect`,
 `fill`, `edit`, `layer`. Anything that names a second file (`render`, `flatten`, `diff`, `export`,
-`import`, `new`) stays outside, so a script cannot quietly write over something
+`import`, `import-image`, `new`) stays outside, so a script cannot quietly write over something
 the person running it never mentioned.
 
 **A batch is all or nothing.** If a line fails, it says which line and why, and
@@ -399,16 +430,32 @@ nothing is saved. A script that half-applied would leave a document nobody could
 reason about, and running it again would not mean the same as running it once.
 
 **Use it for anything generated.** Every separate invocation starts a Qt
-application, parses the whole document, changes a few pixels and writes the file
-back. Converting a photograph to a 160×90 picture one command at a time took
-3621 processes and **4 minutes 26 seconds**; the identical result through
-`batch`, on the same document with `diff` reporting zero pixels different, takes
-**0.1 seconds**.
-The drawing was never the slow part.
+application, parses the whole document and writes it back. `batch` performs the
+same sequence in one process and commits only after every command succeeds.
 
 ---
 
 ## Interchange
+
+### `import-image` — turn a raster image into pixel art
+
+```bash
+omapixel import-image photo.png -o photo.json --scale 8
+omapixel import-image photo.webp -o icon.json --resolution 64x64 --fit contain
+omapixel import-image overlay.png --into sprite.json -o layered.json \
+  --clip idle --frame 0 --layer-name Overlay --resolution 32x24 --fit cover
+```
+
+PNG, JPEG and WebP are decoded by Qt after validating their actual content.
+`--scale N` means N source pixels become one logical Omapixel pixel;
+`--resolution WIDTHxHEIGHT` sets the exact logical size. They are mutually
+exclusive. Resolution imports support `--fit contain`, `cover`, or `stretch`.
+
+Without `--into`, the result is a new one-clip, one-frame document with an
+automatically generated palette. With `--into`, a new animated layer is centred
+in the selected clip and frame. Existing palette slots stay stable; new colours
+fill free slots and any remainder is mapped deterministically to the nearest
+colour. The destination is written only after the complete import succeeds.
 
 A *catalog* is a JSON file that holds many sprite sets at once, keyed by a name
 and a variant, each with its own named sequences. These two commands move art
@@ -457,14 +504,37 @@ omapixel config write     # put the annotated default in place to start from
 omapixel --default-config # print that default to standard output
 ```
 
-The file is `~/.config/omapixel/config.toml`, or `$OMAPIXEL_CONFIG_PATH` when
-that is set. Both the studio and the command line read it: the command line for
-the language, the studio for everything including every keybinding. With no file
-at all, both run on the defaults.
+The file is under Qt's platform configuration location, normally
+`$XDG_CONFIG_HOME/omapixel/config.toml` (falling back to
+`~/.config/omapixel/config.toml`), or exactly `$OMAPIXEL_CONFIG_PATH` when that is
+set. Both the Studio and CLI read it: the CLI for language, the Studio for all
+settings and keybindings. With no file, both use defaults.
 
 `check` exits non-zero when it finds a bad value, a setting nothing reads, a
 binding that names no key, or two actions sharing one key. See
 [Settings and keys](configuration.md).
+
+## Plugins
+
+The CLI implements local export plugins through Plugin API 1. Read
+[Plugins](plugins.md) before authoring or installing one.
+
+```bash
+omapixel plugin list --json
+omapixel plugin check example-exporter --json
+omapixel plugin run example-exporter png art.json \
+  --out export.bin --param scale=2 --json
+```
+
+`plugin list` and `plugin check` only inspect local manifests. `plugin run` starts
+one trusted executable, validates one JSONL result, and publishes one artifact
+atomically. Exit `0` means publication succeeded, `1` means the plugin, protocol,
+artifact, or source/destination operation was refused, and `2` means the command
+line was incomplete or malformed. `--param KEY=VALUE` may be repeated for
+different keys; duplicate keys or malformed values are command usage and return
+`2`, before the plugin starts. These CLI flags become protocol parameter objects,
+not a JSON object with duplicate properties. The host never replaces the
+destination after a failed invocation.
 
 ---
 
