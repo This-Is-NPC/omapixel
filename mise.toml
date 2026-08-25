@@ -408,9 +408,14 @@ if [ -z "$platform" ]; then
   exit 1
 fi
 
+# GTK supplies the native file dialog on Omarchy. Keep the inherited platform
+# theme for interactive launches, but do not load it in headless smoke tests.
+if [ "$platform" = "offscreen" ]; then
+  unset QT_QPA_PLATFORMTHEME
+fi
+
 WAYLAND_DISPLAY="$wayland_display" DISPLAY="$x_display" \
-  QT_QPA_PLATFORM="$platform" QT_QPA_PLATFORMTHEME= \
-  "$BUILD_DIR/bin/omapixel-studio" "$@"
+  QT_QPA_PLATFORM="$platform" "$BUILD_DIR/bin/omapixel-studio" "$@"
 '''
 
 [tasks.studio-smoke]
