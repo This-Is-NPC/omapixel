@@ -2227,7 +2227,11 @@ Window {
                 Chip {
                     id: layerConfirm
                     objectName: "layerConfirm"
-                    label: T.t("sheet.layers.confirm")
+                    label: layerSheet.kind === "storage"
+                           ? T.t("sheet.layers.confirmStorage")
+                           : layerSheet.kind === "merge-down"
+                             ? T.t("sheet.layers.confirmMerge")
+                             : T.t("sheet.layers.confirmFlatten")
                     on: true
                     role: theme.urgent
                     onClicked: layerSheet.apply()
