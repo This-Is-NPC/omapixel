@@ -49,9 +49,11 @@ struct Options {
     bool sheet = false;
     int sheetGap = 2;
     /// Composite all visible layers (the default), or render only `layer`.
-    /// Isolation still respects the layer's visibility and opacity.
+    /// Isolation still respects the layer's visibility and opacity unless a
+    /// layer browser explicitly asks to preview hidden content.
     bool isolated = false;
     QString layer;
+    bool includeHidden = false;
     /// Emits a warning before allocating an image above this many pixels.
     /// Zero disables the warning; it is not an allocation limit.
     qint64 warningPixels = 0;

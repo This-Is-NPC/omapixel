@@ -269,6 +269,7 @@ Item {
                     clip: doc.clip
                     frame: doc.frame
                     isolatedLayer: modelData.id
+                    includeHidden: true
                     cell: Math.min(width / Math.max(1, doc.columns),
                                    height / Math.max(1, doc.rows))
                     checker: true

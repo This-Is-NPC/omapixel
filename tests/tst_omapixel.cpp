@@ -1254,6 +1254,20 @@ private slots:
         QCOMPARE(QColor::fromRgba(top.pixel(0, 0)), QColor(0, 0, 0, 0));
         QCOMPARE(QColor::fromRgba(top.pixel(1, 0)), QColor(30, 190, 80, 255));
 
+        doc.layerById(QStringLiteral("overlay"))->visible = false;
+        const QImage hiddenTop = render::toImage(doc, QStringLiteral("idle"), 0, isolated);
+        QCOMPARE(QColor::fromRgba(hiddenTop.pixel(1, 0)), QColor(0, 0, 0, 0));
+        render::Options compositeIncludingHidden;
+        compositeIncludingHidden.includeHidden = true;
+        const QImage hiddenComposite =
+            render::toImage(doc, QStringLiteral("idle"), 0, compositeIncludingHidden);
+        QCOMPARE(QColor::fromRgba(hiddenComposite.pixel(1, 0)), QColor(0, 0, 0, 0));
+        isolated.includeHidden = true;
+        const QImage hiddenPreview =
+            render::toImage(doc, QStringLiteral("idle"), 0, isolated);
+        QCOMPARE(QColor::fromRgba(hiddenPreview.pixel(1, 0)), QColor(30, 190, 80, 255));
+        doc.layerById(QStringLiteral("overlay"))->visible = true;
+
         QCOMPARE(render::toText(doc, QStringLiteral("idle"), 0),
                  QStringLiteral("RG\nBR\n"));
     }

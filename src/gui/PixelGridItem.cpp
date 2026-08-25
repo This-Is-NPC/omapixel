@@ -110,6 +110,15 @@ void PixelGridItem::setIsolatedLayer(const QString &layer)
     emit specChanged();
 }
 
+void PixelGridItem::setIncludeHidden(bool includeHidden)
+{
+    if (m_includeHidden == includeHidden)
+        return;
+    m_includeHidden = includeHidden;
+    m_textureDirty = true;
+    emit specChanged();
+}
+
 void PixelGridItem::setCell(qreal cell)
 {
     if (qFuzzyCompare(m_cell, cell))
@@ -191,6 +200,7 @@ QSGNode *PixelGridItem::updatePaintNode(QSGNode *oldNode,
         options.checkerLight = m_checkerLight;
         options.isolated = !m_isolatedLayer.isEmpty();
         options.layer = m_isolatedLayer;
+        options.includeHidden = m_includeHidden;
         const QImage image =
             render::toImage(m_model->document(), m_clip, m_frame, options);
         if (!image.isNull() && window()) {

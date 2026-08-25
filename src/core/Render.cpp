@@ -145,7 +145,8 @@ bool composeFrame(const Document &document, const QString &clipName, int frame,
     for (const Layer &layer : document.layers()) {
         if (options.isolated && &layer != isolated)
             continue;
-        if (!layer.visible || layer.opacity == 0)
+        if ((!layer.visible && !(options.isolated && options.includeHidden))
+            || layer.opacity == 0)
             continue;
         const Grid grid = document.cel(layer.id, clip->id, boundedFrame);
         if (grid.columns() != document.columns() || grid.rows() != document.rows()) {

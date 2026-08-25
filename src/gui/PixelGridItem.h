@@ -27,6 +27,7 @@ class PixelGridItem : public QQuickItem
     Q_PROPERTY(QString clip READ clip WRITE setClip NOTIFY specChanged)
     Q_PROPERTY(int frame READ frame WRITE setFrame NOTIFY specChanged)
     Q_PROPERTY(QString isolatedLayer READ isolatedLayer WRITE setIsolatedLayer NOTIFY specChanged)
+    Q_PROPERTY(bool includeHidden READ includeHidden WRITE setIncludeHidden NOTIFY specChanged)
     Q_PROPERTY(qreal cell READ cell WRITE setCell NOTIFY specChanged)
     Q_PROPERTY(bool checker READ checker WRITE setChecker NOTIFY specChanged)
     Q_PROPERTY(bool mesh READ mesh WRITE setMesh NOTIFY specChanged)
@@ -46,6 +47,8 @@ public:
     void setFrame(int frame);
     QString isolatedLayer() const { return m_isolatedLayer; }
     void setIsolatedLayer(const QString &layer);
+    bool includeHidden() const { return m_includeHidden; }
+    void setIncludeHidden(bool includeHidden);
     qreal cell() const { return m_cell; }
     void setCell(qreal cell);
     bool checker() const { return m_checker; }
@@ -73,6 +76,7 @@ private:
     QString m_clip;
     int m_frame = 0;
     QString m_isolatedLayer;
+    bool m_includeHidden = false;
     qreal m_cell = 1;
     bool m_checker = false;
     bool m_mesh = false;
