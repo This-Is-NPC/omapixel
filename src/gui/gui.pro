@@ -1,3 +1,7 @@
+OMAPIXEL_PROJECT_DIR = $$PWD
+OMAPIXEL_SOURCE_ROOT = $$clean_path($$PWD/../..)
+include($$PWD/../../qmake/layout.pri)
+
 QT       += core gui qml quick
 CONFIG   += c++17
 CONFIG   -= app_bundle

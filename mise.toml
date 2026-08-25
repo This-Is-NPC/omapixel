@@ -61,7 +61,14 @@ echo "studio $BUILD_DIR/bin/omapixel-studio"
 
 [tasks.clean]
 description = "Throw the build away"
-run = "rm -rf '{{config_root}}/build' '{{config_root}}/build-tests'"
+run = """
+rm -rf '{{config_root}}/build' '{{config_root}}/build-tests' \
+  '{{config_root}}/build-benchmark' '{{config_root}}/.qmake'
+rm -f '{{config_root}}/.qmake.stash' '{{config_root}}/Makefile' \
+  '{{config_root}}/target_wrapper.sh' '{{config_root}}/version.h' \
+  '{{config_root}}'/*.o \
+  '{{config_root}}'/moc_*.cpp '{{config_root}}'/qrc_*.cpp
+"""
 
 # --------------------------------------------------------------------- tests
 

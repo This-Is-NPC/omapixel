@@ -4,6 +4,10 @@
 # opinion about how it is driven; `cli` and `gui` are both thin things on top of
 # it. Order matters here: the two front ends link the library, so it builds
 # first.
+OMAPIXEL_PROJECT_DIR = $$PWD
+OMAPIXEL_SOURCE_ROOT = $$PWD
+include($$PWD/qmake/layout.pri)
+
 TEMPLATE = subdirs
 CONFIG  += ordered
 
