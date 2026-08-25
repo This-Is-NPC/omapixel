@@ -808,6 +808,8 @@ void addOptions(QCommandLineParser &parser)
          {QStringLiteral("opacity"), QStringLiteral("layer opacity, 0..255"),
           QStringLiteral("n")},
          {QStringLiteral("dup"), QStringLiteral("copy the current frame")},
+        {QStringLiteral("param"), QStringLiteral("plugin parameter KEY=VALUE"),
+          QStringLiteral("key=value")},
     });
 }
 

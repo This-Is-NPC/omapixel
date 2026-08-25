@@ -36,6 +36,8 @@ HEADERS += \
     Bridge.h \
     Sessions.h \
     Output.h \
+    PluginManifest.h \
+    PluginRegistry.h \
     TextSafety.h
 
 SOURCES += \
@@ -53,4 +55,6 @@ SOURCES += \
     Bridge.cpp \
     Sessions.cpp \
     Output.cpp \
+    PluginManifest.cpp \
+    PluginRegistry.cpp \
     TextSafety.cpp

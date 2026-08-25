@@ -128,6 +128,25 @@ run = 'python3 "{{config_root}}/tests/test_i18n_surface.py"'
 description = "Run the executable v2 contract and canonical fixture tests"
 run = 'python3 "{{config_root}}/tests/test_format_v2.py"'
 
+[tasks.plugin-contract]
+description = "Run the Plugin API 1 contract tests"
+run = 'python3 "{{config_root}}/tests/test_plugin_contract.py"'
+
+[tasks.plugin-discovery]
+description = "Run deterministic local plugin discovery and inspection tests"
+depends = ["build"]
+run = 'python3 "{{config_root}}/tests/test_plugin_discovery.py"'
+
+[tasks.plugin-run]
+description = "Run synchronous one-shot CLI plugin execution checks"
+depends = ["build"]
+run = 'python3 "{{config_root}}/tests/test_plugin_run.py"'
+
+[tasks.plugin-e2e]
+description = "Run the complete real-binary CLI plugin acceptance matrix"
+depends = ["build"]
+run = 'python3 "{{config_root}}/tests/test_plugin_e2e.py"'
+
 [tasks.properties-v2]
 description = "Run deterministic property checks for every v2 schema domain"
 run = 'python3 "{{config_root}}/tests/test_format_v2_properties.py"'
@@ -160,7 +179,7 @@ run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 
 [tasks.check]
 description = "Everything CI would run"
-depends = ["build", "test", "format-v2", "properties-v2", "cli-layers",
+depends = ["build", "test", "format-v2", "plugin-contract", "plugin-e2e", "properties-v2", "cli-layers",
            "layers-e2e", "i18n", "i18n-surface", "benchmark-layers",
            "test-keyboard", "test-keyboard-wayland"]
 run = """
@@ -202,6 +221,7 @@ install -m644 "{{config_root}}/packaging/icon/omapixel.svg" "$root/share/icons/h
 install -m644 "{{config_root}}/LICENSE"              "$root/share/licenses/omapixel/LICENSE"
 install -m644 "{{config_root}}/README.md"            "$root/share/doc/omapixel/README.md"
 install -m644 "{{config_root}}"/docs/*.md            "$root/share/doc/omapixel/docs/"
+install -m644 "{{config_root}}"/docs/*.schema.json   "$root/share/doc/omapixel/docs/"
 
 tar -czf "$root.tar.gz" -C "$out" "omapixel-$version-$arch"
 echo "$root.tar.gz"

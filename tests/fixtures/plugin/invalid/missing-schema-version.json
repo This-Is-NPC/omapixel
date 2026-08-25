@@ -1,0 +1,8 @@
+{
+  "id": "example-exporter",
+  "name": "Example exporter",
+  "version": "0.1.0",
+  "pluginApi": 1,
+  "executable": "plugin_fixture.py",
+  "actions": [{"name": "png", "kind": "export"}]
+}

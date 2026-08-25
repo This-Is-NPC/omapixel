@@ -31,6 +31,8 @@ SOURCES += \
     ../src/core/Bridge.cpp \
     ../src/core/Sessions.cpp \
     ../src/core/Output.cpp \
+    ../src/core/PluginManifest.cpp \
+    ../src/core/PluginRegistry.cpp \
     ../src/core/TextSafety.cpp \
     ../src/core/Strings.cpp \
     ../src/core/Toml.cpp \
@@ -56,6 +58,8 @@ HEADERS += \
     ../src/core/Bridge.h \
     ../src/core/Sessions.h \
     ../src/core/Output.h \
+    ../src/core/PluginManifest.h \
+    ../src/core/PluginRegistry.h \
     ../src/core/TextSafety.h \
     ../src/core/Strings.h \
     ../src/core/Toml.h \

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omapixel.org/schemas/plugin-manifest.schema.json",
+  "title": "Omapixel Plugin API 1 export manifest",
+  "$comment": "JSON Schema compares numbers mathematically, so a structural validator may accept 1.0 as const 1. omapixel plugin check is authoritative for the runtime's lexical exact-token rule and rejects fractional version tokens.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "version", "pluginApi", "executable", "actions"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "name": { "$ref": "#/$defs/name" },
+    "version": { "$ref": "#/$defs/version" },
+    "pluginApi": { "type": "integer", "const": 1 },
+    "executable": { "$ref": "#/$defs/relativePath" },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind"],
+        "properties": {
+          "name": { "$ref": "#/$defs/name" },
+          "kind": { "const": "export" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))[^\\u0000-\\u001f\\u007f-\\u009f/]+(?:/[^\\u0000-\\u001f\\u007f-\\u009f/]+)*$"
+    }
+  }
+}

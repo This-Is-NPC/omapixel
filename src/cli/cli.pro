@@ -19,8 +19,8 @@ DESTDIR = $$OUT_PWD/../../bin
 include($$PWD/../../version.pri)
 
 INCLUDEPATH += $$PWD/../core
-HEADERS     += Commands.h
-SOURCES     += main.cpp Commands.cpp
+HEADERS     += Commands.h PluginCommands.h
+SOURCES     += main.cpp Commands.cpp PluginCommands.cpp
 
 # Links the same object file the studio does. That is the whole reason this is
 # one C++ project and not two programs: `resize` used to exist once in QML and

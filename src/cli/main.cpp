@@ -23,6 +23,7 @@
 #include "LayerOperations.h"
 #include "Ops.h"
 #include "Output.h"
+#include "PluginCommands.h"
 #include "Sessions.h"
 #include "Strings.h"
 #include "Render.h"
@@ -74,6 +75,18 @@ constexpr qsizetype maxBatchOutputBytes = 4 * 1024 * 1024;
 void diagnostic(const QString &text)
 {
     err() << safeDiagnostic(text) << "\n";
+}
+
+bool hasOmittedPluginParameter(int argc, char **argv)
+{
+    for (int index = 1; index < argc; ++index) {
+        if (QString::fromLocal8Bit(argv[index]) != QLatin1String("--param"))
+            continue;
+        if (index + 1 == argc
+            || QString::fromLocal8Bit(argv[index + 1]).startsWith(QLatin1Char('-')))
+            return true;
+    }
+    return false;
 }
 
 Codec::WarningLimits warningLimits()
@@ -650,6 +663,7 @@ int main(int argc, char *argv[])
         "  batch    many commands over one document, read once and written once\n"
         "  i18n     what a language catalogue is still missing\n"
         "  config   the settings file: check | write\n"
+        "  plugin   list | check | run local plugins\n"
         "  where    which live studios hold a document\n"
         "  diff     what differs between two documents\n"
         "  import   pull one sprite set out of a catalog\n"
@@ -663,6 +677,12 @@ int main(int argc, char *argv[])
     parser.addHelpOption();
     parser.addVersionOption();
     cli::addOptions(parser);
+    parser.addOption(QCommandLineOption(QStringLiteral("json"),
+                                        QStringLiteral("print machine-readable JSON")));
+    if (hasOmittedPluginParameter(argc, argv)) {
+        err() << "plugin run: --param must be KEY=VALUE with a value\n";
+        return 2;
+    }
     parser.process(app);
 
     QStringList words = parser.positionalArguments();
@@ -683,6 +703,15 @@ int main(int argc, char *argv[])
 
     if (command == QLatin1String("config"))
         return inspectConfig(words.value(0));
+
+    if (command == QLatin1String("plugin")) {
+        const cli::Outcome outcome = cli::runPluginCommand(words, parser);
+        if (!outcome.output.isEmpty())
+            out() << outcome.output;
+        if (!outcome.error.isEmpty())
+            err() << safeDiagnostic(outcome.error);
+        return outcome.code;
+    }
 
     if (command == QLatin1String("new")) {
         if (words.isEmpty()) {
