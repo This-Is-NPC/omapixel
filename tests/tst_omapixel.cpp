@@ -25,6 +25,8 @@
 #include <QSignalSpy>
 #include <QSet>
 #include <QJsonArray>
+#include <QImageReader>
+#include <QMovie>
 
 #include <limits>
 #include <algorithm>
@@ -42,6 +44,9 @@
 #include "Ops.h"
 #include "Palette.h"
 #include "Render.h"
+#include "Quantization.h"
+#include "ImageImport.h"
+#include "GifExport.h"
 #include "Sessions.h"
 #include "Commands.h"
 #include "Config.h"
@@ -1186,6 +1191,93 @@ private slots:
                                 &warning, &error).isNull());
         QVERIFY(error.contains(QLatin1String("limits"))
                 || error.contains(QLatin1String("overflow")));
+    }
+
+    void rasterImportCreatesDocumentsLayersAndOneStudioUndoStep()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("source image.png"));
+        QImage source(2, 2, QImage::Format_RGBA8888);
+        source.setPixelColor(0, 0, QColor(255, 0, 0, 255));
+        source.setPixelColor(1, 0, QColor(0, 0, 0, 0));
+        source.setPixelColor(0, 1, QColor(0, 255, 0, 255));
+        source.setPixelColor(1, 1, QColor(0, 0, 255, 128));
+        QVERIFY(source.save(path, "PNG"));
+
+        const ImageImport::Result created = ImageImport::createDocument(path);
+        QVERIFY2(created.ok, qPrintable(created.error));
+        QCOMPARE(created.document.columns(), 2);
+        QCOMPARE(created.document.rows(), 2);
+        QCOMPARE(created.document.palette().size(), 3);
+        QCOMPARE(created.grid.at(1, 0), Grid::Empty);
+        QCOMPARE(created.report.transparentPixels, 1);
+        QCOMPARE(created.report.approximatedPixels, 0);
+
+        Document target = Document::blank(4, 4);
+        ImageImport::Options options;
+        options.targetResolution = QSize(2, 2);
+        options.resizeMode = ImageImport::ResizeMode::Stretch;
+        options.clip = QStringLiteral("idle");
+        options.layerName = QStringLiteral("Photo");
+        ImageImport::Report report;
+        QString error;
+        QVERIFY2(ImageImport::addLayer(&target, path, options, &report, &error),
+                 qPrintable(error));
+        QCOMPARE(target.layers().size(), 2);
+        const Grid placed = target.cel(report.layerId, QStringLiteral("idle"), 0);
+        QCOMPARE(placed.at(0, 0), Grid::Empty);
+        QVERIFY(placed.at(1, 1) != Grid::Empty);
+
+        DocumentModel model;
+        const int layersBefore = model.layers().size();
+        QVERIFY(model.importImage(QUrl::fromLocalFile(path).toString(),
+                                  QStringLiteral("layer"), 1, 0, 0,
+                                  QStringLiteral("contain"), QStringLiteral("Photo")));
+        QCOMPARE(model.layers().size(), layersBefore + 1);
+        QVERIFY(model.canUndo());
+        model.undo();
+        QCOMPARE(model.layers().size(), layersBefore);
+    }
+
+    void animatedGifIsDeterministicAndDecodable()
+    {
+        Document document = sample();
+        QVERIFY(document.addFrame(QStringLiteral("idle"), 0, false));
+        QVERIFY(document.setFrame(QStringLiteral("idle"), 1,
+                                  Grid::fromRows({QStringLiteral("I..I"),
+                                                  QStringLiteral(".II."),
+                                                  QStringLiteral("I..I")})));
+        QString error;
+        const QByteArray first = gif::encode(document, QStringLiteral("idle"), 2,
+                                             12, true, &error);
+        QVERIFY2(!first.isEmpty(), qPrintable(error));
+        const QByteArray second = gif::encode(document, QStringLiteral("idle"), 2,
+                                              12, true, &error);
+        QCOMPARE(first, second);
+        QVERIFY(first.startsWith("GIF89a"));
+        QVERIFY(first.contains("NETSCAPE2.0"));
+        QCOMPARE(first.count(QByteArrayLiteral("\x21\xf9\x04\x09")), 2);
+
+        QBuffer scanBuffer;
+        scanBuffer.setData(first);
+        QVERIFY(scanBuffer.open(QIODevice::ReadOnly));
+        QImageReader reader(&scanBuffer, QByteArrayLiteral("gif"));
+        QCOMPARE(reader.imageCount(), 2);
+
+        QBuffer playbackBuffer;
+        playbackBuffer.setData(first);
+        QVERIFY(playbackBuffer.open(QIODevice::ReadOnly));
+        QMovie movie(&playbackBuffer, QByteArrayLiteral("gif"));
+        movie.setCacheMode(QMovie::CacheAll);
+        QVERIFY(movie.isValid());
+        movie.start();
+        QTRY_VERIFY_WITH_TIMEOUT(!movie.currentImage().isNull(), 1000);
+        QCOMPARE(movie.currentImage().size(), QSize(8, 6));
+        QTRY_COMPARE_WITH_TIMEOUT(movie.currentFrameNumber(), 1, 1000);
+        QCOMPARE(movie.currentImage().size(), QSize(8, 6));
+        QCOMPARE(movie.currentImage().pixelColor(2, 0).alpha(), 0);
+        movie.stop();
     }
 
     void textIsTheGridAndNothingElse()

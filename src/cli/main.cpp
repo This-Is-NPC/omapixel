@@ -21,6 +21,8 @@
 #include "Differences.h"
 #include "Document.h"
 #include "LayerOperations.h"
+#include "ImageImport.h"
+#include "GifExport.h"
 #include "Ops.h"
 #include "Output.h"
 #include "PluginCommands.h"
@@ -647,7 +649,7 @@ int main(int argc, char *argv[])
         "  check    what stops a document from being drawn\n"
         "  show     draw a frame in the terminal\n"
         "  text     the frame as letters, one per pixel\n"
-        "  render   write a PNG\n"
+        "  render   write a PNG or animated GIF\n"
         "  flatten  write a separate composite document\n"
         "  resize   change the frame, keeping the drawing centred\n"
         "  trim     crop empty borders around one frame's content\n"
@@ -667,6 +669,7 @@ int main(int argc, char *argv[])
         "  where    which live studios hold a document\n"
         "  diff     what differs between two documents\n"
         "  import   pull one sprite set out of a catalog\n"
+        "  import-image  turn PNG, JPEG, or WebP into a document or layer\n"
         "  export   put the clips back into one\n"
         "\n"
         "--default-config prints the annotated settings file to standard output.\n"
@@ -742,6 +745,143 @@ int main(int argc, char *argv[])
         }
         out() << safeDiagnostic(words.first()) << ": " << columns << "x" << rows
               << ", one clip\n";
+        return 0;
+    }
+
+    // -------------------------------------------------------- import-image
+    // A raster is not an omapixel document, so this also comes before the
+    // ordinary document load. With --into it stages a new layer on that file;
+    // without it the raster becomes a new one-frame document.
+
+    if (command == QLatin1String("import-image")) {
+        if (words.isEmpty()) {
+            err() << "import-image: say which image to import\n";
+            return 2;
+        }
+        if (words.size() != 1) {
+            err() << "import-image: say exactly one image to import\n";
+            return 2;
+        }
+        if (!parser.isSet(QStringLiteral("out"))) {
+            err() << "import-image: say -o where to write\n";
+            return 2;
+        }
+        if (parser.isSet(QStringLiteral("scale"))
+            && parser.isSet(QStringLiteral("resolution"))) {
+            err() << "import-image: --scale and --resolution are mutually exclusive\n";
+            return 2;
+        }
+        if (parser.isSet(QStringLiteral("fit"))
+            && !parser.isSet(QStringLiteral("resolution"))) {
+            err() << "import-image: --fit requires --resolution\n";
+            return 2;
+        }
+        const bool intoDocument = parser.isSet(QStringLiteral("into"));
+        if (!intoDocument
+            && (parser.isSet(QStringLiteral("clip"))
+                || parser.isSet(QStringLiteral("frame"))
+                || parser.isSet(QStringLiteral("layer-id"))
+                || parser.isSet(QStringLiteral("layer-name")))) {
+            err() << "import-image: layer target options require --into\n";
+            return 2;
+        }
+
+        ImageImport::Options options;
+        if (parser.isSet(QStringLiteral("scale"))) {
+            bool ok = false;
+            options.scale = parser.value(QStringLiteral("scale")).toInt(&ok);
+            if (!ok || options.scale < 1 || options.scale > 64) {
+                err() << "import-image: --scale must be an integer between 1 and 64\n";
+                return 2;
+            }
+        }
+        if (parser.isSet(QStringLiteral("resolution"))) {
+            const QString value = parser.value(QStringLiteral("resolution"));
+            const QStringList parts = value.toLower().split(QLatin1Char('x'));
+            bool widthOk = false;
+            bool heightOk = false;
+            const int width = parts.size() == 2 ? parts.at(0).toInt(&widthOk) : 0;
+            const int height = parts.size() == 2 ? parts.at(1).toInt(&heightOk) : 0;
+            if (!widthOk || !heightOk || width < 1 || height < 1
+                || width > Document::maxDimension || height > Document::maxDimension) {
+                err() << "import-image: --resolution must be WIDTHxHEIGHT, with each side between 1 and "
+                      << Document::maxDimension << "\n";
+                return 2;
+            }
+            options.targetResolution = QSize(width, height);
+        }
+        const QString fit = parser.isSet(QStringLiteral("fit"))
+                                ? parser.value(QStringLiteral("fit")).toLower()
+                                : QStringLiteral("contain");
+        if (fit == QLatin1String("contain"))
+            options.resizeMode = ImageImport::ResizeMode::Contain;
+        else if (fit == QLatin1String("cover"))
+            options.resizeMode = ImageImport::ResizeMode::Cover;
+        else if (fit == QLatin1String("stretch"))
+            options.resizeMode = ImageImport::ResizeMode::Stretch;
+        else {
+            err() << "import-image: --fit must be contain, cover, or stretch\n";
+            return 2;
+        }
+        if (parser.isSet(QStringLiteral("clip")))
+            options.clip = parser.value(QStringLiteral("clip"));
+        if (parser.isSet(QStringLiteral("layer-id")))
+            options.layerId = parser.value(QStringLiteral("layer-id"));
+        if (parser.isSet(QStringLiteral("layer-name")))
+            options.layerName = parser.value(QStringLiteral("layer-name"));
+        if (parser.isSet(QStringLiteral("frame"))) {
+            bool ok = false;
+            options.frame = parser.value(QStringLiteral("frame")).toInt(&ok);
+            if (!ok || options.frame < 0) {
+                err() << "import-image: --frame must be a non-negative integer\n";
+                return 2;
+            }
+        }
+
+        const QString imagePath = words.first();
+        const QString outputPath = parser.value(QStringLiteral("out"));
+        const QString intoPath = parser.value(QStringLiteral("into"));
+        QStringList sources{imagePath};
+        Document imported;
+        ImageImport::Report report;
+        QString importError;
+        if (!intoPath.isEmpty()) {
+            sources.append(intoPath);
+            const Codec::Result target = Codec::readFile(intoPath, warningLimits());
+            if (!target) {
+                diagnostic(target.error);
+                return 1;
+            }
+            imported = target.document;
+            if (!ImageImport::addLayer(&imported, imagePath, options, &report,
+                                       &importError)) {
+                diagnostic(QStringLiteral("import-image: %1").arg(importError));
+                return 1;
+            }
+        } else {
+            const ImageImport::Result result = ImageImport::createDocument(imagePath,
+                                                                           options);
+            if (!result) {
+                diagnostic(QStringLiteral("import-image: %1").arg(result.error));
+                return 1;
+            }
+            imported = result.document;
+            report = result.report;
+        }
+        QString outputError;
+        if (!output::validate(outputPath, sources, &outputError)) {
+            diagnostic(QStringLiteral("import-image: %1").arg(outputError));
+            return 2;
+        }
+        if (!Codec::writeFile(outputPath, imported, sources, &outputError)) {
+            diagnostic(QStringLiteral("import-image: %1").arg(outputError));
+            return 1;
+        }
+        out() << safeDiagnostic(outputPath) << ": " << report.logicalSize.width()
+              << "x" << report.logicalSize.height() << ", "
+              << report.paletteSlotsAfter << " colour(s), "
+              << report.approximatedPixels << " approximated pixel(s), "
+              << report.clippedPixels << " clipped pixel(s)\n";
         return 0;
     }
 
@@ -862,6 +1002,16 @@ int main(int argc, char *argv[])
             diagnostic(QStringLiteral("E_FRAME_OUT_OF_RANGE: --frame=%1").arg(frameText));
             return 2;
         }
+        const QString requestedFormat = parser.value(QStringLiteral("format")).toLower();
+        QString format = requestedFormat;
+        if (format.isEmpty())
+            format = QFileInfo(parser.value(QStringLiteral("out"))).suffix().toLower()
+                         == QLatin1String("gif") ? QStringLiteral("gif")
+                                                 : QStringLiteral("png");
+        if (format != QLatin1String("png") && format != QLatin1String("gif")) {
+            diagnostic(QStringLiteral("render: --format must be png or gif"));
+            return 2;
+        }
         QString outputError;
         if (!output::validate(parser.value(QStringLiteral("out")), {path},
                               &outputError)) {
@@ -875,6 +1025,52 @@ int main(int argc, char *argv[])
                             : 1;
         if (!scaleOk || options.scale < 1 || options.scale > 64) {
             diagnostic(QStringLiteral("E_RENDER_SCALE: --scale must be an integer between 1 and 64"));
+            return 2;
+        }
+        if (format == QLatin1String("gif")) {
+            if (frameProvided || parser.isSet(QStringLiteral("sheet"))
+                || parser.isSet(QStringLiteral("checker"))
+                || parser.isSet(QStringLiteral("isolated"))
+                || parser.isSet(QStringLiteral("layer-id"))
+                || parser.isSet(QStringLiteral("layer"))) {
+                diagnostic(QStringLiteral(
+                    "render: GIF exports the complete composed clip; --frame, --sheet, "
+                    "--checker, and isolated-layer options are not supported"));
+                return 2;
+            }
+            if (parser.isSet(QStringLiteral("loop"))
+                && parser.isSet(QStringLiteral("no-loop"))) {
+                diagnostic(QStringLiteral("render: --loop and --no-loop conflict"));
+                return 2;
+            }
+            int fps = 0;
+            if (parser.isSet(QStringLiteral("fps"))) {
+                bool fpsOk = false;
+                fps = parser.value(QStringLiteral("fps")).toInt(&fpsOk);
+                if (!fpsOk || fps < 1 || fps > 100) {
+                    diagnostic(QStringLiteral(
+                        "render: --fps must be an integer between 1 and 100"));
+                    return 2;
+                }
+            }
+            QString gifError;
+            if (!gif::write(doc, clipName, parser.value(QStringLiteral("out")),
+                            options.scale, fps,
+                            !parser.isSet(QStringLiteral("no-loop")), {path},
+                            &gifError)) {
+                diagnostic(QStringLiteral("render: %1").arg(gifError));
+                return 1;
+            }
+            out() << safeDiagnostic(parser.value(QStringLiteral("out"))) << ": "
+                  << doc.columns() * options.scale << "x"
+                  << doc.rows() * options.scale << ", "
+                  << selectedClip->frameCount << " frame(s)\n";
+            return 0;
+        }
+        if (parser.isSet(QStringLiteral("fps"))
+            || parser.isSet(QStringLiteral("loop"))
+            || parser.isSet(QStringLiteral("no-loop"))) {
+            diagnostic(QStringLiteral("render: --fps and loop options require GIF output"));
             return 2;
         }
         options.checker = parser.isSet(QStringLiteral("checker"));

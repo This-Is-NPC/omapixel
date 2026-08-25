@@ -362,6 +362,8 @@ Window {
             newSheet.open()
         else if (action === "open")
             openDialog.open()
+        else if (action === "importDocument")
+            importSheet.apply()
         else if (action === "quit") {
             allowClosing = true
             Qt.quit()
@@ -612,7 +614,14 @@ Window {
     // ------------------------------------------------------ command registry
 
     NavigationCommands { id: navigationCommands; host: win; overlay: navigationOverlay; menuBar: menus; firstControl: toolsFirst }
-    FileEditCommands { id: fileEditCommands; host: win; saveDialog: saveDialog; exportDialog: exportSheet }
+    FileEditCommands {
+        id: fileEditCommands
+        host: win
+        saveDialog: saveDialog
+        exportDialog: exportSheet
+        importDialog: importDialog
+        gifSheet: gifSheet
+    }
     CanvasViewCommands { id: canvasViewCommands; host: win; stage: stage; goToSheet: goToSheet; colourSheet: colourSheet; referenceDialog: referenceDialog }
     LayerCommands { id: layerCommands; layerDock: layerDock; layerTool: layerTool }
     InspectorCommands {
@@ -965,12 +974,14 @@ Window {
                     title: T.t("menu.file")
                     Cmd { action: commands.action("file.new") }
                     Cmd { action: commands.action("file.open") }
+                    Cmd { action: commands.action("file.importImage") }
                     Rule {}
                     Cmd { action: commands.action("file.save") }
                     Cmd { action: commands.action("file.saveAs") }
                     Rule {}
                     Cmd { action: commands.action("file.export") }
                     Cmd { action: commands.action("file.exportSheet") }
+                    Cmd { action: commands.action("file.exportGif") }
                     Rule {}
                     Cmd { action: commands.action("file.quit") }
                 }
@@ -2241,6 +2252,15 @@ Window {
     }
 
     FileDialog {
+        id: importDialog
+        objectName: "importDialog"
+        title: T.t("dialog.importImage")
+        nameFilters: [T.t("dialog.imageFilters"), T.t("dialog.allFiles")]
+        onAccepted: importSheet.show(selectedFile.toString())
+        onRejected: Qt.callLater(win.focusCanvas)
+    }
+
+    FileDialog {
         id: saveDialog
         title: T.t("dialog.save")
         fileMode: FileDialog.SaveFile
@@ -2278,7 +2298,7 @@ Window {
 
     FileDialog {
         id: exportDialog
-        title: T.t("dialog.export")
+        title: exportSheet.asSheet ? T.t("dialog.exportSheet") : T.t("dialog.export")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "png"
         nameFilters: ["PNG images (*.png)", "All files (*)"]
@@ -2288,6 +2308,313 @@ Window {
             Qt.callLater(win.focusCanvas)
         }
         onRejected: Qt.callLater(win.focusCanvas)
+    }
+
+    FileDialog {
+        id: gifDialog
+        objectName: "gifDialog"
+        title: T.t("dialog.exportGif")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "gif"
+        nameFilters: [T.t("dialog.gifFilters"), T.t("dialog.allFiles")]
+        onAccepted: {
+            doc.exportGif(selectedFile.toString(), gifSheet.gifScale,
+                          gifSheet.fps, gifSheet.loop)
+            Qt.callLater(win.focusCanvas)
+        }
+        onRejected: Qt.callLater(win.focusCanvas)
+    }
+
+    Sheet {
+        id: importSheet
+        objectName: "importSheet"
+        firstFocusItem: importDestinationLayer
+        onClosed: win.focusCanvas()
+        title: T.t("sheet.importImage")
+
+        property string path: ""
+        property string destination: "layer"
+        property string mode: "scale"
+        property int importScale: 1
+        property int targetWidth: 1
+        property int targetHeight: 1
+        property string fit: "contain"
+        property string layerName: ""
+
+        function show(imagePath) {
+            path = imagePath
+            destination = "layer"
+            mode = "scale"
+            importScale = 1
+            targetWidth = Math.max(1, Math.min(2048, doc.columns))
+            targetHeight = Math.max(1, Math.min(2048, doc.rows))
+            fit = "contain"
+            layerName = ""
+            open()
+        }
+
+        function apply() {
+            var actualScale = mode === "scale" ? importScale : 0
+            var actualWidth = mode === "resolution" ? targetWidth : 0
+            var actualHeight = mode === "resolution" ? targetHeight : 0
+            if (destination === "window") {
+                doc.importImageInNewWindow(path, actualScale, actualWidth,
+                                           actualHeight, fit)
+            } else {
+                doc.importImage(path, destination, actualScale, actualWidth,
+                                actualHeight, fit,
+                                destination === "layer" ? layerName : "")
+            }
+            if (opened)
+                close()
+        }
+
+        function confirmImport() {
+            if (destination === "document") {
+                close()
+                win.requestAction("importDocument")
+            } else {
+                apply()
+            }
+        }
+
+        body: [
+            Label {
+                width: 380
+                wrapMode: Text.Wrap
+                text: T.t("sheet.import.file").arg(
+                          decodeURIComponent(importSheet.path.split("/").pop()))
+            },
+            Row {
+                spacing: 5
+                Label { text: T.t("sheet.import.destination"); anchors.verticalCenter: parent.verticalCenter }
+                Chip {
+                    id: importDestinationLayer
+                    objectName: "importDestinationLayer"
+                    label: T.t("sheet.import.layer")
+                    on: importSheet.destination === "layer"
+                    onClicked: importSheet.destination = "layer"
+                }
+                Chip {
+                    id: importDestinationDocument
+                    objectName: "importDestinationDocument"
+                    label: T.t("sheet.import.document")
+                    on: importSheet.destination === "document"
+                    onClicked: importSheet.destination = "document"
+                }
+                Chip {
+                    id: importDestinationWindow
+                    objectName: "importDestinationWindow"
+                    label: T.t("sheet.import.window")
+                    on: importSheet.destination === "window"
+                    onClicked: importSheet.destination = "window"
+                }
+            },
+            Row {
+                spacing: 5
+                Label { text: T.t("sheet.import.mode"); anchors.verticalCenter: parent.verticalCenter }
+                Chip {
+                    id: importScaleMode
+                    objectName: "importScaleMode"
+                    label: T.t("sheet.import.scale")
+                    on: importSheet.mode === "scale"
+                    onClicked: importSheet.mode = "scale"
+                }
+                Chip {
+                    id: importResolutionMode
+                    objectName: "importResolutionMode"
+                    label: T.t("sheet.import.resolution")
+                    on: importSheet.mode === "resolution"
+                    onClicked: importSheet.mode = "resolution"
+                }
+            },
+            Row {
+                spacing: 5
+                visible: importSheet.mode === "scale"
+                Label { text: T.t("sheet.import.scale"); anchors.verticalCenter: parent.verticalCenter }
+                Repeater {
+                    model: [1, 2, 4, 8, 16]
+                    Chip {
+                        required property int modelData
+                        objectName: "importScale" + modelData
+                        label: modelData + "×"
+                        on: importSheet.importScale === modelData
+                        onClicked: importSheet.importScale = modelData
+                    }
+                }
+            },
+            Row {
+                spacing: 6
+                visible: importSheet.mode === "resolution"
+                Field {
+                    id: importWidth
+                    objectName: "importWidth"
+                    label: T.t("sheet.import.width")
+                    boxWidth: 130
+                    value: String(importSheet.targetWidth)
+                    input.validator: IntValidator { bottom: 1; top: 2048 }
+                    onEdited: function (text) {
+                        var n = parseInt(text, 10)
+                        if (isFinite(n))
+                            importSheet.targetWidth = Math.max(1, Math.min(2048, n))
+                    }
+                    onConfirmed: importHeight.focusEntry()
+                    onEscaped: importSheet.close()
+                }
+                Field {
+                    id: importHeight
+                    objectName: "importHeight"
+                    label: T.t("sheet.import.height")
+                    boxWidth: 130
+                    value: String(importSheet.targetHeight)
+                    input.validator: IntValidator { bottom: 1; top: 2048 }
+                    onEdited: function (text) {
+                        var n = parseInt(text, 10)
+                        if (isFinite(n))
+                            importSheet.targetHeight = Math.max(1, Math.min(2048, n))
+                    }
+                    onConfirmed: importSheet.confirmImport()
+                    onEscaped: importSheet.close()
+                }
+            },
+            Row {
+                spacing: 5
+                visible: importSheet.mode === "resolution"
+                Label { text: T.t("sheet.import.fit"); anchors.verticalCenter: parent.verticalCenter }
+                Repeater {
+                    model: [
+                        { key: "contain", label: T.t("sheet.import.contain") },
+                        { key: "cover", label: T.t("sheet.import.cover") },
+                        { key: "stretch", label: T.t("sheet.import.stretch") }
+                    ]
+                    Chip {
+                        required property var modelData
+                        objectName: "importFit" + modelData.key
+                        label: modelData.label
+                        on: importSheet.fit === modelData.key
+                        onClicked: importSheet.fit = modelData.key
+                    }
+                }
+            },
+            Field {
+                id: importLayerName
+                objectName: "importLayerName"
+                visible: importSheet.destination === "layer"
+                label: T.t("sheet.import.layerName")
+                boxWidth: 380
+                value: importSheet.layerName
+                onEdited: importSheet.layerName = text
+                onConfirmed: importSheet.confirmImport()
+                onEscaped: importSheet.close()
+            },
+            Row {
+                spacing: 6
+                Chip {
+                    id: importConfirm
+                    objectName: "importConfirm"
+                    label: importSheet.destination === "layer"
+                           ? T.t("sheet.import.addLayer")
+                           : importSheet.destination === "document"
+                             ? T.t("sheet.import.replaceDocument")
+                             : T.t("sheet.import.openWindow")
+                    on: true
+                    onClicked: importSheet.confirmImport()
+                }
+                Chip {
+                    objectName: "importCancel"
+                    label: T.t("action.cancel")
+                    onClicked: importSheet.close()
+                }
+            }
+        ]
+    }
+
+    Sheet {
+        id: gifSheet
+        objectName: "gifSheet"
+        firstFocusItem: gifFps.input
+        onClosed: win.focusCanvas()
+        title: T.t("sheet.exportGif")
+
+        property int gifScale: 1
+        property int fps: doc.fps
+        property bool loop: true
+
+        function show() {
+            gifScale = 1
+            fps = doc.fps
+            loop = true
+            open()
+        }
+
+        function choose() {
+            gifDialog.currentFile = doc.suggestedGifPath()
+            close()
+            gifDialog.open()
+        }
+
+        body: [
+            Label {
+                width: 380
+                wrapMode: Text.Wrap
+                text: T.t("sheet.exportGif.size")
+                      .arg(doc.frameCount)
+                      .arg(doc.columns * gifSheet.gifScale)
+                      .arg(doc.rows * gifSheet.gifScale)
+            },
+            Row {
+                spacing: 5
+                Label { text: T.t("sheet.exportGif.scale"); anchors.verticalCenter: parent.verticalCenter }
+                Repeater {
+                    model: [1, 2, 4, 8, 16]
+                    Chip {
+                        required property int modelData
+                        objectName: "gifScale" + modelData
+                        label: modelData + "×"
+                        on: gifSheet.gifScale === modelData
+                        onClicked: gifSheet.gifScale = modelData
+                    }
+                }
+            },
+            Field {
+                id: gifFps
+                objectName: "gifFps"
+                label: T.t("sheet.exportGif.fps")
+                boxWidth: 130
+                value: String(gifSheet.fps)
+                input.validator: IntValidator { bottom: 1; top: 100 }
+                onEdited: function (text) {
+                    var n = parseInt(text, 10)
+                    if (isFinite(n))
+                        gifSheet.fps = Math.max(1, Math.min(100, n))
+                }
+                onConfirmed: gifSheet.choose()
+                onEscaped: gifSheet.close()
+            },
+            Chip {
+                id: gifLoop
+                objectName: "gifLoop"
+                label: T.t("sheet.exportGif.loop")
+                on: gifSheet.loop
+                Accessible.name: T.t("sheet.exportGif.loop")
+                onClicked: gifSheet.loop = !gifSheet.loop
+            },
+            Row {
+                spacing: 6
+                Chip {
+                    id: gifChoose
+                    objectName: "gifChoose"
+                    label: T.t("sheet.exportGif.choose")
+                    on: true
+                    onClicked: gifSheet.choose()
+                }
+                Chip {
+                    objectName: "gifCancel"
+                    label: T.t("action.cancel")
+                    onClicked: gifSheet.close()
+                }
+            }
+        ]
     }
 
     Sheet {
@@ -2668,8 +2995,10 @@ Window {
                 width: 320
                 wrapMode: Text.Wrap
                 text: exportSheet.asSheet
-                      ? T.t("sheet.export.sheetSize").arg(doc.clip)
-                            .arg(doc.columns * doc.frameCount * exportSheet.factor)
+                      ? T.t("sheet.export.sheetSize").arg(doc.frameCount)
+                            .arg((doc.columns * doc.frameCount
+                                  + 2 * Math.max(0, doc.frameCount - 1))
+                                 * exportSheet.factor)
                             .arg(doc.rows * exportSheet.factor)
                       : T.t("sheet.export.frameSize")
                             .arg(doc.columns * exportSheet.factor)

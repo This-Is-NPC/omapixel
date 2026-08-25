@@ -4,14 +4,18 @@ CommandProvider {
     required property var host
     required property var saveDialog
     required property var exportDialog
+    required property var importDialog
+    required property var gifSheet
 
     actions: [
         CommandAction { commandId: "file.new"; text: T.t("menu.new"); group: T.t("command.group.file"); shortcut: cfg.shortcuts.new; onTriggered: host.requestAction("new") },
         CommandAction { commandId: "file.open"; text: T.t("menu.open"); group: T.t("command.group.file"); shortcut: cfg.shortcuts.open; onTriggered: host.requestAction("open") },
+        CommandAction { commandId: "file.importImage"; text: T.t("menu.importImage"); group: T.t("command.group.file"); onTriggered: importDialog.open() },
         CommandAction { commandId: "file.save"; text: T.t("menu.save"); group: T.t("command.group.file"); shortcut: cfg.shortcuts.save; onTriggered: doc.path === "" ? saveDialog.open() : doc.save() },
         CommandAction { commandId: "file.saveAs"; text: T.t("menu.saveAs"); group: T.t("command.group.file"); shortcut: cfg.shortcuts.save_as; onTriggered: saveDialog.open() },
         CommandAction { commandId: "file.export"; text: T.t("menu.exportPng"); group: T.t("command.group.file"); shortcut: cfg.shortcuts.export_png; onTriggered: { exportDialog.asSheet = false; exportDialog.open() } },
         CommandAction { commandId: "file.exportSheet"; text: T.t("menu.exportSheet"); group: T.t("command.group.file"); shortcut: cfg.shortcuts.export_sheet; onTriggered: { exportDialog.asSheet = true; exportDialog.open() } },
+        CommandAction { commandId: "file.exportGif"; text: T.t("menu.exportGif"); group: T.t("command.group.file"); onTriggered: gifSheet.show() },
         CommandAction { commandId: "file.quit"; text: T.t("menu.quit"); group: T.t("command.group.file"); shortcut: cfg.shortcuts.quit; onTriggered: host.requestAction("quit") },
 
         CommandAction { commandId: "edit.undo"; text: T.t("menu.undo"); group: T.t("command.group.edit"); shortcut: cfg.shortcuts.undo; enabled: doc.canUndo; onTriggered: doc.undo() },

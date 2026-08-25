@@ -24,6 +24,7 @@ depends=(
   'hicolor-icon-theme'
   'qt6-base'
   'qt6-declarative'
+  'qt6-imageformats' # WebP import plugin
 )
 makedepends=(
   'gcc'

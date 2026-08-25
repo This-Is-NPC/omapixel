@@ -337,9 +337,18 @@ public:
     Q_INVOKABLE bool exportImage(const QString &path, int scale, bool sheet,
                                  bool checker);
 
+    Q_INVOKABLE bool importImage(const QString &path, const QString &destination,
+                                 int scale, int width, int height,
+                                 const QString &fit, const QString &layerName);
+    Q_INVOKABLE bool importImageInNewWindow(const QString &path, int scale,
+                                            int width, int height,
+                                            const QString &fit);
+    Q_INVOKABLE bool exportGif(const QString &path, int scale, int fps, bool loop);
+
     /// A path to offer when exporting: the document's own, with the suffix
     /// swapped. Guessing this saves the one piece of typing nobody wants to do.
     Q_INVOKABLE QString suggestedExportPath(bool sheet) const;
+    Q_INVOKABLE QString suggestedGifPath() const;
 
 signals:
     /// The document's contents changed: repaint, relist, everything.

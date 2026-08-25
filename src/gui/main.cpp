@@ -38,6 +38,135 @@ QString safeDiagnostic(const QString &text)
     return omapixel::text::escapeForTerminal(text);
 }
 
+struct InternalImageImport
+{
+    bool requested = false;
+    QString path;
+    int scale = 0;
+    int width = 0;
+    int height = 0;
+    QString fit = QStringLiteral("contain");
+};
+
+bool parseInternalImageImport(const QStringList &arguments,
+                              InternalImageImport *import, QString *error)
+{
+    bool sawInternal = false;
+    bool hasScale = false;
+    bool hasResolution = false;
+    bool hasFit = false;
+    QStringList positional;
+    for (int index = 1; index < arguments.size(); ++index) {
+        const QString argument = arguments.at(index);
+        if (!argument.startsWith(QLatin1String("--import-"))) {
+            positional.append(argument);
+            continue;
+        }
+        sawInternal = true;
+        if (argument == QLatin1String("--import-image")
+            || argument == QLatin1String("--import-scale")
+            || argument == QLatin1String("--import-resolution")
+            || argument == QLatin1String("--import-fit")) {
+            if (index + 1 >= arguments.size()
+                || arguments.at(index + 1).startsWith(QLatin1Char('-'))) {
+                if (error)
+                    *error = QStringLiteral("%1 requires a separate value").arg(argument);
+                return false;
+            }
+            const QString value = arguments.at(++index);
+            if (argument == QLatin1String("--import-image")) {
+                if (import->requested) {
+                    if (error)
+                        *error = QStringLiteral("--import-image may only be specified once");
+                    return false;
+                }
+                import->requested = true;
+                import->path = value;
+            } else if (argument == QLatin1String("--import-scale")) {
+                if (hasScale) {
+                    if (error)
+                        *error = QStringLiteral("--import-scale may only be specified once");
+                    return false;
+                }
+                bool ok = false;
+                import->scale = value.toInt(&ok);
+                if (!ok || import->scale < 1) {
+                    if (error)
+                        *error = QStringLiteral("--import-scale must be a positive integer");
+                    return false;
+                }
+                hasScale = true;
+            } else if (argument == QLatin1String("--import-resolution")) {
+                if (hasResolution) {
+                    if (error)
+                        *error = QStringLiteral("--import-resolution may only be specified once");
+                    return false;
+                }
+                const QStringList parts = value.toLower().split(QLatin1Char('x'));
+                bool widthOk = false;
+                bool heightOk = false;
+                import->width = parts.size() == 2 ? parts.at(0).toInt(&widthOk) : 0;
+                import->height = parts.size() == 2 ? parts.at(1).toInt(&heightOk) : 0;
+                if (!widthOk || !heightOk || import->width < 1 || import->height < 1
+                    || import->width > omapixel::Document::maxDimension
+                    || import->height > omapixel::Document::maxDimension) {
+                    if (error)
+                        *error = QStringLiteral(
+                            "--import-resolution must be WIDTHxHEIGHT, with each side between 1 and %1")
+                                     .arg(omapixel::Document::maxDimension);
+                    return false;
+                }
+                hasResolution = true;
+            } else {
+                if (hasFit) {
+                    if (error)
+                        *error = QStringLiteral("--import-fit may only be specified once");
+                    return false;
+                }
+                import->fit = value.toLower();
+                if (import->fit != QLatin1String("contain")
+                    && import->fit != QLatin1String("cover")
+                    && import->fit != QLatin1String("stretch")) {
+                    if (error)
+                        *error = QStringLiteral(
+                            "--import-fit must be contain, cover, or stretch");
+                    return false;
+                }
+                hasFit = true;
+            }
+            continue;
+        }
+        if (error)
+            *error = QStringLiteral("unknown internal import argument: %1").arg(argument);
+        return false;
+    }
+
+    if (!sawInternal)
+        return true;
+    if (!import->requested) {
+        if (error)
+            *error = QStringLiteral("internal image import requires --import-image");
+        return false;
+    }
+    if (!positional.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("internal image import cannot open a document path");
+        return false;
+    }
+    if (import->path.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("--import-image requires a non-empty path");
+        return false;
+    }
+    if (hasScale == hasResolution) {
+        if (error)
+            *error = QStringLiteral(
+                "internal image import requires exactly one of --import-scale or --import-resolution");
+        return false;
+    }
+    return true;
+}
+
 bool saveImageAtomically(const QImage &image, const QString &path,
                          const QStringList &sources, QString *error)
 {
@@ -71,6 +200,15 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral(OMAPIXEL_VERSION));
     app.setApplicationDisplayName(QStringLiteral("omapixel"));
     app.setDesktopFileName(QStringLiteral("omapixel-studio"));
+
+    InternalImageImport internalImport;
+    QString internalImportError;
+    if (!parseInternalImageImport(app.arguments(), &internalImport,
+                                  &internalImportError)) {
+        std::fprintf(stderr, "image import arguments failed: %s\n",
+                     qPrintable(safeDiagnostic(internalImportError)));
+        return 2;
+    }
 
     // Registered by hand rather than through QML_ELEMENT. With qmake,
     // QML_ELEMENT needs a qmltypes step and an import name declared in the .pro,
@@ -129,8 +267,19 @@ int main(int argc, char *argv[])
     // A file named on the command line, so `omapixel-studio drawing.json` works
     // the way every other editor does.
     const QStringList arguments = app.arguments();
-    if (arguments.size() > 1)
+    if (internalImport.requested) {
+        if (!document.importImage(internalImport.path, QStringLiteral("document"),
+                                  internalImport.scale, internalImport.width,
+                                  internalImport.height, internalImport.fit,
+                                  QStringLiteral("Imported"))) {
+            std::fprintf(stderr, "image import failed: %s\n",
+                         qPrintable(safeDiagnostic(document.note())));
+            document.retireScratch();
+            return 1;
+        }
+    } else if (arguments.size() > 1) {
         document.open(arguments.at(1));
+    }
 
     QQmlApplicationEngine engine;
     // Exposed as a context property rather than instantiated from QML: there is

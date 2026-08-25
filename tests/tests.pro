@@ -27,6 +27,9 @@ SOURCES += \
     ../src/core/Codec.cpp \
     ../src/core/Ops.cpp \
     ../src/core/Render.cpp \
+    ../src/core/Quantization.cpp \
+    ../src/core/ImageImport.cpp \
+    ../src/core/GifExport.cpp \
     ../src/core/LayerOperations.cpp \
     ../src/core/Bridge.cpp \
     ../src/core/Sessions.cpp \
@@ -54,6 +57,9 @@ HEADERS += \
     ../src/core/Codec.h \
     ../src/core/Ops.h \
     ../src/core/Render.h \
+    ../src/core/Quantization.h \
+    ../src/core/ImageImport.h \
+    ../src/core/GifExport.h \
     ../src/core/LayerOperations.h \
     ../src/core/Bridge.h \
     ../src/core/Sessions.h \

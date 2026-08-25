@@ -156,6 +156,11 @@ description = "Run deterministic CLI layer and batch contract tests"
 depends = ["build"]
 run = 'python3 "{{config_root}}/tests/test_cli_layers.py"'
 
+[tasks.image-io]
+description = "Run raster import and animated GIF export contracts"
+depends = ["build"]
+run = 'python3 "{{config_root}}/tests/test_image_io.py"'
+
 [tasks.layers-e2e]
 description = "Run the CLI, Studio, where, render, flatten and live-reload fixture"
 depends = ["build", "test"]
@@ -179,7 +184,7 @@ run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 
 [tasks.check]
 description = "Everything CI would run"
-depends = ["build", "test", "format-v2", "plugin-contract", "plugin-e2e", "properties-v2", "cli-layers",
+depends = ["build", "test", "format-v2", "plugin-contract", "plugin-e2e", "properties-v2", "cli-layers", "image-io",
            "layers-e2e", "i18n", "i18n-surface", "benchmark-layers",
            "test-keyboard", "test-keyboard-wayland"]
 run = """

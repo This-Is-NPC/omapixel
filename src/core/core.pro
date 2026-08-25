@@ -32,6 +32,9 @@ HEADERS += \
     Codec.h \
     Ops.h \
     Render.h \
+    Quantization.h \
+    ImageImport.h \
+    GifExport.h \
     LayerOperations.h \
     Bridge.h \
     Sessions.h \
@@ -51,6 +54,9 @@ SOURCES += \
     Codec.cpp \
     Ops.cpp \
     Render.cpp \
+    Quantization.cpp \
+    ImageImport.cpp \
+    GifExport.cpp \
     LayerOperations.cpp \
     Bridge.cpp \
     Sessions.cpp \

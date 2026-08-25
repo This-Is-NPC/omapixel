@@ -4,6 +4,8 @@
 #include "Codec.h"
 #include "Config.h"
 #include "Differences.h"
+#include "GifExport.h"
+#include "ImageImport.h"
 #include "LayerOperations.h"
 #include "Ops.h"
 #include "Output.h"
@@ -24,6 +26,7 @@
 #include <QMimeData>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QProcess>
 #include <QUrl>
 #include <QVariantMap>
 
@@ -89,6 +92,66 @@ QString freeSlotIn(const Palette &palette)
             return QString(QChar(c));
     }
     return QString();
+}
+
+QString localPath(const QString &path)
+{
+    const QUrl url(path);
+    return url.isLocalFile() ? url.toLocalFile() : path;
+}
+
+bool importOptions(const QString &fit, int scale, int width, int height,
+                   ImageImport::Options *options, QString *error)
+{
+    if (!options)
+        return false;
+    if (scale < 0) {
+        if (error)
+            *error = QStringLiteral("import scale must be zero or a positive integer");
+        return false;
+    }
+    if (scale > 0 && (width != 0 || height != 0)) {
+        if (error)
+            *error = QStringLiteral("import scale and resolution are mutually exclusive");
+        return false;
+    }
+    if (scale == 0 && (width <= 0 || height <= 0
+                       || width > Document::maxDimension
+                       || height > Document::maxDimension)) {
+        if (error)
+            *error = QStringLiteral("import resolution must be positive and no larger than %1x%1")
+                         .arg(Document::maxDimension);
+        return false;
+    }
+
+    const QString mode = fit.toLower();
+    if (mode == QLatin1String("contain"))
+        options->resizeMode = ImageImport::ResizeMode::Contain;
+    else if (mode == QLatin1String("cover"))
+        options->resizeMode = ImageImport::ResizeMode::Cover;
+    else if (mode == QLatin1String("stretch"))
+        options->resizeMode = ImageImport::ResizeMode::Stretch;
+    else {
+        if (error)
+            *error = QStringLiteral("import fit must be contain, cover, or stretch");
+        return false;
+    }
+    options->scale = scale;
+    options->targetResolution = scale == 0 ? QSize(width, height) : QSize();
+    return true;
+}
+
+bool samePalette(const Palette &left, const Palette &right)
+{
+    if (left.size() != right.size())
+        return false;
+    for (int index = 0; index < left.entries().size(); ++index) {
+        const Palette::Slot &a = left.entries().at(index);
+        const Palette::Slot &b = right.entries().at(index);
+        if (a.letter != b.letter || a.colour != b.colour)
+            return false;
+    }
+    return true;
 }
 
 QVariantMap layerReport(const LayerOperationReport &report)
@@ -1527,9 +1590,7 @@ QVariantList DocumentModel::sizePresets() const
 
 bool DocumentModel::open(const QString &path)
 {
-    QString where = path;
-    if (where.startsWith(QLatin1String("file://")))
-        where = QUrl(where).toLocalFile();
+    const QString where = localPath(path);
 
     const Codec::Result read = Codec::readFile(where, warningLimits());
     if (!read) {
@@ -1688,9 +1749,7 @@ QString DocumentModel::describeDifferences(const Document &before) const
 
 bool DocumentModel::save(const QString &path)
 {
-    QString where = path.isEmpty() ? m_path : path;
-    if (where.startsWith(QLatin1String("file://")))
-        where = QUrl(where).toLocalFile();
+    const QString where = localPath(path.isEmpty() ? m_path : path);
     if (where.isEmpty()) {
         say(Strings::shared().t(QStringLiteral("note.sayWhereToSave")));
         return false;
@@ -1714,9 +1773,7 @@ bool DocumentModel::save(const QString &path)
 bool DocumentModel::exportImage(const QString &path, int scale, bool sheet,
                                 bool checker)
 {
-    QString where = path;
-    if (where.startsWith(QLatin1String("file://")))
-        where = QUrl(where).toLocalFile();
+    const QString where = localPath(path);
     if (where.isEmpty()) {
         say(Strings::shared().t(QStringLiteral("note.sayWhereToExport")));
         return false;
@@ -1755,6 +1812,153 @@ bool DocumentModel::exportImage(const QString &path, int scale, bool sheet,
     }
 }
 
+bool DocumentModel::importImage(const QString &path, const QString &destination,
+                                int scale, int width, int height,
+                                const QString &fit, const QString &layerName)
+{
+    const QString where = localPath(path);
+    if (where.isEmpty()) {
+        say(QStringLiteral("image import path is empty"));
+        return false;
+    }
+
+    ImageImport::Options options;
+    QString error;
+    if (!importOptions(fit, scale, width, height, &options, &error)) {
+        say(error);
+        return false;
+    }
+    options.layerName = layerName;
+
+    if (destination == QLatin1String("document")) {
+        const ImageImport::Result result = ImageImport::createDocument(where, options);
+        if (!result) {
+            say(result.error);
+            return false;
+        }
+
+        retireScratch();
+        m_document = result.document;
+        m_undo.clear();
+        m_redo.clear();
+        m_undoActiveLayerIds.clear();
+        m_redoActiveLayerIds.clear();
+        emit historyChanged();
+        m_clip = m_document.clipNames().value(0);
+        m_frame = 0;
+        m_activeLayerId = result.report.layerId;
+        if (m_activeLayerId.isEmpty())
+            m_activeLayerId = m_document.layers().value(0).id;
+        m_editScope = QStringLiteral("frame");
+        m_pickerScope = QStringLiteral("active");
+        m_path.clear();
+        m_dirty = true;
+        m_reloadPending = false;
+        m_lastChangeExternal = false;
+        watch();
+        openScratch();
+        paletteMoved();
+        m_changes->sync();
+        say(QStringLiteral("imported %1").arg(QFileInfo(where).fileName()));
+        emit changed();
+        emit activeLayerChanged();
+        emit renderChanged(QString(), -1);
+        emit viewChanged();
+        emit fileChanged();
+        emit documentReplaced();
+        return true;
+    }
+
+    if (destination != QLatin1String("layer")) {
+        say(QStringLiteral("image import destination must be document or layer"));
+        return false;
+    }
+
+    options.clip = m_clip;
+    options.frame = m_frame;
+    const Document before = m_document;
+    Document next = m_document;
+    ImageImport::Report report;
+    if (!ImageImport::addLayer(&next, where, options, &report, &error)) {
+        say(error);
+        return false;
+    }
+
+    const bool paletteChanged = !samePalette(next.palette(), before.palette());
+    remember(before);
+    m_document = next;
+    m_activeLayerId = report.layerId;
+    m_dirty = true;
+    if (paletteChanged)
+        paletteMoved();
+    QString note = QStringLiteral("imported %1 as %2")
+                       .arg(QFileInfo(where).fileName(), activeLayerName());
+    if (report.clippedPixels > 0)
+        note += QStringLiteral(" · %1 pixel(s) clipped at the canvas edge")
+                    .arg(report.clippedPixels);
+    say(note);
+    emit changed();
+    emit activeLayerChanged();
+    emit renderChanged(QString(), -1);
+    emit viewChanged();
+    emit fileChanged();
+    return true;
+}
+
+bool DocumentModel::importImageInNewWindow(const QString &path, int scale,
+                                           int width, int height,
+                                           const QString &fit)
+{
+    const QString where = localPath(path);
+    if (where.isEmpty()) {
+        say(QStringLiteral("image import path is empty"));
+        return false;
+    }
+
+    ImageImport::Options options;
+    QString error;
+    if (!importOptions(fit, scale, width, height, &options, &error)) {
+        say(error);
+        return false;
+    }
+
+    QStringList arguments{QStringLiteral("--import-image"), where};
+    if (scale > 0) {
+        arguments << QStringLiteral("--import-scale") << QString::number(scale);
+    } else {
+        arguments << QStringLiteral("--import-resolution")
+                  << QStringLiteral("%1x%2").arg(width).arg(height);
+    }
+    arguments << QStringLiteral("--import-fit") << fit.toLower();
+    if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments)) {
+        say(QStringLiteral("could not open imported image in a new window"));
+        return false;
+    }
+    return true;
+}
+
+bool DocumentModel::exportGif(const QString &path, int scale, int fps, bool loop)
+{
+    const QString where = localPath(path);
+    if (where.isEmpty()) {
+        say(Strings::shared().t(QStringLiteral("note.sayWhereToExport")));
+        return false;
+    }
+
+    QString error;
+    if (!output::validate(where, {followedPath()}, &error)) {
+        say(error);
+        return false;
+    }
+    if (!gif::write(m_document, m_clip, where, scale, fps, loop,
+                    {followedPath()}, &error)) {
+        say(error);
+        return false;
+    }
+    say(QStringLiteral("exported GIF to %1").arg(QFileInfo(where).fileName()));
+    return true;
+}
+
 QString DocumentModel::suggestedExportPath(bool sheet) const
 {
     const QString stem = m_path.isEmpty()
@@ -1764,6 +1968,17 @@ QString DocumentModel::suggestedExportPath(bool sheet) const
                                                : QFileInfo(m_path).absolutePath();
     return QStringLiteral("%1/%2%3.png")
         .arg(directory, stem, sheet ? QStringLiteral("-sheet") : QString());
+}
+
+QString DocumentModel::suggestedGifPath() const
+{
+    const QString stem = m_path.isEmpty()
+                             ? QStringLiteral("untitled")
+                             : QFileInfo(m_path).completeBaseName();
+    const QString directory = m_path.isEmpty() ? QDir::currentPath()
+                                               : QFileInfo(m_path).absolutePath();
+    return QUrl::fromLocalFile(QStringLiteral("%1/%2.gif").arg(directory, stem))
+        .toString();
 }
 
 } // namespace omapixel
