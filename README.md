@@ -181,7 +181,6 @@ Full docs live in [`docs/`](docs/).
 - **[Settings and keys](docs/configuration.md)**: one TOML file, every setting, every binding.
 - **[Adding a language](docs/i18n.md)**: translate the JSON catalogue and check its coverage.
 - **[How it is built](docs/design.md)**: one core, two front ends, and why it is shaped this way.
-- **[Releasing](docs/releasing.md)**: push a tag, and how the package reaches Omarchy.
 
 ## License
 
