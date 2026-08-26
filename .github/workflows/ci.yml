@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
+    env:
+      XDG_RUNTIME_DIR: /tmp/omapixel-runtime
     steps:
       - name: system dependencies
         run: |
@@ -26,5 +28,6 @@ jobs:
       - name: build and test
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          install -d -m 700 "$XDG_RUNTIME_DIR"
           mise trust
           mise run check
