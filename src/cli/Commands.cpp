@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPoint>
+#include <QRegularExpression>
 
 namespace omapixel {
 namespace cli {
@@ -55,6 +56,24 @@ bool parseSlot(const QString &text, QChar *slot, QString *error)
         return false;
     }
     *slot = text.at(0);
+    return true;
+}
+
+bool parseBoundedInteger(const QString &text, const QString &option,
+                         int minimum, int maximum, int *result, QString *error)
+{
+    if (!QRegularExpression(QStringLiteral("^[+-]?[0-9]+$")).match(text).hasMatch()) {
+        *error = QStringLiteral("%1 must be an integer").arg(option);
+        return false;
+    }
+    bool ok = false;
+    const int value = text.toInt(&ok);
+    if (!ok || value < minimum || value > maximum) {
+        *error = QStringLiteral("%1 must be an integer from %2 to %3")
+                     .arg(option).arg(minimum).arg(maximum);
+        return false;
+    }
+    *result = value;
     return true;
 }
 
@@ -387,21 +406,30 @@ Outcome doClip(Document &doc, QStringList &words, const QCommandLineParser &pars
     const QString name = isSet(parser, "name")
                              ? value(parser, "name")
                              : (words.isEmpty() ? QString() : words.takeFirst());
+    QString error;
 
     if (action == QLatin1String("add")) {
-        const int fps = isSet(parser, "fps") ? value(parser, "fps").toInt() : 8;
-        if (!doc.addClip(name, fps)) {
+        int fps = 8;
+        if (isSet(parser, "fps")
+            && !parseBoundedInteger(value(parser, "fps"), QStringLiteral("--fps"),
+                                    1, 60, &fps, &error))
+            return Outcome::wrong(error);
+        if (!doc.addClip(name, fps, &error)) {
             return Outcome::refused(
-                QStringLiteral("clip add: %1 is empty or already there").arg(name));
+                error.isEmpty()
+                    ? QStringLiteral("clip add: %1 is empty or already there").arg(name)
+                    : error);
         }
     } else if (action == QLatin1String("rm")) {
-        if (!doc.removeClip(name)) {
+        if (!doc.removeClip(name, &error)) {
             // Two different refusals, and saying "no clip walk" for both sends
             // somebody hunting for a typo that is not there.
             return Outcome::refused(
-                doc.clip(name)
-                    ? QStringLiteral("clip rm: a document keeps its last clip")
-                    : QStringLiteral("clip rm: no clip %1").arg(name));
+                error.isEmpty()
+                    ? (doc.clip(name)
+                           ? QStringLiteral("clip rm: a document keeps its last clip")
+                           : QStringLiteral("clip rm: no clip %1").arg(name))
+                    : error);
         }
     } else if (action == QLatin1String("rename")) {
         if (words.isEmpty())
@@ -413,7 +441,11 @@ Outcome doClip(Document &doc, QStringList &words, const QCommandLineParser &pars
     } else if (action == QLatin1String("fps")) {
         if (!isSet(parser, "fps"))
             return Outcome::wrong(QStringLiteral("clip fps: say --fps N"));
-        if (!doc.setFps(name, value(parser, "fps").toInt()))
+        int fps = 0;
+        if (!parseBoundedInteger(value(parser, "fps"), QStringLiteral("--fps"),
+                                 1, 60, &fps, &error))
+            return Outcome::wrong(error);
+        if (!doc.setFps(name, fps))
             return Outcome::refused(QStringLiteral("clip fps: no clip %1").arg(name));
     } else {
         return Outcome::wrong(
@@ -438,13 +470,22 @@ Outcome doFrame(Document &doc, QStringList &words, const QCommandLineParser &par
                           action == QLatin1String("dup"), &error))
             return Outcome::refused(error);
     } else if (action == QLatin1String("rm")) {
-        if (!doc.removeFrame(target.clip, target.frame))
-            return Outcome::refused(QStringLiteral("frame rm: a clip keeps its last frame"));
+        if (!doc.removeFrame(target.clip, target.frame, &error))
+            return Outcome::refused(error.isEmpty()
+                                         ? QStringLiteral("frame rm: a clip keeps its last frame")
+                                         : error);
     } else if (action == QLatin1String("move")) {
         if (!isSet(parser, "index"))
             return Outcome::wrong(QStringLiteral("frame move: say --index N"));
-        if (!doc.moveFrame(target.clip, target.frame, value(parser, "index").toInt()))
-            return Outcome::refused(QStringLiteral("frame move: out of range"));
+        const Clip *clip = doc.clip(target.clip);
+        int index = 0;
+        if (!clip || !parseBoundedInteger(value(parser, "index"), QStringLiteral("--index"),
+                                          0, clip->frameCount - 1, &index, &error))
+            return Outcome::wrong(error);
+        if (!doc.moveFrame(target.clip, target.frame, index, &error))
+            return Outcome::refused(error.isEmpty()
+                                         ? QStringLiteral("frame move: out of range")
+                                         : error);
     } else {
         return Outcome::wrong(
             QStringLiteral("frame: add, dup, rm or move — not %1").arg(action));

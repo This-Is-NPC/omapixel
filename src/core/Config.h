@@ -46,6 +46,9 @@ class Config : public QObject
 public:
     explicit Config(QObject *parent = nullptr);
 
+    static constexpr qint64 maxConfigBytes = 1024 * 1024;
+    static constexpr int maxHistoryDepth = 256;
+
     /// The one the process is using. Shared for the same reason the catalogue
     /// is: both front ends read it, and so does anything that grows a setting.
     static Config &shared();

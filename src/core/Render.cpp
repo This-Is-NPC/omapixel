@@ -435,6 +435,14 @@ QString toAnsi(const Document &document, const QString &clip, int frame,
                 out += QLatin1Char(' ');
                 continue;
             }
+            // A lower-only cell is a foreground block. Do not set a background
+            // first: terminals retain that escape until it is explicitly reset.
+            if (!upper.isValid()) {
+                out += QStringLiteral("\x1b[38;2;%1;%2;%3m▄")
+                           .arg(lower.red()).arg(lower.green()).arg(lower.blue());
+                out += reset;
+                continue;
+            }
             // The upper half block with a foreground and a background paints
             // both rows in one cell.
             if (upper.isValid()) {
@@ -445,15 +453,7 @@ QString toAnsi(const Document &document, const QString &clip, int frame,
                 out += QStringLiteral("\x1b[48;2;%1;%2;%3m")
                            .arg(lower.red()).arg(lower.green()).arg(lower.blue());
             }
-            out += upper.isValid() ? QStringLiteral("▀")
-                                   : QStringLiteral("▄");
-            if (!upper.isValid()) {
-                // Only a lower half: it was painted as foreground, so undo the
-                // background we never set.
-                out.chop(1);
-                out += QStringLiteral("\x1b[38;2;%1;%2;%3m▄")
-                           .arg(lower.red()).arg(lower.green()).arg(lower.blue());
-            }
+            out += QStringLiteral("▀");
             out += reset;
         }
         out += QLatin1Char('\n');

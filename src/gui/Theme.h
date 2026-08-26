@@ -1,10 +1,12 @@
 #pragma once
 
 #include <QColor>
+#include <QByteArray>
 #include <QFileSystemWatcher>
 #include <QObject>
 
 class QProcess;
+class QTimer;
 
 namespace omapixel {
 
@@ -104,6 +106,9 @@ private:
 
     QFileSystemWatcher m_watcher;
     QProcess *m_hyprctl = nullptr;
+    QTimer *m_hyprctlTimeout = nullptr;
+    QByteArray m_hyprctlOutput;
+    bool m_hyprctlOutputRejected = false;
     QString m_themePath;
     QString m_name;
     int m_rounding = 0;

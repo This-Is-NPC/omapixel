@@ -1,6 +1,7 @@
 #include "Config.h"
 
 #include "Document.h"
+#include "Output.h"
 #include "Toml.h"
 
 #include <QCoreApplication>
@@ -267,9 +268,10 @@ QStringList Config::defaultSearchPath()
 QString Config::defaultText()
 {
     for (const QString &path : defaultSearchPath()) {
-        QFile file(path);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text))
-            return QString::fromUtf8(file.readAll());
+        QByteArray bytes;
+        if (input::readRegularFile(path, maxConfigBytes, &bytes)
+            && bytes.size() <= maxConfigBytes)
+            return QString::fromUtf8(bytes);
     }
     return QString();
 }
@@ -418,12 +420,17 @@ void Config::load()
     }
 
     const QString path = file();
-    QFile handle(path);
     watch();
-    if (!handle.open(QIODevice::ReadOnly | QIODevice::Text))
+    QByteArray bytes;
+    if (!input::readRegularFile(path, maxConfigBytes, &bytes))
         return;   // no file is the normal case: the defaults are the program
+    if (bytes.size() > maxConfigBytes) {
+        m_problems.append(QStringLiteral("config file exceeds hard limit of %1 bytes")
+                              .arg(maxConfigBytes));
+        return;
+    }
 
-    const toml::Table parsed = toml::read(QString::fromUtf8(handle.readAll()));
+    const toml::Table parsed = toml::read(QString::fromUtf8(bytes));
     for (const toml::Problem &problem : parsed.problems)
         m_problems.append(QStringLiteral("line %1: %2").arg(problem.line).arg(problem.message));
 
@@ -499,8 +506,13 @@ void Config::load()
              || key == QLatin1String("canvas.big_step")
              || key == QLatin1String("window.inspector_width")
              || key == QLatin1String("history.depth"))
-            && !integerIn(1, std::numeric_limits<int>::max(),
-                          QStringLiteral("wants a positive integer")))
+            && !integerIn(1, key == QLatin1String("history.depth")
+                                  ? maxHistoryDepth
+                                  : std::numeric_limits<int>::max(),
+                          key == QLatin1String("history.depth")
+                              ? QStringLiteral("wants an integer from 1 to %1")
+                                    .arg(maxHistoryDepth)
+                              : QStringLiteral("wants a positive integer")))
             continue;
         if ((key == QLatin1String("document.width")
              || key == QLatin1String("document.height"))

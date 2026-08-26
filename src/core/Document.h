@@ -199,8 +199,9 @@ public:
 
     // ------------------------------------------------------------- the clips
 
-    bool addClip(const QString &name, int fps = 8);
-    bool removeClip(const QString &name);
+    /// Structural clip changes reject locked animated layers through `error`.
+    bool addClip(const QString &name, int fps = 8, QString *error = nullptr);
+    bool removeClip(const QString &name, QString *error = nullptr);
     /// Keeps the clip where it was in the list. Deleting and reinserting sends
     /// it to the end, and the list is the sidebar -- a clip that jumps position
     /// when renamed looks like another clip.
@@ -209,10 +210,11 @@ public:
 
     // ------------------------------------------------------------ the frames
 
+    /// Structural frame changes reject locked animated layers through `error`.
     bool addFrame(const QString &clip, int after, bool duplicate,
                   QString *error = nullptr);
-    bool removeFrame(const QString &clip, int index);
-    bool moveFrame(const QString &clip, int index, int to);
+    bool removeFrame(const QString &clip, int index, QString *error = nullptr);
+    bool moveFrame(const QString &clip, int index, int to, QString *error = nullptr);
 
     // -------------------------------------------------------------- the size
 

@@ -43,6 +43,15 @@ bool rejectLocked(const Layer &layer, QString *error)
     return true;
 }
 
+bool rejectLockedAnimatedLayers(const QList<Layer> &layers, QString *error)
+{
+    for (const Layer &layer : layers) {
+        if (layer.storage == QStringLiteral("animated") && rejectLocked(layer, error))
+            return true;
+    }
+    return false;
+}
+
 qint64 gridDifferenceCount(const Grid &left, const Grid &right)
 {
     return qint64(ops::diff(left, right).size());
@@ -640,9 +649,13 @@ bool Document::convertLayerStorage(const QString &layerIdOrName,
 
 // ----------------------------------------------------------------- the clips
 
-bool Document::addClip(const QString &name, int fps)
+bool Document::addClip(const QString &name, int fps, QString *error)
 {
+    if (error)
+        error->clear();
     if (m_clips.size() >= maxClips || !validName(name) || indexOfClip(name) >= 0)
+        return false;
+    if (rejectLockedAnimatedLayers(m_layers, error))
         return false;
     qint64 totalFrames = 1;
     for (const Clip &clip : m_clips)
@@ -681,8 +694,10 @@ bool Document::addClip(const QString &name, int fps)
     return true;
 }
 
-bool Document::removeClip(const QString &name)
+bool Document::removeClip(const QString &name, QString *error)
 {
+    if (error)
+        error->clear();
     // The last clip stays, for the same reason a clip keeps its last frame: a
     // document with no clips has nothing to draw and nothing to select. The
     // studio opens it on an empty frame with no way back, and every command
@@ -691,6 +706,8 @@ bool Document::removeClip(const QString &name)
     // write a file that neither front end can then edit.
     const int at = indexOfClip(name);
     if (at < 0 || m_clips.size() <= 1)
+        return false;
+    if (rejectLockedAnimatedLayers(m_layers, error))
         return false;
     const QString id = m_clips.at(at).id;
     m_clips.removeAt(at);
@@ -725,6 +742,8 @@ bool Document::setFps(const QString &name, int fps)
 
 bool Document::addFrame(const QString &name, int after, bool duplicate, QString *error)
 {
+    if (error)
+        error->clear();
     Document next = *this;
     Clip *found = next.clip(name);
     if (!found) {
@@ -732,6 +751,8 @@ bool Document::addFrame(const QString &name, int after, bool duplicate, QString 
             *error = QStringLiteral("E_CLIP_NOT_FOUND: no clip %1").arg(name);
         return false;
     }
+    if (rejectLockedAnimatedLayers(next.m_layers, error))
+        return false;
     if (found->frameCount >= maxFramesPerClip) {
         if (error)
             *error = QStringLiteral("E_FRAME_LIMIT: clip %1 keeps at most %2 frames")
@@ -810,13 +831,17 @@ bool Document::addFrame(const QString &name, int after, bool duplicate, QString 
     return true;
 }
 
-bool Document::removeFrame(const QString &name, int index)
+bool Document::removeFrame(const QString &name, int index, QString *error)
 {
+    if (error)
+        error->clear();
     Document next = *this;
     Clip *found = next.clip(name);
     // A clip with no frames is a clip that cannot be drawn, so the last one stays.
     if (!found || found->frameCount <= 1 || index < 0
         || index >= found->frameCount)
+        return false;
+    if (rejectLockedAnimatedLayers(next.m_layers, error))
         return false;
     for (Layer &layer : next.m_layers) {
         if (layer.storage != QStringLiteral("animated"))
@@ -851,8 +876,10 @@ bool Document::removeFrame(const QString &name, int index)
     return true;
 }
 
-bool Document::moveFrame(const QString &name, int index, int to)
+bool Document::moveFrame(const QString &name, int index, int to, QString *error)
 {
+    if (error)
+        error->clear();
     Document next = *this;
     Clip *found = next.clip(name);
     if (!found || index < 0 || index >= found->frameCount || to < 0
@@ -860,6 +887,8 @@ bool Document::moveFrame(const QString &name, int index, int to)
         return false;
     if (index == to)
         return true;
+    if (rejectLockedAnimatedLayers(next.m_layers, error))
+        return false;
     for (Layer &layer : next.m_layers) {
         if (layer.storage != QStringLiteral("animated"))
             continue;

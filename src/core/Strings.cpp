@@ -11,9 +11,25 @@
 #include <QJsonParseError>
 #include <QLocale>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QStandardPaths>
 
 namespace omapixel {
+
+namespace {
+
+bool validLanguageTag(const QString &language)
+{
+    // Keep catalogue names to a small language-plus-region shape. Besides
+    // matching the supported fallback rules, this makes the filename boundary
+    // unambiguous.
+    return QRegularExpression(QStringLiteral(
+               "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8}){0,2}$"))
+        .match(language)
+        .hasMatch();
+}
+
+} // namespace
 
 Strings::Strings(QObject *parent) : QObject(parent)
 {
@@ -63,7 +79,7 @@ QString Strings::preferredLanguage()
 
 bool Strings::merge(const QString &language)
 {
-    if (language.isEmpty())
+    if (!validLanguageTag(language))
         return false;
     for (const QString &place : searchPath()) {
         const QString path = place + QLatin1Char('/') + language + QStringLiteral(".json");
@@ -95,7 +111,9 @@ void Strings::load(const QString &language)
     merge(QStringLiteral("en"));       // the floor: every key, in English
     m_language = QStringLiteral("en");
 
-    if (language.isEmpty() || language.startsWith(QStringLiteral("en")))
+    if (!validLanguageTag(language) || language == QLatin1String("en")
+        || language.startsWith(QStringLiteral("en-"))
+        || language.startsWith(QStringLiteral("en_")))
         return;
 
     // `pt_BR`, then `pt`: a general catalogue serves a specific system until
@@ -104,7 +122,8 @@ void Strings::load(const QString &language)
         m_language = language;
         return;
     }
-    const QString general = language.section(QLatin1Char('_'), 0, 0);
+    const int separator = language.indexOf(QRegularExpression(QStringLiteral("[-_]")));
+    const QString general = separator < 0 ? language : language.left(separator);
     if (general != language && merge(general))
         m_language = general;
 }

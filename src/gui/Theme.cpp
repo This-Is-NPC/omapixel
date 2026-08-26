@@ -12,8 +12,17 @@
 
 namespace omapixel {
 
+namespace {
+
+constexpr int hyprctlTimeoutMs = 250;
+constexpr qint64 maxHyprctlOutputBytes = 64 * 1024;
+
+} // namespace
+
 Theme::~Theme()
 {
+    if (m_hyprctlTimeout)
+        m_hyprctlTimeout->stop();
     if (!m_hyprctl || m_hyprctl->state() == QProcess::NotRunning)
         return;
     m_hyprctl->terminate();
@@ -114,8 +123,45 @@ void Theme::queryRounding()
 {
     if (!m_hyprctl) {
         m_hyprctl = new QProcess(this);
+        m_hyprctlTimeout = new QTimer(this);
+        m_hyprctlTimeout->setSingleShot(true);
+        connect(m_hyprctlTimeout, &QTimer::timeout, this, [this] {
+            if (m_hyprctl->state() == QProcess::NotRunning)
+                return;
+            m_hyprctlOutput.clear();
+            m_hyprctlOutputRejected = true;
+            m_hyprctl->kill();
+        });
+        connect(m_hyprctl, &QProcess::readyReadStandardOutput, this, [this] {
+            if (m_hyprctlOutputRejected)
+                return;
+            const QByteArray chunk = m_hyprctl->read(maxHyprctlOutputBytes + 1);
+            if (chunk.size() > maxHyprctlOutputBytes
+                || m_hyprctlOutput.size() > maxHyprctlOutputBytes - chunk.size()) {
+                m_hyprctlOutput.clear();
+                m_hyprctlOutputRejected = true;
+                m_hyprctl->kill();
+                return;
+            }
+            m_hyprctlOutput.append(chunk);
+        });
         connect(m_hyprctl, &QProcess::finished, this, [this] {
-            const int next = parseRounding(m_hyprctl->readAllStandardOutput());
+            m_hyprctlTimeout->stop();
+            if (!m_hyprctlOutputRejected) {
+                const QByteArray tail = m_hyprctl->read(maxHyprctlOutputBytes + 1);
+                if (tail.size() > maxHyprctlOutputBytes
+                    || m_hyprctlOutput.size() > maxHyprctlOutputBytes - tail.size())
+                    m_hyprctlOutputRejected = true;
+                else
+                    m_hyprctlOutput.append(tail);
+            }
+            const QByteArray output = m_hyprctlOutput;
+            m_hyprctlOutput.clear();
+            if (m_hyprctlOutputRejected) {
+                m_hyprctlOutputRejected = false;
+                return;
+            }
+            const int next = parseRounding(output);
             if (next < 0 || next == m_rounding)
                 return;
             m_rounding = next;
@@ -123,13 +169,19 @@ void Theme::queryRounding()
         });
         // Not running Hyprland, or no hyprctl on PATH: the corners stay square,
         // which is what every omarchy theme but one asks for anyway.
-        connect(m_hyprctl, &QProcess::errorOccurred, this, [] {});
+        connect(m_hyprctl, &QProcess::errorOccurred, this, [this] {
+            m_hyprctlOutput.clear();
+            m_hyprctlOutputRejected = true;
+        });
     }
     if (m_hyprctl->state() != QProcess::NotRunning)
         return;
+    m_hyprctlOutput.clear();
+    m_hyprctlOutputRejected = false;
     m_hyprctl->start(QStringLiteral("hyprctl"),
                      {QStringLiteral("-j"), QStringLiteral("getoption"),
                       QStringLiteral("decoration:rounding")});
+    m_hyprctlTimeout->start(hyprctlTimeoutMs);
 }
 
 void Theme::watch()

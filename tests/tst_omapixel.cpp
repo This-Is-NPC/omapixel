@@ -700,6 +700,47 @@ private slots:
         QCOMPARE(malformed, before);
     }
 
+    void structuralAnimationEditsRespectLockedAnimatedLayers()
+    {
+        Document doc = Document::blank(2, 1);
+        QVERIFY(doc.addFrame(QStringLiteral("idle"), 0, false));
+        doc.layerById(QStringLiteral("layer"))->locked = true;
+
+        const Document before = doc;
+        QString error;
+        QVERIFY(!doc.addFrame(QStringLiteral("idle"), 0, false, &error));
+        QCOMPARE(error, QStringLiteral("E_LAYER_LOCKED: --layer=layer"));
+        QCOMPARE(doc, before);
+
+        error.clear();
+        QVERIFY(!doc.removeFrame(QStringLiteral("idle"), 0, &error));
+        QCOMPARE(error, QStringLiteral("E_LAYER_LOCKED: --layer=layer"));
+        QCOMPARE(doc, before);
+
+        error.clear();
+        QVERIFY(!doc.moveFrame(QStringLiteral("idle"), 0, 1, &error));
+        QCOMPARE(error, QStringLiteral("E_LAYER_LOCKED: --layer=layer"));
+        QCOMPARE(doc, before);
+
+        error.clear();
+        QVERIFY(!doc.addClip(QStringLiteral("walk"), 12, &error));
+        QCOMPARE(error, QStringLiteral("E_LAYER_LOCKED: --layer=layer"));
+        QCOMPARE(doc, before);
+
+        Document clips = Document::blank(2, 1);
+        QVERIFY(clips.addClip(QStringLiteral("walk")));
+        clips.layerById(QStringLiteral("layer"))->locked = true;
+        const Document clipsBefore = clips;
+        error.clear();
+        QVERIFY(!clips.removeClip(QStringLiteral("walk"), &error));
+        QCOMPARE(error, QStringLiteral("E_LAYER_LOCKED: --layer=layer"));
+        QCOMPARE(clips, clipsBefore);
+
+        QVERIFY(clips.renameClip(QStringLiteral("walk"), QStringLiteral("run")));
+        QVERIFY(clips.setFps(QStringLiteral("run"), 24));
+        QCOMPARE(clips.clip(QStringLiteral("run"))->fps, 24);
+    }
+
     void frameLimitsReturnDeterministicErrors()
     {
         Document frames = Document::blank(1, 1);
@@ -1410,6 +1451,18 @@ private slots:
         QVERIFY(ansi.contains(QStringLiteral("\x1b[")));
         // Two sprite rows per terminal row: three rows become two lines.
         QCOMPARE(ansi.count(QLatin1Char('\n')), 2);
+    }
+
+    void ansiLowerOnlyPixelsHaveNoBackgroundEscape()
+    {
+        Document doc = Document::blank(1, 2);
+        doc.palette() = Palette();
+        doc.palette().set(u'L', QColor(QStringLiteral("#112233")));
+        QVERIFY(doc.setFrame(QStringLiteral("idle"), 0,
+                             Grid::fromRows({QStringLiteral("."), QStringLiteral("L")})));
+
+        QCOMPARE(render::toAnsi(doc, QStringLiteral("idle"), 0),
+                 QStringLiteral("\x1b[38;2;17;34;51m▄\x1b[0m\n"));
     }
 
     void terminalOutputBudgetRefusesBeforeBuildingOutput()
@@ -2272,6 +2325,31 @@ private slots:
         QCOMPARE(doc.frame(QStringLiteral("walk"), 1).drawnCount(), 25);
         // ... and the other clip's frame is untouched.
         QCOMPARE(doc.frame(QStringLiteral("idle"), 0).drawnCount(), 0);
+    }
+
+    void cliRejectsMalformedAndOutOfRangeAnimationNumbers()
+    {
+        Document doc = Document::blank(1, 1);
+
+        QCOMPARE(run(doc, QStringLiteral("clip add walk --fps nope")).code, 2);
+        QVERIFY(!doc.clip(QStringLiteral("walk")));
+        QCOMPARE(run(doc, QStringLiteral("clip add walk --fps 0")).code, 2);
+        QCOMPARE(run(doc, QStringLiteral("clip add walk --fps 61")).code, 2);
+        QVERIFY(doc.addClip(QStringLiteral("walk")));
+
+        QCOMPARE(run(doc, QStringLiteral("clip fps walk --fps 12x")).code, 2);
+        QCOMPARE(run(doc, QStringLiteral("clip fps walk --fps 0")).code, 2);
+        QCOMPARE(doc.clip(QStringLiteral("walk"))->fps, 8);
+
+        QVERIFY(doc.addFrame(QStringLiteral("walk"), 0, false));
+        const Document before = doc;
+        QCOMPARE(run(doc, QStringLiteral("frame move --clip walk --frame 0 --index nope"))
+                     .code,
+                 2);
+        QCOMPARE(run(doc, QStringLiteral("frame move --clip walk --frame 0 --index 2"))
+                     .code,
+                 2);
+        QCOMPARE(doc, before);
     }
 
     void onlyDocumentCommandsCanBeBatched()
@@ -6491,6 +6569,35 @@ private slots:
         qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
     }
 
+    void configInputAndHistoryHaveHardLimits()
+    {
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        const QString path = home.path() + QStringLiteral("/config.toml");
+        qputenv("OMAPIXEL_CONFIG_PATH", path.toUtf8());
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QByteArray(Config::maxConfigBytes + 1, '#'));
+        file.close();
+        Config oversized;
+        QCOMPARE(oversized.problems(), QStringList{
+            QStringLiteral("config file exceeds hard limit of %1 bytes")
+                .arg(Config::maxConfigBytes)});
+        QCOMPARE(oversized.number(QStringLiteral("history.depth")), 80);
+
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        file.write("[history]\ndepth = "
+                   + QByteArray::number(Config::maxHistoryDepth + 1) + '\n');
+        file.close();
+        Config history;
+        QCOMPARE(history.problems(), QStringList{
+            QStringLiteral("line 2: history.depth — wants an integer from 1 to %1")
+                .arg(Config::maxHistoryDepth)});
+        QCOMPARE(history.number(QStringLiteral("history.depth")), 80);
+        qputenv("OMAPIXEL_CONFIG_PATH", "/nonexistent/omapixel-tests.toml");
+    }
+
     void caretMarginsAcceptNumbersOrCenterPerAxis()
     {
         QTemporaryDir home;
@@ -6940,6 +7047,30 @@ private slots:
         none.load(QStringLiteral("xx"));
         QCOMPARE(none.language(), QStringLiteral("en"));
         QCOMPARE(none.t(QStringLiteral("menu.file")), QStringLiteral("File"));
+    }
+
+    void catalogueLanguageIdentifiersCannotEscapeTheirDirectory()
+    {
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        qputenv("XDG_CONFIG_HOME", home.path().toUtf8());
+        const QString config =
+            QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+        QDir().mkpath(config + QStringLiteral("/i18n"));
+
+        QFile english(config + QStringLiteral("/i18n/en.json"));
+        QVERIFY(english.open(QIODevice::WriteOnly));
+        english.write(R"({"menu.file":"File"})");
+        english.close();
+        QFile escaped(config + QStringLiteral("/escape.json"));
+        QVERIFY(escaped.open(QIODevice::WriteOnly));
+        escaped.write(R"({"menu.file":"Escaped"})");
+        escaped.close();
+
+        Strings strings;
+        strings.load(QStringLiteral("../escape"));
+        QCOMPARE(strings.language(), QStringLiteral("en"));
+        QCOMPARE(strings.t(QStringLiteral("menu.file")), QStringLiteral("File"));
     }
 
     void theEnglishCatalogueCoversEveryKeyTheWindowAsksFor()
