@@ -622,7 +622,8 @@ QString Config::action(int key, int modifiers) const
         for (auto it = m_bound.constBegin(); it != m_bound.constEnd(); ++it) {
             for (const Combination &combination : it.value()) {
                 if (combination.key == key
-                    && combination.modifiers == (held & ~Qt::ShiftModifier))
+                    && combination.modifiers
+                           == (held & ~static_cast<int>(Qt::ShiftModifier)))
                     return it.key();
             }
         }

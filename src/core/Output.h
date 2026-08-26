@@ -1,9 +1,8 @@
 #pragma once
 
-#include <QByteArray>
-#include <QByteArray>
 #include <QString>
 #include <QStringList>
+#include <QByteArray>
 
 namespace omapixel {
 namespace input {

@@ -424,8 +424,8 @@ private:
 
     int m_paletteRevision = 0;
     PaletteModel m_paletteRows;
-    ChangeLog *m_changes = nullptr;
     Document m_document;
+    ChangeLog *m_changes = nullptr;
     QList<Document> m_undo;
     QList<Document> m_redo;
     QList<QString> m_undoActiveLayerIds;
