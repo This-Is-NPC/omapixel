@@ -122,6 +122,8 @@ def main():
                 "--out", output, "--param", f"case={case}", env=env,
             )
             assert failed.returncode == 1, (case, failed.stdout, failed.stderr)
+            if case == "crash":
+                assert "plugin crashed" in failed.stderr, failed.stderr
             assert output.read_bytes() == b"unchanged"
             assert_workspace_clean(baseline_workspaces)
 

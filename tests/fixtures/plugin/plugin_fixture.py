@@ -4,6 +4,7 @@
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import time
 
@@ -48,7 +49,7 @@ def main():
         print("bounded failure diagnostic", file=sys.stderr, flush=True)
         return 7
     if case == "crash":
-        os.abort()
+        os.kill(os.getpid(), signal.SIGKILL)
     if case == "timeout":
         time.sleep(61)
         return 0

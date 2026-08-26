@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
 import unittest
@@ -375,6 +376,8 @@ class ProtocolContractTest(unittest.TestCase):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
                 code, _, stderr, _ = run_fixture(case, Path(directory))
                 self.assertNotEqual(code, 0)
+                if case == "crash":
+                    self.assertEqual(code, -signal.SIGKILL)
                 self.assertLessEqual(len(stderr), MAX_STDERR)
         with tempfile.TemporaryDirectory() as directory:
             code, _, _, timed_out = run_fixture("timeout", Path(directory), timeout=0.1)
