@@ -51,6 +51,16 @@ if [[ $(uname -m) == x86_64 ]]; then
   fi
 fi
 
+# GitHub's native ARM runner and the container's builder user have different
+# UIDs. The official helper chowns these mounts to the runner, so grant the
+# container write access before it creates the local package database.
+mkdir -p \
+  "$omarchy_pkgs/build-output/edge/aarch64" \
+  "$omarchy_pkgs/pkgs.omarchy.org/edge/aarch64"
+chmod 0777 \
+  "$omarchy_pkgs/build-output/edge/aarch64" \
+  "$omarchy_pkgs/pkgs.omarchy.org/edge/aarch64"
+
 "$omarchy_pkgs/bin/repo" build --arch aarch64 --package omapixel
 
 shopt -s globstar nullglob
