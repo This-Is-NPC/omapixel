@@ -158,6 +158,10 @@ run = '"$BUILD_DIR/bin/omapixel" i18n "$@"'
 description = "Audit QML user-facing strings against the English catalogue"
 run = 'python3 "{{config_root}}/tests/test_i18n_surface.py"'
 
+[tasks.gui-qml]
+description = "Check Studio QML interaction and accessibility contracts"
+run = 'python3 "{{config_root}}/tests/test_gui_qml.py"'
+
 [tasks.format-v2]
 description = "Run the executable v2 contract and canonical fixture tests"
 run = 'python3 "{{config_root}}/tests/test_format_v2.py"'
@@ -234,7 +238,7 @@ run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 [tasks.check]
 description = "Everything CI would run"
 depends = ["build", "test", "format-v2", "plugin-contract", "plugin-e2e", "properties-v2", "cli-layers", "image-io",
-           "skill-e2e", "dist-contract", "layers-e2e", "i18n", "i18n-surface", "benchmark-layers",
+           "skill-e2e", "dist-contract", "layers-e2e", "i18n", "i18n-surface", "gui-qml", "benchmark-layers",
            "test-keyboard", "test-keyboard-wayland"]
 run = """
 mise run studio-smoke
@@ -260,9 +264,11 @@ rm -rf "$root"
          "$root/share/omapixel/i18n" \
          "$root/share/omapixel/agents/skills/omapixel" \
          "$root/share/applications" \
+         "$root/share/mime/packages" \
          "$root/share/icons/hicolor/scalable/apps" \
          "$root/share/licenses/omapixel" \
-         "$root/share/doc/omapixel/docs"
+         "$root/share/doc/omapixel/docs" \
+         "$root/share/doc/omapixel/examples"
 
 install -m755 "$BUILD_DIR/bin/omapixel"        "$root/bin/omapixel"
 install -m755 "$BUILD_DIR/bin/omapixel-studio" "$root/bin/omapixel-studio"
@@ -274,12 +280,20 @@ install -m644 "{{config_root}}/config/config.toml"   "$root/share/omapixel/confi
 install -m644 "{{config_root}}"/agents/skills/omapixel/*.md \
   "$root/share/omapixel/agents/skills/omapixel/"
 install -m644 "{{config_root}}/packaging/omapixel-studio.desktop" "$root/share/applications/"
+install -m644 "{{config_root}}/packaging/omapixel.xml" "$root/share/mime/packages/"
 install -m644 "{{config_root}}/packaging/icon/omapixel.svg" "$root/share/icons/hicolor/scalable/apps/"
 install -m644 "{{config_root}}/LICENSE"              "$root/share/licenses/omapixel/LICENSE"
 install -m644 "{{config_root}}/README.md"            "$root/share/doc/omapixel/README.md"
 install -m644 "{{config_root}}"/docs/*.md            "$root/share/doc/omapixel/docs/"
 install -m644 "{{config_root}}"/docs/*.schema.json   "$root/share/doc/omapixel/docs/"
 install -m644 "{{config_root}}/docs/studio.png"      "$root/share/doc/omapixel/docs/"
+install -m644 "{{config_root}}/examples/README.md" \
+  "$root/share/doc/omapixel/examples/README.md"
+examples_root="{{config_root}}/examples"
+while IFS= read -r -d '' example; do
+  relative="${example#"$examples_root"/}"
+  install -Dm644 "$example" "$root/share/doc/omapixel/examples/$relative"
+done < <(find "$examples_root" -type f \\( -name '*.omapixel' -o -name '*.gif' \\) -print0)
 
 tar -czf "$root.tar.gz" -C "$out" "omapixel-$version-$arch"
 echo "$root.tar.gz"

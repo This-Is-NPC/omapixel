@@ -22,6 +22,7 @@ depends=(
   # Wayland. Without it opening a document silently does nothing.
   'xdg-desktop-portal'
   'hicolor-icon-theme'
+  'shared-mime-info'
   'qt6-base'
   'qt6-declarative'
   'qt6-imageformats' # WebP import plugin
@@ -73,6 +74,8 @@ package() {
 
   install -Dm644 packaging/omapixel-studio.desktop \
     "$pkgdir/usr/share/applications/omapixel-studio.desktop"
+  install -Dm644 packaging/omapixel.xml \
+    "$pkgdir/usr/share/mime/packages/omapixel.xml"
   install -Dm644 packaging/icon/omapixel.svg \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/omapixel.svg"
 
@@ -81,6 +84,13 @@ package() {
   install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname/docs" docs/*.md
   install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname/docs" docs/*.schema.json
   install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname/docs" docs/studio.png
+  install -Dm644 examples/README.md \
+    "$pkgdir/usr/share/doc/$pkgname/examples/README.md"
+  while IFS= read -r -d '' example; do
+    relative=${example#examples/}
+    install -Dm644 "$example" \
+      "$pkgdir/usr/share/doc/$pkgname/examples/$relative"
+  done < <(find examples -type f \( -name '*.omapixel' -o -name '*.gif' \) -print0)
 
   for guide in SKILL.md drawing.md animation.md layers.md studio.md; do
     test -f "$pkgdir/usr/share/omapixel/agents/skills/omapixel/$guide"

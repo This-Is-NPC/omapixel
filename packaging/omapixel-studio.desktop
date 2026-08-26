@@ -15,4 +15,5 @@ Icon=omapixel
 Terminal=false
 Categories=Graphics;2DGraphics;RasterGraphics;
 Keywords=pixel;art;sprite;animation;drawing;
+MimeType=application/x-omapixel;
 StartupWMClass=omapixel-studio

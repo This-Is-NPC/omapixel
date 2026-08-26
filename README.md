@@ -196,6 +196,7 @@ bottom, and a bar of live keys under the canvas.
 Full docs live in [`docs/`](docs/).
 
 - **[Getting started](docs/getting-started.md)**: draw, animate and export something, start to finish.
+- **[Dependencies](docs/dependencies.md)**: runtime, checkout, WebP, and test environments.
 - **[Examples](examples/)**: editable projects paired with their rendered GIF previews.
 - **[The command line](docs/cli.md)**: every command, every flag, with examples.
 - **[The studio](docs/studio.md)**: the window, its panels and its keys.
@@ -210,7 +211,5 @@ Full docs live in [`docs/`](docs/).
 omapixel is available under the [MIT License](LICENSE).
 
 ---
-
-<sub>Needs Qt 6 and a C++ compiler: `sudo pacman -S --needed qt6-base qt6-declarative gcc make`.</sub>
 
 <sub>Built for [Omarchy](https://omarchy.org) with [Omakiten](https://github.com/This-Is-NPC/omakiten).</sub>

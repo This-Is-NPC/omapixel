@@ -6,11 +6,9 @@ in the window.
 
 ## Install
 
-You need Qt 6 and a C++ compiler. On Arch:
-
-```bash
-sudo pacman -S --needed qt6-base qt6-declarative gcc make
-```
+See [Dependencies](dependencies.md) for the distinction between an Omarchy
+package installation, a checkout build, optional WebP support, ordinary tests,
+and the full headless/Wayland gate.
 
 Then, from the project:
 
@@ -20,8 +18,9 @@ mise run build    # builds the command line and the studio
 mise run test     # the unit tests, if you want to be sure
 ```
 
-`mise.toml` is the only entry point; there is no Makefile. If mise refuses the
-file, run `mise trust` once.
+`mise.toml` is the only entry point; there is no Makefile. If `mise run deps`
+reports missing checkout dependencies, install the command it prints. If mise
+refuses the file, run `mise trust` once.
 
 The two programs land in `build/`:
 

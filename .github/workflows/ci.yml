@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: system dependencies
         run: |
-          pacman -Syu --needed --noconfirm git mise qt6-base qt6-declarative hyprland weston wtype mesa zstd
+          pacman -Syu --needed --noconfirm git mise qt6-base qt6-declarative qt6-imageformats python hyprland weston wtype mesa zstd
 
       - uses: actions/checkout@v4
 
