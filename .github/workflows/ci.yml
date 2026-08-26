@@ -21,13 +21,18 @@ jobs:
     steps:
       - name: system dependencies
         run: |
-          pacman -Syu --needed --noconfirm git mise qt6-base qt6-declarative qt6-imageformats python hyprland weston wtype mesa zstd
+          pacman -Syu --needed --noconfirm git mise qt6-base qt6-declarative qt6-imageformats python sway wtype mesa zstd
+          setcap -r /usr/bin/sway
 
       - uses: actions/checkout@v4
 
       - name: build and test
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          install -d -m 700 "$XDG_RUNTIME_DIR"
-          mise trust
-          mise run check
+          useradd --create-home --user-group omapixel-ci
+          chown -R omapixel-ci:omapixel-ci "$GITHUB_WORKSPACE"
+          install -d -o omapixel-ci -g omapixel-ci -m 700 "$XDG_RUNTIME_DIR"
+          runuser -u omapixel-ci -- env \
+            HOME=/home/omapixel-ci \
+            XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+            GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
+            bash -lc 'cd "$GITHUB_WORKSPACE" && mise trust && mise run check'

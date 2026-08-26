@@ -67,7 +67,7 @@ mise run test
 ```
 
 These tests use Qt's offscreen platform and do not need a display, Wayland
-compositor, Hyprland, Weston, or `wtype`. Python is not needed for this focused
+compositor, Hyprland, Sway, or `wtype`. Python is not needed for this focused
 test task.
 
 ## Full headless and Wayland checks
@@ -84,12 +84,11 @@ Wayland session. A clean CI/container environment therefore needs:
 
 - `python`
 - `qt6-imageformats`
-- `hyprland`
-- `weston`
+- `sway`
 - `wtype`
 - `mesa`
 
-The Wayland test uses Weston as a headless parent when no display exists,
-starts Hyprland inside it, and uses `wtype` to exercise keyboard input. Mesa
-provides the software rendering path. These packages are test dependencies,
-not a replacement for the runtime dependency resolution performed by `pacman`.
+The Wayland test starts Sway with its headless Pixman backend and uses `wtype`
+to exercise keyboard input. Mesa provides Qt's software rendering path. These
+packages are test dependencies, not a replacement for the runtime dependency
+resolution performed by `pacman`.

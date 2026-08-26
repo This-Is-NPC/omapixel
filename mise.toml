@@ -145,7 +145,7 @@ QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./tst_omapixel \
 """
 
 [tasks.test-keyboard-wayland]
-description = "Run keyboard journeys through a real nested Hyprland compositor"
+description = "Run keyboard journeys through a real headless Wayland compositor"
 depends = ["build", "test-keyboard"]
 run = 'python3 "{{config_root}}/tests/test_keyboard_wayland.py"'
 
@@ -238,9 +238,10 @@ run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 [tasks.check]
 description = "Everything CI would run"
 depends = ["build", "test", "format-v2", "plugin-contract", "plugin-e2e", "properties-v2", "cli-layers", "image-io",
-           "skill-e2e", "dist-contract", "layers-e2e", "i18n", "i18n-surface", "gui-qml", "benchmark-layers",
+           "skill-e2e", "dist-contract", "layers-e2e", "i18n", "i18n-surface", "gui-qml",
            "test-keyboard", "test-keyboard-wayland"]
 run = """
+mise run benchmark-layers
 mise run studio-smoke
 echo 'build, tests, and Studio startup are green'
 """
