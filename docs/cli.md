@@ -521,6 +521,23 @@ settings and keybindings. With no file, both use defaults.
 binding that names no key, or two actions sharing one key. See
 [Settings and keys](configuration.md).
 
+### `skill` - install the coding-agent skill
+
+```bash
+omapixel skill          # bundled source and installation status
+omapixel skill install  # link it into the global Agent Skills directory
+```
+
+The package keeps the canonical skill under
+`/usr/share/omapixel/agents/skills/omapixel`; a checkout install uses
+`~/.local/share/omapixel/agents/skills/omapixel`. `install` links that one copy
+to the unified global path `~/.agents/skills/omapixel`. Package updates therefore
+update every agent through the same skill without copying stale instructions.
+
+Installation is idempotent and refuses to replace an existing file, directory,
+or link owned by the user. Restart a running agent after installing because
+skills are discovered at startup.
+
 ## Plugins
 
 The CLI implements local export plugins through Plugin API 1. Read

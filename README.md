@@ -31,6 +31,7 @@ On Omarchy:
 
 ```bash
 sudo pacman -S omapixel
+omapixel skill install # teach supported coding agents how to drive it
 ```
 
 From a checkout:
@@ -88,6 +89,7 @@ New here? Start with [Getting started](docs/getting-started.md).
 | `import` `export` | read and write somebody else's sprite catalog |
 | `import-image` | turn PNG, JPEG or WebP into a new document or layer |
 | `config` `i18n` | the settings file, and what a translation is missing |
+| `skill` | inspect or install the Omapixel skill for coding agents |
 
 `--clip` and `--frame` default to the first clip and frame 0, so a document with
 one clip needs no flags at all. Exit `1` means the answer was no; exit `2` means

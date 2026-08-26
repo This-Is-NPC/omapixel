@@ -18,6 +18,10 @@ DESTDIR = $$OUT_PWD/../../bin
 # Where the version comes from. One file, both binaries.
 include($$PWD/../../version.pri)
 
+# A shadow build can live anywhere, so checkout binaries need one source-tree
+# fallback. Installed data beside the executable still wins at runtime.
+DEFINES += OMAPIXEL_SKILL_DIR=\\\"$$PWD/../../agents/skills/omapixel\\\"
+
 INCLUDEPATH += $$PWD/../core
 HEADERS     += Commands.h PluginCommands.h
 SOURCES     += main.cpp Commands.cpp PluginCommands.cpp

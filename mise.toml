@@ -195,6 +195,21 @@ description = "Run raster import and animated GIF export contracts"
 depends = ["build"]
 run = 'python3 "{{config_root}}/tests/test_image_io.py"'
 
+[tasks.skill-e2e]
+description = "Run the portable agent-skill content and installer contract"
+depends = ["build"]
+run = 'python3 "{{config_root}}/tests/test_skill.py"'
+
+[tasks.dist-contract]
+description = "Verify the staged release contains and discovers the agent skill"
+depends = ["dist"]
+run = '''
+version="${OMAPIXEL_VERSION:-$(git -C '{{config_root}}' describe --tags --always 2>/dev/null || echo 0.0.0)}"
+version="${version#v}"
+python3 "{{config_root}}/tests/test_skill_dist.py" \
+  "{{config_root}}/dist/omapixel-$version-$(uname -m)"
+'''
+
 [tasks.layers-e2e]
 description = "Run the CLI, Studio, where, render, flatten and live-reload fixture"
 depends = ["build", "test"]
@@ -219,7 +234,7 @@ run = '"$BUILD_DIR/bin/omapixel" config "$@"'
 [tasks.check]
 description = "Everything CI would run"
 depends = ["build", "test", "format-v2", "plugin-contract", "plugin-e2e", "properties-v2", "cli-layers", "image-io",
-           "layers-e2e", "i18n", "i18n-surface", "benchmark-layers",
+           "skill-e2e", "dist-contract", "layers-e2e", "i18n", "i18n-surface", "benchmark-layers",
            "test-keyboard", "test-keyboard-wayland"]
 run = """
 mise run studio-smoke
@@ -241,8 +256,9 @@ out="{{config_root}}/dist"
 root="$out/omapixel-$version-$arch"
 
 rm -rf "$root"
-mkdir -p "$root/bin" \
+    mkdir -p "$root/bin" \
          "$root/share/omapixel/i18n" \
+         "$root/share/omapixel/agents/skills/omapixel" \
          "$root/share/applications" \
          "$root/share/icons/hicolor/scalable/apps" \
          "$root/share/licenses/omapixel" \
@@ -255,6 +271,8 @@ install -m755 "$BUILD_DIR/bin/omapixel-studio" "$root/bin/omapixel-studio"
 # -- and it is the same layout the packages lay down under /usr.
 install -m644 "{{config_root}}"/i18n/*.json          "$root/share/omapixel/i18n/"
 install -m644 "{{config_root}}/config/config.toml"   "$root/share/omapixel/config.toml"
+install -m644 "{{config_root}}"/agents/skills/omapixel/*.md \
+  "$root/share/omapixel/agents/skills/omapixel/"
 install -m644 "{{config_root}}/packaging/omapixel-studio.desktop" "$root/share/applications/"
 install -m644 "{{config_root}}/packaging/icon/omapixel.svg" "$root/share/icons/hicolor/scalable/apps/"
 install -m644 "{{config_root}}/LICENSE"              "$root/share/licenses/omapixel/LICENSE"
@@ -505,17 +523,21 @@ echo "Studio startup and keyboard overlays are green"
 '''
 
 [tasks.install]
-description = "Install the binaries, the language files and the default config"
+description = "Install the binaries, runtime data and agent skill"
 depends = ["build"]
 run = """
-mkdir -p "$HOME/.local/bin" "$HOME/.local/share/omapixel/i18n"
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/omapixel/i18n" \
+  "$HOME/.local/share/omapixel/agents/skills/omapixel"
 install -m755 "$BUILD_DIR/bin/omapixel" "$HOME/.local/bin/omapixel"
 install -m755 "$BUILD_DIR/bin/omapixel-studio" "$HOME/.local/bin/omapixel-studio"
 # Beside the binaries, where an installed build looks for them. Without this
 # an installed omapixel speaks English and cannot print its own default config.
 install -m644 "{{config_root}}"/i18n/*.json "$HOME/.local/share/omapixel/i18n/"
 install -m644 "{{config_root}}/config/config.toml" "$HOME/.local/share/omapixel/config.toml"
+install -m644 "{{config_root}}"/agents/skills/omapixel/*.md \
+  "$HOME/.local/share/omapixel/agents/skills/omapixel/"
 echo "installed to $HOME/.local/bin"
 echo
 echo "to keep settings of your own:  omapixel config write"
+echo "to teach your coding agent:    omapixel skill install"
 """

@@ -31,6 +31,7 @@ makedepends=(
   'gcc'
   'make'
 )
+checkdepends=('python')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
@@ -53,6 +54,8 @@ check() {
   # The tests touch QImage and never open a window; a build server has no
   # display, and without this Qt aborts on a missing platform plugin.
   QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./tst_omapixel
+  cd ..
+  OMAPIXEL_CLI="$PWD/build/bin/omapixel" python3 tests/test_skill.py
 }
 
 package() {
@@ -65,6 +68,8 @@ package() {
   # speaks nothing and cannot print its own default config.
   install -Dm644 -t "$pkgdir/usr/share/omapixel/i18n" i18n/*.json
   install -Dm644 config/config.toml "$pkgdir/usr/share/omapixel/config.toml"
+  install -Dm644 -t "$pkgdir/usr/share/omapixel/agents/skills/omapixel" \
+    agents/skills/omapixel/*.md
 
   install -Dm644 packaging/omapixel-studio.desktop \
     "$pkgdir/usr/share/applications/omapixel-studio.desktop"
@@ -76,4 +81,8 @@ package() {
   install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname/docs" docs/*.md
   install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname/docs" docs/*.schema.json
   install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname/docs" docs/studio.png
+
+  for guide in SKILL.md drawing.md animation.md layers.md studio.md; do
+    test -f "$pkgdir/usr/share/omapixel/agents/skills/omapixel/$guide"
+  done
 }

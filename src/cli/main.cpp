@@ -604,6 +604,93 @@ int inspectConfig(const QString &what)
     return 0;
 }
 
+QString skillSourcePath()
+{
+    const QStringList candidates = {
+        QDir::cleanPath(QCoreApplication::applicationDirPath()
+                        + QStringLiteral("/../share/omapixel/agents/skills/omapixel")),
+        QDir::cleanPath(QCoreApplication::applicationDirPath()
+                        + QStringLiteral("/../../agents/skills/omapixel")),
+        QStringLiteral(OMAPIXEL_SKILL_DIR)};
+    const QStringList required = {QStringLiteral("SKILL.md"),
+                                  QStringLiteral("drawing.md"),
+                                  QStringLiteral("animation.md"),
+                                  QStringLiteral("layers.md"),
+                                  QStringLiteral("studio.md")};
+
+    for (const QString &candidate : candidates) {
+        bool complete = true;
+        for (const QString &name : required)
+            complete = complete && QFileInfo(QDir(candidate).filePath(name)).isFile();
+        if (complete)
+            return QFileInfo(candidate).canonicalFilePath();
+    }
+    return QString();
+}
+
+QString skillDestination()
+{
+    return QDir::cleanPath(QDir::homePath()
+                           + QStringLiteral("/.agents/skills/omapixel"));
+}
+
+bool skillLinkMatches(const QString &path, const QString &source)
+{
+    const QFileInfo link(path);
+    if (!link.isSymLink())
+        return false;
+    return QFileInfo(link.symLinkTarget()).canonicalFilePath() == source;
+}
+
+int manageSkill(const QStringList &words)
+{
+    if (words.size() > 1 || (!words.isEmpty() && words.first() != QLatin1String("install"))) {
+        err() << "skill: say `install`, or nothing at all\n";
+        return 2;
+    }
+
+    const QString source = skillSourcePath();
+    if (source.isEmpty()) {
+        err() << "the bundled omapixel skill is not installed\n";
+        return 1;
+    }
+
+    const QString destination = skillDestination();
+    if (words.isEmpty()) {
+        const bool linked = skillLinkMatches(destination, source);
+        const QFileInfo entry(destination);
+        const bool conflict = !linked && (entry.exists() || entry.isSymLink());
+        out() << "source  " << safeDiagnostic(source) << "\n";
+        out() << (linked ? "linked   " : conflict ? "conflict " : "missing  ")
+              << safeDiagnostic(destination) << "\n";
+        if (conflict)
+            out() << "\nresolve conflicts before installing\n";
+        else if (!linked)
+            out() << "\ninstall with:  omapixel skill install\n";
+        return conflict ? 1 : 0;
+    }
+
+    const QFileInfo entry(destination);
+    if ((entry.exists() || entry.isSymLink()) && !skillLinkMatches(destination, source)) {
+        err() << safeDiagnostic(destination)
+              << " already exists and is not this bundled skill\n";
+        return 1;
+    }
+
+    if (skillLinkMatches(destination, source)) {
+        out() << "omapixel skill is already installed\n";
+        return 0;
+    }
+    if (!QDir().mkpath(QFileInfo(destination).absolutePath())
+        || !QFile::link(source, destination)) {
+        err() << "could not link " << safeDiagnostic(destination) << "\n";
+        return 1;
+    }
+    out() << "linked " << safeDiagnostic(destination) << "\n";
+    out() << "restart your agent to load the omapixel skill\n";
+    return 0;
+}
+
 } // namespace
 
 // --------------------------------------------------------------- the commands
@@ -665,6 +752,7 @@ int main(int argc, char *argv[])
         "  batch    many commands over one document, read once and written once\n"
         "  i18n     what a language catalogue is still missing\n"
         "  config   the settings file: check | write\n"
+        "  skill    install the agent skill\n"
         "  plugin   list | check | run local plugins\n"
         "  where    which live studios hold a document\n"
         "  diff     what differs between two documents\n"
@@ -706,6 +794,9 @@ int main(int argc, char *argv[])
 
     if (command == QLatin1String("config"))
         return inspectConfig(words.value(0));
+
+    if (command == QLatin1String("skill"))
+        return manageSkill(words);
 
     if (command == QLatin1String("plugin")) {
         const cli::Outcome outcome = cli::runPluginCommand(words, parser);
