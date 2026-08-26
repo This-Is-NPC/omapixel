@@ -48,7 +48,7 @@ exit 1
 
 [tasks.build]
 description = "Build the CLI and the studio"
-depends = ["deps"]
+depends = ["build-toolchain"]
 run = """
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
@@ -58,6 +58,40 @@ echo
 echo "cli    $BUILD_DIR/bin/omapixel"
 echo "studio $BUILD_DIR/bin/omapixel-studio"
 """
+
+[tasks.build-toolchain]
+description = "Discard build objects compiled with an obsolete Qt or compiler"
+depends = ["deps"]
+run = '''
+qt_archdata="$(qmake6 -query QT_INSTALL_ARCHDATA)"
+qt_libs="$(qmake6 -query QT_INSTALL_LIBS)"
+
+file_identity() {
+  stat -Lc '%Y:%s' "$1"
+}
+
+signature="qmake=$(command -v qmake6)
+qt=$(qmake6 -query QT_VERSION)
+qconfig=$(file_identity "$qt_archdata/mkspecs/qconfig.pri")
+qtcore=$(file_identity "$qt_libs/libQt6Core.so.6")
+qtquick=$(file_identity "$qt_libs/libQt6Quick.so.6")
+cxx=$(command -v g++)
+compiler=$(g++ -dumpfullversion -dumpversion)"
+stamp="$BUILD_DIR/.toolchain"
+previous="$(cat "$stamp" 2>/dev/null || true)"
+
+if [ "$signature" != "$previous" ]; then
+  if [ -d "$BUILD_DIR" ] || [ -d "{{config_root}}/build-tests" ] \
+     || [ -d "{{config_root}}/build-benchmark" ]; then
+    echo "Qt or compiler changed — discarding stale build objects"
+  fi
+  rm -rf "$BUILD_DIR" "{{config_root}}/build-tests" \
+    "{{config_root}}/build-benchmark"
+fi
+
+mkdir -p "$BUILD_DIR"
+printf '%s\n' "$signature" > "$stamp"
+'''
 
 [tasks.clean]
 description = "Throw the build away"
@@ -168,7 +202,7 @@ run = 'python3 "{{config_root}}/tests/test_layers_e2e.py"'
 
 [tasks.benchmark-layers]
 description = "Build and run the canonical multilayer performance gate"
-depends = ["deps"]
+depends = ["build-toolchain"]
 run = """
 mkdir -p "{{config_root}}/build-benchmark"
 cd "{{config_root}}/build-benchmark"
