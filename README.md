@@ -6,10 +6,32 @@
 operation is on the command line, and there is a window for when you take
 over.**
 
-![the last-horizon photograph dissolving into the omarchy wallpaper](examples/last-horizon-omarchy/last-horizon-omarchy.gif)
-
 No mouse in the loop. No colour baked into a pixel. No screenshotting a running
 window to find out what got drawn.
+
+## Made with omapixel
+
+<table>
+  <tr>
+    <td width="62%" align="center">
+      <a href="examples/last-horizon-omarchy/last-horizon-omarchy.omapixel">
+        <img src="examples/last-horizon-omarchy/last-horizon-omarchy.gif" alt="The Last Horizon photograph dissolving into Omarchy, Omapixel, and back">
+      </a>
+    </td>
+    <td width="38%" align="center">
+      <a href="examples/escape-from-omarchy/escape-from-omarchy.omapixel">
+        <img src="examples/escape-from-omarchy/escape-from-omarchy.gif" alt="An animated newspaper ending with Oligarchy transforming into Omarchy and a beating Omapixel heart" width="260">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub><strong>Last Horizon × Omarchy × Omapixel</strong><br>109 frames · 12 fps · three-stage dissolve with a pulsing heart</sub></td>
+    <td align="center"><sub><strong>Escape from Omarchy</strong><br>102 frames · 8 fps · layered newspaper animation</sub></td>
+  </tr>
+</table>
+
+Both previews come from editable `.omapixel` projects. Open one in the Studio,
+inspect every layer and frame, or [browse all examples](examples/).
 
 ---
 
@@ -174,6 +196,7 @@ bottom, and a bar of live keys under the canvas.
 Full docs live in [`docs/`](docs/).
 
 - **[Getting started](docs/getting-started.md)**: draw, animate and export something, start to finish.
+- **[Examples](examples/)**: editable projects paired with their rendered GIF previews.
 - **[The command line](docs/cli.md)**: every command, every flag, with examples.
 - **[The studio](docs/studio.md)**: the window, its panels and its keys.
 - **[The format](docs/format.md)**: the schema, composition rules, and layer behavior.
