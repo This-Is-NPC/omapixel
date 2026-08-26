@@ -121,6 +121,17 @@ def main():
         expect(run("batch", second, "--script", script), 0, "5 command(s), 5 change(s)")
         assert first.read_bytes() == second.read_bytes()
 
+        compressed = root / "compressed.omapixel"
+        expect(run("new", compressed, "--size", "3x2"))
+        assert compressed.read_bytes().startswith(b"\x28\xb5\x2f\xfd")
+        expect(run("paint", compressed, "--frame", "0", "--at", "1,1", "--slot", "I"))
+        assert compressed.read_bytes().startswith(b"\x28\xb5\x2f\xfd")
+        expect(run("check", compressed), 0, "nothing to report")
+        expect(run("diff", compressed, compressed), 0, "0 difference(s)")
+        compressed_flat = root / "compressed-flat.omapixel"
+        expect(run("flatten", compressed, "-o", compressed_flat))
+        assert compressed_flat.read_bytes().startswith(b"\x28\xb5\x2f\xfd")
+
         unsafe_path = root / "terminal\x1b]8;;bad\x07.json"
         created = run("new", unsafe_path)
         expect(created, 0)
@@ -142,7 +153,7 @@ def main():
         expect(run("batch", first, "--script", command_limited), 2,
                "hard command limit")
 
-    print("cli-layer-tests: 36 command checks passed")
+    print("cli-layer-tests: 42 command checks passed")
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ BUILD_DIR = "{{config_root}}/build"
 description = "Check the system dependencies, and say how to install what is missing"
 run = """
 missing=""
-for tool in qmake6 g++ make; do
+for tool in qmake6 g++ make zstd; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 # The Qt modules the .pro files ask for. Present as headers rather than as
@@ -40,7 +40,7 @@ fi
 echo "missing:$missing" >&2
 echo >&2
 echo "on Arch / Omarchy:" >&2
-echo "  sudo pacman -S --needed qt6-base qt6-declarative gcc make" >&2
+echo "  sudo pacman -S --needed qt6-base qt6-declarative gcc make zstd" >&2
 exit 1
 """
 

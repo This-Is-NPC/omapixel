@@ -25,6 +25,7 @@ depends=(
   'qt6-base'
   'qt6-declarative'
   'qt6-imageformats' # WebP import plugin
+  'zstd'
 )
 makedepends=(
   'gcc'

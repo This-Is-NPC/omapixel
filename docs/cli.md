@@ -22,6 +22,13 @@ else's file.
 Changes are written back to the same file. There is no `--save` and no
 in-place flag; a command that changes a document saves it.
 
+Document output uses the destination suffix as an explicit format choice:
+`.json` writes readable v2 JSON and `.omapixel` writes the same compact JSON in
+a checksum-bearing Zstandard frame. Commands that modify a document in place
+preserve its representation while that suffix remains. A path without either
+suffix keeps the historical JSON behavior, even when compressed content was
+recognized after a rename.
+
 ## Exit codes
 
 | | |

@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <zstd.h>
 
 #include "Bridge.h"
 #include "Codec.h"
@@ -1028,6 +1029,106 @@ private slots:
         QVERIFY(back.document == sample());
     }
 
+    void omapixelFilesAreStandardCompressedJsonFrames()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString jsonPath = dir.filePath(QStringLiteral("drawing.json"));
+        const QString omapixelPath = dir.filePath(QStringLiteral("drawing.omapixel"));
+        QVERIFY(Codec::writeFile(jsonPath, sample()));
+        QVERIFY(Codec::writeFile(omapixelPath, sample()));
+
+        QFile jsonFile(jsonPath);
+        QVERIFY(jsonFile.open(QIODevice::ReadOnly));
+        const QByteArray json = jsonFile.readAll();
+        QVERIFY(json.startsWith('{'));
+        QVERIFY(json.contains('\n'));
+
+        QFile omapixelFile(omapixelPath);
+        QVERIFY(omapixelFile.open(QIODevice::ReadOnly));
+        const QByteArray compressed = omapixelFile.readAll();
+        QCOMPARE(compressed.first(4), QByteArray("\x28\xb5\x2f\xfd", 4));
+        const unsigned long long size = ZSTD_getFrameContentSize(
+            compressed.constData(), size_t(compressed.size()));
+        QVERIFY(size != ZSTD_CONTENTSIZE_ERROR);
+        QVERIFY(size != ZSTD_CONTENTSIZE_UNKNOWN);
+        QByteArray compact(int(size), Qt::Uninitialized);
+        const size_t decoded = ZSTD_decompress(compact.data(), size_t(compact.size()),
+                                               compressed.constData(),
+                                               size_t(compressed.size()));
+        QVERIFY2(!ZSTD_isError(decoded), ZSTD_getErrorName(decoded));
+        QCOMPARE(decoded, size_t(compact.size()));
+        QVERIFY(!compact.contains('\n'));
+        QVERIFY(Codec::read(compact).ok);
+
+        const Codec::Result back = Codec::readFile(omapixelPath);
+        QVERIFY2(back.ok, qPrintable(back.error));
+        QCOMPARE(back.document, sample());
+    }
+
+    void compressedDocumentsAreDetectedByContentNotSuffix()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString source = dir.filePath(QStringLiteral("drawing.omapixel"));
+        const QString renamed = dir.filePath(QStringLiteral("drawing.data"));
+        QVERIFY(Codec::writeFile(source, sample()));
+        QVERIFY(QFile::rename(source, renamed));
+        const Codec::Result back = Codec::readFile(renamed);
+        QVERIFY2(back.ok, qPrintable(back.error));
+        QCOMPARE(back.document, sample());
+    }
+
+    void corruptAndConcatenatedCompressedDocumentsAreRefused()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("drawing.omapixel"));
+        QVERIFY(Codec::writeFile(path, sample()));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QByteArray valid = file.readAll();
+        file.close();
+
+        QByteArray trailing = valid;
+        trailing.append('x');
+        QVERIFY(output::writeAtomically(path, trailing));
+        Codec::Result read = Codec::readFile(path);
+        QVERIFY(!read.ok);
+        QVERIFY(read.error.contains(QStringLiteral("trailing")));
+
+        QByteArray corrupt = valid;
+        corrupt[corrupt.size() - 1] ^= char(0x01);
+        QVERIFY(output::writeAtomically(path, corrupt));
+        read = Codec::readFile(path);
+        QVERIFY(!read.ok);
+        QVERIFY(read.error.contains(QStringLiteral("checksum"), Qt::CaseInsensitive));
+
+        QByteArray concatenated = valid + valid;
+        QVERIFY(output::writeAtomically(path, concatenated));
+        read = Codec::readFile(path);
+        QVERIFY(!read.ok);
+        QVERIFY(read.error.contains(QStringLiteral("multiple frames")));
+    }
+
+    void compressedDocumentsCannotExpandPastTheDocumentLimit()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QByteArray oversized(Document::maxDocumentBytes + 1, 'x');
+        QByteArray compressed(int(ZSTD_compressBound(size_t(oversized.size()))),
+                              Qt::Uninitialized);
+        const size_t size = ZSTD_compress(compressed.data(), size_t(compressed.size()),
+                                          oversized.constData(), size_t(oversized.size()), 1);
+        QVERIFY2(!ZSTD_isError(size), ZSTD_getErrorName(size));
+        compressed.resize(int(size));
+        const QString path = dir.filePath(QStringLiteral("oversized.omapixel"));
+        QVERIFY(output::writeAtomically(path, compressed));
+        const Codec::Result read = Codec::readFile(path);
+        QVERIFY(!read.ok);
+        QVERIFY(read.error.contains(QStringLiteral("expanded document exceeds")));
+    }
+
     void documentModelSavesFileDialogUrls()
     {
         QTemporaryDir dir;
@@ -1038,6 +1139,21 @@ private slots:
         QVERIFY(document.save(QUrl::fromLocalFile(path).toString()));
         QCOMPARE(document.path(), path);
         QVERIFY(Codec::readFile(path).ok);
+    }
+
+    void documentModelSavesCompressedFileDialogUrls()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("saved.omapixel"));
+        DocumentModel document;
+        document.paint(0, 0, QStringLiteral("I"));
+        QVERIFY(document.save(QUrl::fromLocalFile(path).toString()));
+        QCOMPARE(document.path(), path);
+        QVERIFY(Codec::readFile(path).ok);
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.read(4), QByteArray("\x28\xb5\x2f\xfd", 4));
     }
 
     // ------------------------------------------------------------------- Ops

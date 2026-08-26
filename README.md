@@ -20,7 +20,7 @@ window to find out what got drawn.
    studio.
 3. Look: `text` for the letters, `show` for the terminal, `render` for a PNG.
 4. Animate with `clip` and `frame`; the studio plays it back, looping or not.
-5. Hand over the JSON, a PNG, or a sprite sheet.
+5. Hand over the JSON, compressed `.omapixel`, a PNG, or a sprite sheet.
 
 Anything generated goes through `batch`: one pass over one document, read once
 and written once. Everything an agent does should go through it.
@@ -48,6 +48,17 @@ omapixel new heart.json --size 16x16
 omapixel rect heart.json --from 4,4 --to 11,9 --slot R --filled
 omapixel show heart.json
 ```
+
+Use a `.omapixel` suffix when the editable document should be compressed;
+`.json` remains the default readable interchange form:
+
+```bash
+omapixel new animation.omapixel --size 160x90
+omapixel-studio animation.omapixel
+```
+
+The Studio's Save As dialog offers both representations and subsequent saves
+preserve the selected one.
 
 `R` is a palette slot. A pixel stores the letter, the palette stores the colour,
 so recolouring every `R` in the document is one edit. See

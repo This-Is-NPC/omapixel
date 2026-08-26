@@ -54,6 +54,8 @@ public:
 
     static Result read(const QByteArray &json);
     static Result read(const QByteArray &json, const WarningLimits &limits);
+    /// Reads JSON or a Zstandard-compressed Omapixel document. Compressed input
+    /// is detected by its frame magic rather than trusting the file suffix.
     static Result readFile(const QString &path);
     static Result readFile(const QString &path, const WarningLimits &limits);
 
@@ -64,7 +66,9 @@ public:
 
     static QByteArray write(const Document &document, QString *error = nullptr);
 
-    /// Writes through a temporary and renames over the target. The studio
+    /// Writes JSON by default and compact JSON in a Zstandard frame when the
+    /// target suffix is `.omapixel`. Writes through a temporary and renames
+    /// over the target. The studio
     /// watches the file it has open, and the atomic rename means it never
     /// reads half a document because a CLI command is halfway through a write.
     static bool writeFile(const QString &path, const Document &document,

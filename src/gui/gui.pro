@@ -27,5 +27,5 @@ RESOURCES += resources.qrc
 
 # The same static library the CLI links. One model, two front ends -- which is
 # the entire reason this project is C++ rather than QML plus a script.
-LIBS           += -L$$OUT_PWD/../core -lomapixelcore
+LIBS           += -L$$OUT_PWD/../core -lomapixelcore -lzstd
 PRE_TARGETDEPS += $$OUT_PWD/../core/libomapixelcore.a

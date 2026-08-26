@@ -8,6 +8,7 @@ CONFIG   += testcase c++17 console
 CONFIG   -= app_bundle
 TEMPLATE  = app
 TARGET    = tst_omapixel
+LIBS     += -lzstd
 
 # Compiles the core's sources directly rather than linking the library. It is
 # what omawrite does, and it keeps `mise run test` independent of whether the

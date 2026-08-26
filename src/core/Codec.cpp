@@ -3,15 +3,18 @@
 #include "TextSafety.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QRegularExpression>
+#include <QScopeGuard>
 #include <QSet>
 
 #include <cmath>
 #include <limits>
+#include <zstd.h>
 
 namespace omapixel {
 namespace {
@@ -399,6 +402,187 @@ QStringList resourceWarnings(const Document &document, qint64 bytes,
     return warnings;
 }
 
+QByteArray encodeJson(const Document &document, QJsonDocument::JsonFormat format,
+                      QString *error)
+{
+    const QStringList problems = document.problems();
+    if (!problems.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("document is invalid: %1")
+                         .arg(problems.first());
+        return QByteArray();
+    }
+    QJsonArray palette;
+    for (const Palette::Slot &slot : document.palette().entries()) {
+        QJsonObject entry;
+        entry.insert(QStringLiteral("slot"), QString(slot.letter));
+        entry.insert(QStringLiteral("colour"), colourString(slot.colour));
+        palette.append(entry);
+    }
+    QJsonArray clips;
+    for (const Clip &clip : document.clips()) {
+        QJsonObject entry;
+        entry.insert(QStringLiteral("id"), clip.id);
+        entry.insert(QStringLiteral("name"), clip.name);
+        entry.insert(QStringLiteral("fps"), clip.fps);
+        entry.insert(QStringLiteral("frameCount"), clip.frameCount);
+        clips.append(entry);
+    }
+    QJsonArray layers;
+    for (const Layer &layer : document.layers()) {
+        QJsonArray cels;
+        for (const Cel &cel : layer.cels) {
+            QJsonObject entry;
+            if (layer.storage == QStringLiteral("shared")) {
+                entry.insert(QStringLiteral("scope"), QStringLiteral("all"));
+            } else {
+                entry.insert(QStringLiteral("clip"), cel.clip);
+                entry.insert(QStringLiteral("frame"), cel.frame);
+            }
+            entry.insert(QStringLiteral("rows"), rowsOf(cel.grid));
+            cels.append(entry);
+        }
+        QJsonObject entry;
+        entry.insert(QStringLiteral("id"), layer.id);
+        entry.insert(QStringLiteral("name"), layer.name);
+        entry.insert(QStringLiteral("visible"), layer.visible);
+        entry.insert(QStringLiteral("locked"), layer.locked);
+        entry.insert(QStringLiteral("opacity"), layer.opacity);
+        entry.insert(QStringLiteral("mode"), layer.mode);
+        entry.insert(QStringLiteral("storage"), layer.storage);
+        entry.insert(QStringLiteral("cels"), cels);
+        layers.append(entry);
+    }
+    QJsonObject canvas;
+    canvas.insert(QStringLiteral("width"), document.columns());
+    canvas.insert(QStringLiteral("height"), document.rows());
+    QJsonObject root;
+    root.insert(QStringLiteral("version"), 2);
+    root.insert(QStringLiteral("canvas"), canvas);
+    root.insert(QStringLiteral("palette"), palette);
+    root.insert(QStringLiteral("clips"), clips);
+    root.insert(QStringLiteral("layers"), layers);
+    const QByteArray encoded = QJsonDocument(root).toJson(format);
+    if (encoded.size() > Document::maxDocumentBytes) {
+        if (error)
+            *error = QStringLiteral("serialized document exceeds the hard limit of %1 MiB")
+                         .arg(Document::maxDocumentBytes / (1024 * 1024));
+        return QByteArray();
+    }
+    return encoded;
+}
+
+QByteArray compressDocument(const QByteArray &json, QString *error)
+{
+    ZSTD_CCtx *context = ZSTD_createCCtx();
+    if (!context) {
+        if (error)
+            *error = QStringLiteral("could not create Zstandard compressor");
+        return QByteArray();
+    }
+    const auto freeContext = qScopeGuard([context] { ZSTD_freeCCtx(context); });
+    size_t result = ZSTD_CCtx_setParameter(context, ZSTD_c_compressionLevel,
+                                           ZSTD_CLEVEL_DEFAULT);
+    if (!ZSTD_isError(result))
+        result = ZSTD_CCtx_setParameter(context, ZSTD_c_checksumFlag, 1);
+    QByteArray compressed(int(ZSTD_compressBound(size_t(json.size()))), Qt::Uninitialized);
+    if (!ZSTD_isError(result)) {
+        result = ZSTD_compress2(context, compressed.data(), size_t(compressed.size()),
+                                json.constData(), size_t(json.size()));
+    }
+    if (ZSTD_isError(result)) {
+        if (error)
+            *error = QStringLiteral("could not compress document: %1")
+                         .arg(QString::fromLatin1(ZSTD_getErrorName(result)));
+        return QByteArray();
+    }
+    compressed.resize(int(result));
+    if (compressed.size() > Document::maxDocumentBytes) {
+        if (error)
+            *error = QStringLiteral("compressed document exceeds the hard limit of %1 MiB")
+                         .arg(Document::maxDocumentBytes / (1024 * 1024));
+        return QByteArray();
+    }
+    return compressed;
+}
+
+bool decompressDocument(const QByteArray &compressed, QByteArray *json, QString *error)
+{
+    json->clear();
+    const size_t frameSize = ZSTD_findFrameCompressedSize(
+        compressed.constData(), size_t(compressed.size()));
+    if (ZSTD_isError(frameSize)) {
+        if (error)
+            *error = QStringLiteral("invalid Zstandard document: %1")
+                         .arg(QString::fromLatin1(ZSTD_getErrorName(frameSize)));
+        return false;
+    }
+    if (frameSize != size_t(compressed.size())) {
+        if (error)
+            *error = QStringLiteral("invalid Zstandard document: trailing data or multiple frames");
+        return false;
+    }
+    const unsigned long long declaredSize = ZSTD_getFrameContentSize(
+        compressed.constData(), size_t(compressed.size()));
+    if (declaredSize != ZSTD_CONTENTSIZE_UNKNOWN
+        && declaredSize != ZSTD_CONTENTSIZE_ERROR
+        && declaredSize > unsigned(Document::maxDocumentBytes)) {
+        if (error)
+            *error = QStringLiteral("expanded document exceeds the hard limit of %1 MiB")
+                         .arg(Document::maxDocumentBytes / (1024 * 1024));
+        return false;
+    }
+
+    ZSTD_DCtx *context = ZSTD_createDCtx();
+    if (!context) {
+        if (error)
+            *error = QStringLiteral("could not create Zstandard decompressor");
+        return false;
+    }
+    const auto freeContext = qScopeGuard([context] { ZSTD_freeDCtx(context); });
+    size_t result = ZSTD_DCtx_setParameter(context, ZSTD_d_windowLogMax, 24);
+    if (ZSTD_isError(result)) {
+        if (error)
+            *error = QStringLiteral("could not limit Zstandard decompressor: %1")
+                         .arg(QString::fromLatin1(ZSTD_getErrorName(result)));
+        return false;
+    }
+
+    ZSTD_inBuffer input{compressed.constData(), size_t(compressed.size()), 0};
+    char buffer[64 * 1024];
+    do {
+        ZSTD_outBuffer output{buffer, sizeof(buffer), 0};
+        result = ZSTD_decompressStream(context, &output, &input);
+        if (ZSTD_isError(result)) {
+            if (error)
+                *error = QStringLiteral("could not decompress document: %1")
+                             .arg(QString::fromLatin1(ZSTD_getErrorName(result)));
+            return false;
+        }
+        if (json->size() > Document::maxDocumentBytes - int(output.pos)) {
+            if (error)
+                *error = QStringLiteral("expanded document exceeds the hard limit of %1 MiB")
+                             .arg(Document::maxDocumentBytes / (1024 * 1024));
+            json->clear();
+            return false;
+        }
+        json->append(buffer, int(output.pos));
+        if (result != 0 && input.pos == input.size && output.pos == 0) {
+            if (error)
+                *error = QStringLiteral("invalid Zstandard document: truncated frame");
+            json->clear();
+            return false;
+        }
+    } while (result != 0);
+    return true;
+}
+
+bool isZstandard(const QByteArray &bytes)
+{
+    static const QByteArray magic("\x28\xb5\x2f\xfd", 4);
+    return bytes.startsWith(magic);
+}
+
 } // namespace
 
 Codec::Result Codec::read(const QByteArray &json)
@@ -770,7 +954,16 @@ Codec::Result Codec::readFile(const QString &path, const WarningLimits &limits)
                            .arg(Document::maxDocumentBytes / (1024 * 1024));
         return result;
     }
-    return read(bytes, limits);
+    if (!isZstandard(bytes))
+        return read(bytes, limits);
+    QByteArray json;
+    QString error;
+    if (!decompressDocument(bytes, &json, &error)) {
+        Result result;
+        result.error = QStringLiteral("%1: %2").arg(path, error);
+        return result;
+    }
+    return read(json, limits);
 }
 
 bool Codec::rejectDuplicateJsonKeys(const QByteArray &json, QString *error)
@@ -781,71 +974,7 @@ bool Codec::rejectDuplicateJsonKeys(const QByteArray &json, QString *error)
 
 QByteArray Codec::write(const Document &document, QString *error)
 {
-    const QStringList problems = document.problems();
-    if (!problems.isEmpty()) {
-        if (error)
-            *error = QStringLiteral("document is invalid: %1")
-                         .arg(problems.first());
-        return QByteArray();
-    }
-    QJsonArray palette;
-    for (const Palette::Slot &slot : document.palette().entries()) {
-        QJsonObject entry;
-        entry.insert(QStringLiteral("slot"), QString(slot.letter));
-        entry.insert(QStringLiteral("colour"), colourString(slot.colour));
-        palette.append(entry);
-    }
-    QJsonArray clips;
-    for (const Clip &clip : document.clips()) {
-        QJsonObject entry;
-        entry.insert(QStringLiteral("id"), clip.id);
-        entry.insert(QStringLiteral("name"), clip.name);
-        entry.insert(QStringLiteral("fps"), clip.fps);
-        entry.insert(QStringLiteral("frameCount"), clip.frameCount);
-        clips.append(entry);
-    }
-    QJsonArray layers;
-    for (const Layer &layer : document.layers()) {
-        QJsonArray cels;
-        for (const Cel &cel : layer.cels) {
-            QJsonObject entry;
-            if (layer.storage == QStringLiteral("shared")) {
-                entry.insert(QStringLiteral("scope"), QStringLiteral("all"));
-            } else {
-                entry.insert(QStringLiteral("clip"), cel.clip);
-                entry.insert(QStringLiteral("frame"), cel.frame);
-            }
-            entry.insert(QStringLiteral("rows"), rowsOf(cel.grid));
-            cels.append(entry);
-        }
-        QJsonObject entry;
-        entry.insert(QStringLiteral("id"), layer.id);
-        entry.insert(QStringLiteral("name"), layer.name);
-        entry.insert(QStringLiteral("visible"), layer.visible);
-        entry.insert(QStringLiteral("locked"), layer.locked);
-        entry.insert(QStringLiteral("opacity"), layer.opacity);
-        entry.insert(QStringLiteral("mode"), layer.mode);
-        entry.insert(QStringLiteral("storage"), layer.storage);
-        entry.insert(QStringLiteral("cels"), cels);
-        layers.append(entry);
-    }
-    QJsonObject canvas;
-    canvas.insert(QStringLiteral("width"), document.columns());
-    canvas.insert(QStringLiteral("height"), document.rows());
-    QJsonObject root;
-    root.insert(QStringLiteral("version"), 2);
-    root.insert(QStringLiteral("canvas"), canvas);
-    root.insert(QStringLiteral("palette"), palette);
-    root.insert(QStringLiteral("clips"), clips);
-    root.insert(QStringLiteral("layers"), layers);
-    const QByteArray encoded = QJsonDocument(root).toJson(QJsonDocument::Indented);
-    if (encoded.size() > Document::maxDocumentBytes) {
-        if (error)
-            *error = QStringLiteral("serialized document exceeds the hard limit of %1 MiB")
-                         .arg(Document::maxDocumentBytes / (1024 * 1024));
-        return QByteArray();
-    }
-    return encoded;
+    return encodeJson(document, QJsonDocument::Indented, error);
 }
 
 bool Codec::writeFile(const QString &path, const Document &document, QString *error)
@@ -856,9 +985,18 @@ bool Codec::writeFile(const QString &path, const Document &document, QString *er
 bool Codec::writeFile(const QString &path, const Document &document,
                       const QStringList &sources, QString *error)
 {
-    const QByteArray encoded = write(document, error);
+    const bool compressed = QFileInfo(path).suffix().compare(
+        QStringLiteral("omapixel"), Qt::CaseInsensitive) == 0;
+    QByteArray encoded = encodeJson(document, compressed ? QJsonDocument::Compact
+                                                         : QJsonDocument::Indented,
+                                    error);
     if (encoded.isEmpty())
         return false;
+    if (compressed) {
+        encoded = compressDocument(encoded, error);
+        if (encoded.isEmpty())
+            return false;
+    }
     return output::writeAtomically(path, encoded, sources, error);
 }
 

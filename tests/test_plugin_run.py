@@ -11,7 +11,6 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 CLI = Path(os.environ.get("OMAPIXEL_CLI", ROOT / "build/bin/omapixel"))
 FIXTURES = ROOT / "tests" / "fixtures" / "plugin"
-DOCUMENT = ROOT / "tests" / "fixtures" / "format-v2" / "valid" / "minimal.json"
 
 
 def run(*args, env=None):
@@ -55,8 +54,10 @@ def main():
         plugin_root = root / "plugins"
         plugin_root.mkdir()
         install_fixture(plugin_root)
-        source = root / "source art \u03c0.json"
-        source.write_bytes(DOCUMENT.read_bytes())
+        source = root / "source art \u03c0.omapixel"
+        created = run("new", source, "--size", "2x2")
+        assert created.returncode == 0, (created.stdout, created.stderr)
+        assert source.read_bytes().startswith(b"\x28\xb5\x2f\xfd")
         output = root / "output dir" / "r\u00e9sultat \u03c0.bin"
         output.parent.mkdir()
         output.write_bytes(b"keep this on failure")
@@ -185,17 +186,17 @@ def main():
         assert source.read_bytes() == source_before
         assert_workspace_clean(baseline_workspaces)
 
-        document_before = DOCUMENT.read_bytes()
+        document_before = source.read_bytes()
         same_path = run(
-            "plugin", "run", "example-exporter", "png", DOCUMENT,
-            "--out", DOCUMENT, env=env,
+            "plugin", "run", "example-exporter", "png", source,
+            "--out", source, env=env,
         )
         assert same_path.returncode == 1
-        assert DOCUMENT.read_bytes() == document_before
+        assert source.read_bytes() == document_before
         assert_workspace_clean(baseline_workspaces)
 
         missing_out = run(
-            "plugin", "run", "example-exporter", "png", DOCUMENT, env=env,
+            "plugin", "run", "example-exporter", "png", source, env=env,
         )
         assert missing_out.returncode == 2
         assert_workspace_clean(baseline_workspaces)

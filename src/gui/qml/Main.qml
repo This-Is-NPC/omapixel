@@ -2247,7 +2247,8 @@ Window {
     FileDialog {
         id: openDialog
         title: T.t("dialog.open")
-        nameFilters: ["omapixel documents (*.json)", "All files (*)"]
+        nameFilters: [T.t("dialog.documentFilters"), T.t("dialog.omapixelFilters"),
+                      T.t("dialog.jsonFilters"), T.t("dialog.allFiles")]
         onAccepted: {
             doc.open(selectedFile)
             Qt.callLater(win.focusCanvas)
@@ -2268,8 +2269,9 @@ Window {
         id: saveDialog
         title: T.t("dialog.save")
         fileMode: FileDialog.SaveFile
-        defaultSuffix: "json"
-        nameFilters: ["omapixel documents (*.json)", "All files (*)"]
+        defaultSuffix: selectedNameFilter.index === 1 ? "omapixel" : "json"
+        nameFilters: [T.t("dialog.jsonFilters"), T.t("dialog.omapixelFilters"),
+                      T.t("dialog.allFiles")]
         onAccepted: {
             var saved = doc.save(selectedFile)
             if (saved && win.pendingAction !== "")
