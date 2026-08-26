@@ -13,12 +13,32 @@ Rectangle {
     property string key: ""
     property string caption: ""
     property bool on: false
+    property bool usable: true
     signal clicked
 
-    activeFocusOnTab: true
-    Keys.onSpacePressed: function (event) { button.clicked(); event.accepted = true }
-    Keys.onReturnPressed: function (event) { button.clicked(); event.accepted = true }
-    Keys.onEnterPressed: function (event) { button.clicked(); event.accepted = true }
+    enabled: usable
+    activeFocusOnTab: usable
+    Accessible.role: Accessible.Button
+    Accessible.name: caption
+    Accessible.description: key === "" ? "" : key
+    Accessible.checkable: true
+    Accessible.checked: on
+    Accessible.focusable: true
+    Keys.onSpacePressed: function (event) {
+        if (button.usable)
+            button.clicked()
+        event.accepted = true
+    }
+    Keys.onReturnPressed: function (event) {
+        if (button.usable)
+            button.clicked()
+        event.accepted = true
+    }
+    Keys.onEnterPressed: function (event) {
+        if (button.usable)
+            button.clicked()
+        event.accepted = true
+    }
 
     Rectangle {
         anchors.fill: parent
@@ -33,13 +53,15 @@ Rectangle {
     width: 34
     height: 34
     radius: theme.rounding
-    color: button.on ? theme.fill(theme.accent, 0.18)
+    color: !button.usable ? "transparent"
+         : button.on ? theme.fill(theme.accent, 0.18)
          : hover.hovered ? theme.fill(theme.foreground, 0.08)
                          : "transparent"
     border.width: 1
     border.color: button.on ? theme.accent
-                : hover.hovered ? theme.fill(theme.foreground, 0.25)
-                                : "transparent"
+                 : hover.hovered ? theme.fill(theme.foreground, 0.25)
+                                 : "transparent"
+    opacity: button.usable ? 1 : 0.35
     Behavior on color { ColorAnimation { duration: 90 } }
 
     Text {
@@ -51,7 +73,13 @@ Rectangle {
     }
 
     HoverHandler { id: hover }
-    TapHandler { onTapped: button.clicked() }
+    TapHandler {
+        enabled: button.usable
+        onTapped: {
+            button.forceActiveFocus()
+            button.clicked()
+        }
+    }
 
     // The name and its key, on hover. A strip of glyphs is fast once you know
     // it and unusable until you do.

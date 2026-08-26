@@ -11,11 +11,14 @@ Rectangle {
 
     property int column: -1
     property int row: -1
+    readonly property bool compact: width < leftFacts.implicitWidth
+                                      + savedStatus.implicitWidth + 44
 
     height: 26
     color: theme.panel
 
     Row {
+        id: leftFacts
         anchors.left: parent.left
         anchors.leftMargin: 12
         anchors.verticalCenter: parent.verticalCenter
@@ -91,8 +94,9 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 14
 
-        StatusText { text: doc.note; wide: true }
+        StatusText { text: doc.note; wide: true; visible: !bar.compact }
         StatusText {
+            id: savedStatus
             text: doc.dirty ? T.t("status.unsaved")
                             : (doc.path === "" ? T.t("status.new") : T.t("status.saved"))
             alarm: doc.dirty

@@ -306,6 +306,7 @@
   "accessibility.layers.resizeHelp": "Use left and right arrows or drag to change the inspector width",
   "panel.palette": "Palette",
   "panel.palette.colourOf": "colour of slot %1",
+  "panel.palette.invalidColour": "%1 is not a valid colour",
   "panel.palette.it": "it",
   "panel.palette.showAll": "show all %1",
   "panel.palette.showNine": "show nine rows",

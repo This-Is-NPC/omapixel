@@ -7,6 +7,7 @@ Column {
     id: field
 
     property string label: ""
+    property string accessibleName: ""
     property string value: ""
     property int boxWidth: 200
     signal edited(string text)
@@ -60,6 +61,7 @@ Column {
             font.family: theme.fontFamily
             font.pixelSize: 12
             selectByMouse: true
+            Accessible.name: field.accessibleName === "" ? field.label : field.accessibleName
             onTextChanged: if (activeFocus) field.edited(text)
             onAccepted: field.committed(text)
             // Escape leaves the field. Without it, a text box is a trap: the

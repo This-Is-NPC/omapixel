@@ -14,17 +14,22 @@ Item {
 
     property string title: ""
     property bool open: true
+    property bool usable: true
     property string hint: ""          // a word on the right, e.g. the size
     property var commandRegistry: null
     property string sectionId: ""
     default property alias content: body.data
 
     function focusHeader() {
+        if (!usable)
+            return
         open = true
         header.forceActiveFocus()
     }
 
     function toggle() {
+        if (!usable)
+            return
         if (commandRegistry && sectionId !== "")
             commandRegistry.invoke("inspector.toggleSection", { sectionId: sectionId })
         else
@@ -35,6 +40,7 @@ Item {
     implicitHeight: header.height + (open ? body.implicitHeight + 12 : 0)
     height: implicitHeight
     clip: true
+    enabled: usable
 
     Behavior on height {
         NumberAnimation { duration: 110; easing.type: Easing.OutCubic }
@@ -49,6 +55,12 @@ Item {
         radius: theme.rounding
         color: hover.hovered ? theme.fill(theme.foreground, 0.06) : "transparent"
         Behavior on color { ColorAnimation { duration: 90 } }
+        Accessible.role: Accessible.Button
+        Accessible.name: section.title
+        Accessible.description: section.hint
+        Accessible.checkable: true
+        Accessible.checked: section.open
+        Accessible.focusable: true
 
         Text {
             id: caret
@@ -83,9 +95,14 @@ Item {
         }
 
         HoverHandler { id: hover }
-        TapHandler { onTapped: section.toggle() }
+        TapHandler {
+            onTapped: {
+                header.forceActiveFocus()
+                section.toggle()
+            }
+        }
 
-        activeFocusOnTab: true
+        activeFocusOnTab: section.usable
         Keys.onSpacePressed: function (event) {
             section.toggle()
             event.accepted = true

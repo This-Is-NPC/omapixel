@@ -1336,8 +1336,12 @@ void DocumentModel::flip(const QString &axis)
 void DocumentModel::addClip(const QString &name)
 {
     const Document before = m_document;
-    if (!m_document.addClip(name)) {
-        say(Strings::shared().t(QStringLiteral("note.clipExists")).arg(name));
+    QString error;
+    if (!m_document.addClip(name, 8, &error)) {
+        if (error.isEmpty())
+            say(Strings::shared().t(QStringLiteral("note.clipExists")).arg(name));
+        else
+            reportError(error);
         return;
     }
     remember(before);
@@ -1355,8 +1359,11 @@ void DocumentModel::removeClip(const QString &name)
     // The refusal to remove the last clip lives in Document, so the command
     // line obeys it too.
     const Document before = m_document;
-    if (!m_document.removeClip(name))
+    QString error;
+    if (!m_document.removeClip(name, &error)) {
+        reportError(error);
         return;
+    }
     remember(before);
     if (m_clip == name) {
         m_clip = m_document.clipNames().value(0);
@@ -1398,8 +1405,11 @@ void DocumentModel::setFps(int fps)
 void DocumentModel::addFrame(bool duplicate)
 {
     const Document before = m_document;
-    if (!m_document.addFrame(m_clip, m_frame, duplicate))
+    QString error;
+    if (!m_document.addFrame(m_clip, m_frame, duplicate, &error)) {
+        reportError(error);
         return;
+    }
     remember(before);
     m_frame += 1;
     m_dirty = true;
@@ -1412,8 +1422,11 @@ void DocumentModel::addFrame(bool duplicate)
 void DocumentModel::removeFrame()
 {
     const Document before = m_document;
-    if (!m_document.removeFrame(m_clip, m_frame))
+    QString error;
+    if (!m_document.removeFrame(m_clip, m_frame, &error)) {
+        reportError(error);
         return;
+    }
     remember(before);
     m_frame = qBound(0, m_frame, frameCount() - 1);
     m_dirty = true;
@@ -1426,8 +1439,11 @@ void DocumentModel::removeFrame()
 void DocumentModel::moveFrame(int step)
 {
     const Document before = m_document;
-    if (!m_document.moveFrame(m_clip, m_frame, m_frame + step))
+    QString error;
+    if (!m_document.moveFrame(m_clip, m_frame, m_frame + step, &error)) {
+        reportError(error);
         return;
+    }
     remember(before);
     m_frame += step;
     m_dirty = true;

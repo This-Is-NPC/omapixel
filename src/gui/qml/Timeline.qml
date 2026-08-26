@@ -33,12 +33,22 @@ Item {
 
     // --------------------------------------------------------------- the clip
 
-    Row {
-        id: clips
+    Flickable {
+        id: clipScroll
         anchors.left: parent.left
-        anchors.leftMargin: 12
+        anchors.right: parent.right
         anchors.top: parent.top
         anchors.topMargin: 8
+        height: 32
+        contentWidth: Math.max(width, clips.x + clips.implicitWidth + 12)
+        contentHeight: height
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+
+        Row {
+        id: clips
+        x: 12
+        y: 0
         spacing: 6
 
         Label { anchors.verticalCenter: parent.verticalCenter; text: T.t("timeline.clip") }
@@ -71,8 +81,10 @@ Item {
             id: clipName
             onEscaped: win.focusCanvas()
             label: ""
+            accessibleName: T.t("timeline.clip") + ": " + doc.clip
             boxWidth: 150
             value: doc.clip
+            Accessible.name: T.t("timeline.clip") + ": " + doc.clip
             onCommitted: function (text) { doc.renameClip(doc.clip, text) }
         }
 
@@ -82,6 +94,7 @@ Item {
         Label { anchors.verticalCenter: parent.verticalCenter; text: T.t("timeline.fps").arg(doc.fps) }
         Chip { label: T.t("timeline.decreaseFps"); onClicked: line.commandRequested("timeline.fpsDown", {}) }
         Chip { label: T.t("timeline.increaseFps"); onClicked: line.commandRequested("timeline.fpsUp", {}) }
+        }
     }
 
     // ------------------------------------------------------------- the frames
@@ -90,7 +103,7 @@ Item {
         id: transport
         anchors.left: parent.left
         anchors.leftMargin: 12
-        anchors.top: clips.bottom
+        anchors.top: clipScroll.bottom
         anchors.topMargin: 12
         spacing: 6
 
@@ -117,11 +130,12 @@ Item {
     }
 
     ListView {
+        id: frameList
         anchors.left: transport.right
         anchors.leftMargin: 16
         anchors.right: parent.right
         anchors.rightMargin: 12
-        anchors.top: clips.bottom
+        anchors.top: clipScroll.bottom
         anchors.topMargin: 8
         height: 72
         orientation: ListView.Horizontal
@@ -129,10 +143,53 @@ Item {
         model: doc.frameCount
         boundsBehavior: Flickable.StopAtBounds
         clip: true
+        activeFocusOnTab: true
+        Accessible.role: Accessible.List
+        Accessible.name: T.t("timeline.clip") + " frames"
+        Accessible.description: T.t("command.timeline.selectFrame")
+
+        function moveCurrent(delta) {
+            if (count === 0)
+                return
+            currentIndex = Math.max(0, Math.min(count - 1, currentIndex + delta))
+            positionViewAtIndex(currentIndex, ListView.Contain)
+        }
+
+        function selectCurrent() {
+            if (currentIndex >= 0 && currentIndex < count)
+                line.commandRequested("timeline.selectFrame", { frame: currentIndex })
+        }
+
+        Component.onCompleted: currentIndex = doc.frame
+        onActiveFocusChanged: if (activeFocus) currentIndex = doc.frame
+        Keys.onLeftPressed: function (event) {
+            frameList.moveCurrent(-1)
+            event.accepted = true
+        }
+        Keys.onRightPressed: function (event) {
+            frameList.moveCurrent(1)
+            event.accepted = true
+        }
+        Keys.onReturnPressed: function (event) {
+            frameList.selectCurrent()
+            event.accepted = true
+        }
+        Keys.onEnterPressed: function (event) {
+            frameList.selectCurrent()
+            event.accepted = true
+        }
+        Keys.onSpacePressed: function (event) {
+            frameList.selectCurrent()
+            event.accepted = true
+        }
 
         delegate: Rectangle {
             id: cellBox
             required property int index
+            Accessible.role: Accessible.ListItem
+            Accessible.name: T.t("command.timeline.selectFrame").arg(cellBox.index + 1)
+            Accessible.selectable: true
+            Accessible.selected: cellBox.index === doc.frame
 
             width: 60
             height: 72
@@ -162,8 +219,12 @@ Item {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: line.commandRequested("timeline.selectFrame",
-                                                 { frame: cellBox.index })
+                onClicked: {
+                    frameList.forceActiveFocus()
+                    frameList.currentIndex = cellBox.index
+                    line.commandRequested("timeline.selectFrame",
+                                          { frame: cellBox.index })
+                }
             }
         }
     }

@@ -286,12 +286,24 @@ Item {
 
             var dx = w.angleDelta.x
             var dy = w.angleDelta.y
+            var pixelX = w.pixelDelta.x
+            var pixelY = w.pixelDelta.y
+            // Shift+wheel is the conventional way to reach the horizontal
+            // axis when a mouse only exposes a vertical wheel.
+            if (w.modifiers & Qt.ShiftModifier) {
+                if (dx === 0)
+                    dx = dy
+                if (pixelX === 0)
+                    pixelX = pixelY
+                dy = 0
+                pixelY = 0
+            }
             // Pixels first when they are there: that is already the distance
             // asked for. A trackpad otherwise reports fractions of a degree --
             // deltas of two and four where a wheel notch is 120 -- so its
             // events need a much larger factor to cover the same ground.
-            if (w.pixelDelta.x !== 0 || w.pixelDelta.y !== 0)
-                surface.scrollBy(w.pixelDelta.x * 3, w.pixelDelta.y * 3)
+            if (pixelX !== 0 || pixelY !== 0)
+                surface.scrollBy(pixelX * 3, pixelY * 3)
             else if (w.phase !== 0)
                 surface.scrollBy(dx * 6, dy * 6)      // trackpad, high resolution
             else

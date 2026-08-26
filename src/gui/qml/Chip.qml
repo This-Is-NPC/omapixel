@@ -9,9 +9,17 @@ Rectangle {
 
     property string label: ""
     property bool on: false
+    property bool checkable: false
     property bool usable: true
     property color role: theme.accent
     signal clicked
+
+    enabled: usable
+    Accessible.role: Accessible.Button
+    Accessible.name: label
+    Accessible.checkable: checkable
+    Accessible.checked: on
+    Accessible.focusable: true
 
     // Reachable by Tab, and worked by Space or Enter. Almost every control in
     // this window is a Chip, so the keyboard reaches almost all of them from
@@ -97,6 +105,9 @@ Rectangle {
 
     TapHandler {
         enabled: chip.usable
-        onTapped: chip.clicked()
+        onTapped: {
+            chip.forceActiveFocus()
+            chip.clicked()
+        }
     }
 }

@@ -52,6 +52,12 @@ Window {
     function zoomLabel() {
         return T.t("status.zoom").arg(Math.round(zoom * 100) / 100)
     }
+    function shortcutGlyph(binding) {
+        if (binding === "+" || binding.endsWith("++"))
+            return "+"
+        var parts = binding.split("+")
+        return parts.length > 0 ? parts[parts.length - 1].toUpperCase() : ""
+    }
     property bool onion: cfg.settings["canvas.onion"]
     property bool mesh: cfg.settings["canvas.grid"]
     property bool playing: false
@@ -1089,19 +1095,19 @@ Window {
                         spacing: 4
 
                         ToolButton { id: toolsFirst; objectName: "toolsFirstControl"
-                                     glyph: "B"; key: "B"; caption: T.t("tool.pencil")
+                                     glyph: win.shortcutGlyph(cfg.keys.tool_pencil); key: cfg.keys.tool_pencil; caption: T.t("tool.pencil")
                                      on: win.tool === "pencil"
                                      onClicked: commands.invoke("canvas.tool.pencil") }
-                        ToolButton { objectName: "toolEraser"; glyph: "E"; key: "E"; caption: T.t("tool.eraser")
+                        ToolButton { objectName: "toolEraser"; glyph: win.shortcutGlyph(cfg.keys.tool_eraser); key: cfg.keys.tool_eraser; caption: T.t("tool.eraser")
                                       on: win.tool === "eraser"
                                       onClicked: commands.invoke("canvas.tool.eraser") }
-                        ToolButton { objectName: "toolBucket"; glyph: "F"; key: "F"; caption: T.t("tool.bucket")
+                        ToolButton { objectName: "toolBucket"; glyph: win.shortcutGlyph(cfg.keys.tool_bucket); key: cfg.keys.tool_bucket; caption: T.t("tool.bucket")
                                       on: win.tool === "bucket"
                                       onClicked: commands.invoke("canvas.tool.bucket") }
-                        ToolButton { objectName: "toolPicker"; glyph: "I"; key: "I"; caption: T.t("tool.picker")
+                        ToolButton { objectName: "toolPicker"; glyph: win.shortcutGlyph(cfg.keys.tool_picker); key: cfg.keys.tool_picker; caption: T.t("tool.picker")
                                       on: win.tool === "picker"
                                       onClicked: commands.invoke("canvas.tool.picker") }
-                        ToolButton { objectName: "toolHand"; glyph: "H"; key: "H"; caption: T.t("tool.pan")
+                        ToolButton { objectName: "toolHand"; glyph: win.shortcutGlyph(cfg.keys.tool_hand); key: cfg.keys.tool_hand; caption: T.t("tool.pan")
                                       on: win.tool === "hand"
                                       onClicked: commands.invoke("canvas.tool.hand") }
 
@@ -1113,15 +1119,42 @@ Window {
                         // draw with is the same kind of fact as the tool you
                         // draw with, and was the only one of the two you could
                         // not see without opening a panel.
-                        Repeater {
-                            model: 10
+                                 Repeater {
+                             model: 10
 
-                            Rectangle {
-                                id: chip
-                                required property int index
-                                readonly property string letter: win.registerAt(index)
-                                readonly property bool inUse: letter !== ""
-                                                              && win.slot === letter
+                             Rectangle {
+                                 id: chip
+                                 required property int index
+                                 readonly property string letter: win.registerAt(index)
+                                 readonly property bool inUse: letter !== ""
+                                                               && win.slot === letter
+
+                                 enabled: letter !== ""
+                                 activeFocusOnTab: enabled
+                                 Accessible.role: Accessible.Button
+                                 Accessible.name: letter === ""
+                                                   ? T.t("strip.emptyColour")
+                                                       + " " + (index === 9 ? "0" : String(index + 1))
+                                                   : T.t("strip.slot").arg(letter)
+                                 Accessible.checkable: true
+                                 Accessible.checked: inUse
+                                 Accessible.focusable: true
+
+                                 Keys.onSpacePressed: function (event) {
+                                     if (chip.letter !== "")
+                                         commands.invoke("palette.select", { slot: chip.letter })
+                                     event.accepted = true
+                                 }
+                                 Keys.onReturnPressed: function (event) {
+                                     if (chip.letter !== "")
+                                         commands.invoke("palette.select", { slot: chip.letter })
+                                     event.accepted = true
+                                 }
+                                 Keys.onEnterPressed: function (event) {
+                                     if (chip.letter !== "")
+                                         commands.invoke("palette.select", { slot: chip.letter })
+                                     event.accepted = true
+                                 }
 
                                 width: 34
                                 height: 34
@@ -1153,11 +1186,15 @@ Window {
                                 // Choosing, not painting: a click here is the
                                 // hand that is already on the mouse, and it
                                 // will draw by clicking the canvas next.
-                                TapHandler {
-                                    onTapped: if (chip.letter !== "")
-                                                  commands.invoke("palette.select",
-                                                                  { slot: chip.letter })
-                                }
+                                 TapHandler {
+                                     enabled: chip.letter !== ""
+                                     onTapped: {
+                                         chip.forceActiveFocus()
+                                         if (chip.letter !== "")
+                                             commands.invoke("palette.select",
+                                                             { slot: chip.letter })
+                                     }
+                                 }
 
                                 Rectangle {
                                     visible: chipHover.hovered
@@ -1375,8 +1412,9 @@ Window {
                                 // costs more than it gives -- the ones you are
                                 // working with are at the top, and the rest are
                                 // a scroll or a click away.
-                                property bool showAll: false
-                                readonly property int rowsShown: 9
+                                 property bool showAll: false
+                                 property string paletteColourError: ""
+                                 readonly property int rowsShown: 9
                                 readonly property int swatchPitch: 28
 
                                 // A list model, not a JS array: assigning a
@@ -1385,9 +1423,9 @@ Window {
                                 // With a few hundred slots that is a few
                                 // hundred items destroyed and made again on a
                                 // keypress, which is the stutter.
-                                GridView {
-                                    id: swatches
-                                    width: parent.width
+                                 GridView {
+                                     id: swatches
+                                     width: parent.width
                                     height: Math.min(contentHeight,
                                                      paletteSection.showAll
                                                      ? contentHeight
@@ -1397,8 +1435,62 @@ Window {
                                     cellHeight: paletteSection.swatchPitch
                                     boundsBehavior: Flickable.StopAtBounds
                                     clip: true
-                                    model: doc.paletteModel
-                                    cacheBuffer: 0
+                                     model: doc.paletteModel
+                                     cacheBuffer: 0
+                                     activeFocusOnTab: true
+                                     Accessible.role: Accessible.List
+                                     Accessible.name: T.t("panel.palette")
+                                     Accessible.description: T.t("panel.palette.slots").arg(doc.palette.length)
+
+                                     function moveCurrent(dx, dy) {
+                                         if (count === 0)
+                                             return
+                                         var columns = Math.max(1, Math.floor(width / cellWidth))
+                                         var step = dy === 0 ? dx : dy * columns
+                                         currentIndex = Math.max(0, Math.min(count - 1,
+                                                                             currentIndex + step))
+                                         positionViewAtIndex(currentIndex, GridView.Contain)
+                                     }
+
+                                     function selectCurrent() {
+                                         if (currentIndex >= 0 && currentIndex < count)
+                                             commands.invoke("palette.select",
+                                                             { slot: currentIndex === 0
+                                                                       ? "."
+                                                                       : doc.palette[currentIndex - 1].slot })
+                                     }
+
+                                     Component.onCompleted: currentIndex = Math.max(
+                                         0, 1 + doc.palette.map(function (entry) {
+                                             return entry.slot
+                                         }).indexOf(win.slot))
+                                     onActiveFocusChanged: if (activeFocus) {
+                                         currentIndex = Math.max(
+                                             0, 1 + doc.palette.map(function (entry) {
+                                                 return entry.slot
+                                             }).indexOf(win.slot))
+                                     }
+                                     Keys.onLeftPressed: function (event) {
+                                         swatches.moveCurrent(-1, 0); event.accepted = true
+                                     }
+                                     Keys.onRightPressed: function (event) {
+                                         swatches.moveCurrent(1, 0); event.accepted = true
+                                     }
+                                     Keys.onUpPressed: function (event) {
+                                         swatches.moveCurrent(0, -1); event.accepted = true
+                                     }
+                                     Keys.onDownPressed: function (event) {
+                                         swatches.moveCurrent(0, 1); event.accepted = true
+                                     }
+                                     Keys.onReturnPressed: function (event) {
+                                         swatches.selectCurrent(); event.accepted = true
+                                     }
+                                     Keys.onEnterPressed: function (event) {
+                                         swatches.selectCurrent(); event.accepted = true
+                                     }
+                                     Keys.onSpacePressed: function (event) {
+                                         swatches.selectCurrent(); event.accepted = true
+                                     }
 
                                     Behavior on height {
                                         NumberAnimation { duration: 110
@@ -1406,10 +1498,14 @@ Window {
                                     }
 
                                     delegate: Rectangle {
-                                        id: pip
-                                        required property int index
-                                        required property string slot
-                                        required property color colour
+                                         id: pip
+                                         required property int index
+                                         required property string slot
+                                         required property color colour
+                                         Accessible.role: Accessible.ListItem
+                                         Accessible.name: T.t("command.palette.selectSlot").arg(pip.slot)
+                                         Accessible.selectable: true
+                                         Accessible.selected: win.slot === pip.slot
                                         width: 24
                                         height: 24
                                         radius: theme.rounding
@@ -1455,10 +1551,12 @@ Window {
                                             font.pixelSize: 10
                                         }
 
-                                        TapHandler {
-                                            onTapped: {
-                                                commands.invoke("palette.select",
-                                                                { slot: pip.slot })
+                                         TapHandler {
+                                              onTapped: {
+                                                  swatches.forceActiveFocus()
+                                                  swatches.currentIndex = pip.index
+                                                  commands.invoke("palette.select",
+                                                                 { slot: pip.slot })
                                             }
                                         }
                                     }
@@ -1468,16 +1566,17 @@ Window {
                                     visible: swatches.contentHeight
                                              > paletteSection.rowsShown
                                                * paletteSection.swatchPitch
-                                    label: paletteSection.showAll
-                                           ? T.t("panel.palette.showNine")
-                                           : T.t("panel.palette.showAll")
-                                                 .arg(doc.palette.length)
-                                    on: paletteSection.showAll
+                                     label: paletteSection.showAll
+                                            ? T.t("panel.palette.showNine")
+                                            : T.t("panel.palette.showAll")
+                                                  .arg(doc.palette.length)
+                                     checkable: true
+                                     on: paletteSection.showAll
                                     onClicked: commands.invoke("inspector.paletteRows")
                                 }
 
-                                Row {
-                                    spacing: 6
+                                 Row {
+                                     spacing: 6
 
                                     Rectangle {
                                         anchors.bottom: parent.bottom
@@ -1492,24 +1591,46 @@ Window {
                                         border.color: theme.fill(theme.foreground, 0.25)
                                     }
 
-                                Field {
-                                    onEscaped: win.focusCanvas()
-                                    label: T.t("panel.palette.colourOf").arg(win.slot)
+                                 Field {
+                                     id: paletteColourField
+                                     onEscaped: win.focusCanvas()
+                                     label: T.t("panel.palette.colourOf").arg(win.slot)
                                     boxWidth: 168
-                                    value: {
+                                     value: {
                                         var found = doc.palette.filter(function (e) {
                                             return e.slot === win.slot
                                         })
-                                        return found.length > 0 ? found[0].colour : ""
-                                    }
-                                    // On Enter, not on every keystroke: "#FF0"
+                                         return found.length > 0 ? found[0].colour : ""
+                                     }
+                                     accessibleName: T.t("panel.palette.colourOf").arg(win.slot)
+                                     onEdited: paletteSection.paletteColourError = ""
+                                     // On Enter, not on every keystroke: "#FF0"
                                     // is a valid colour on the way to "#FF0055",
                                     // and each one would land its own undo step.
-                                    onCommitted: function (text) {
-                                        doc.setPaletteColour(win.slot, text)
-                                    }
-                                }
-                                }
+                                     onCommitted: function (text) {
+                                         var candidate = text.trim()
+                                         var matches = doc.findColours(candidate)
+                                         var valid = candidate !== "" && matches.length > 0
+                                                      && String(matches[0].name).toLowerCase()
+                                                         === candidate.toLowerCase()
+                                         if (!valid) {
+                                             paletteSection.paletteColourError =
+                                                 T.t("panel.palette.invalidColour").arg(candidate)
+                                             return
+                                         }
+                                         paletteSection.paletteColourError = ""
+                                         doc.setPaletteColour(win.slot, candidate)
+                                     }
+                                 }
+                                 }
+
+                                 Label {
+                                     width: parent.width
+                                     wrapMode: Text.Wrap
+                                     visible: paletteSection.paletteColourError !== ""
+                                     color: theme.urgent
+                                     text: paletteSection.paletteColourError
+                                 }
 
                                 // Said out loud, because it is the one thing
                                 // here that reaches back into the drawing. It
@@ -1638,10 +1759,11 @@ Window {
                                         model: doc.sizePresets()
 
                                         Chip {
-                                            required property var modelData
-                                            required property int index
-                                            label: modelData.w + "×" + modelData.h
-                                            on: win.wantColumns === modelData.w
+                                             required property var modelData
+                                             required property int index
+                                             label: modelData.w + "×" + modelData.h
+                                             checkable: true
+                                             on: win.wantColumns === modelData.w
                                                 && win.wantRows === modelData.h
                                             onClicked: commands.invoke("inspector.setSize",
                                                                        { width: modelData.w,
@@ -1720,9 +1842,10 @@ Window {
                                         model: [0, 25, 50, 75, 100]
 
                                         Chip {
-                                            required property int modelData
-                                            label: modelData + "%"
-                                            on: Math.round(win.referenceAlpha * 100) === modelData
+                                             required property int modelData
+                                             label: modelData + "%"
+                                             checkable: true
+                                             on: Math.round(win.referenceAlpha * 100) === modelData
                                             onClicked: commands.invoke(
                                                 "inspector.reference.setOpacity",
                                                 { percent: modelData })
@@ -1732,9 +1855,10 @@ Window {
 
                                 Row {
                                     spacing: 5
-                                    Chip {
-                                        label: win.referenceOnTop ? T.t("panel.reference.onTop") : T.t("panel.reference.behind")
-                                        on: win.referenceOnTop
+                                     Chip {
+                                         label: win.referenceOnTop ? T.t("panel.reference.onTop") : T.t("panel.reference.behind")
+                                         checkable: true
+                                         on: win.referenceOnTop
                                         usable: win.referencePath !== ""
                                         onClicked: commands.invoke("inspector.reference.position")
                                     }
@@ -2192,6 +2316,8 @@ Window {
                        .arg(report.affectedPixels || 0).arg(report.removedLayers || 0)
         }
         function apply() {
+            if (layerSheet.report.ok === false)
+                return
             if (kind === "storage")
                 doc.setLayerStorage(report.id, report.storage, true)
             else if (kind === "merge-down")
@@ -2227,13 +2353,14 @@ Window {
                 Chip {
                     id: layerConfirm
                     objectName: "layerConfirm"
-                    label: layerSheet.kind === "storage"
+                     label: layerSheet.kind === "storage"
                            ? T.t("sheet.layers.confirmStorage")
                            : layerSheet.kind === "merge-down"
                              ? T.t("sheet.layers.confirmMerge")
-                             : T.t("sheet.layers.confirmFlatten")
-                    on: true
-                    role: theme.urgent
+                              : T.t("sheet.layers.confirmFlatten")
+                     on: true
+                     usable: layerSheet.report.ok !== false
+                     role: theme.urgent
                     onClicked: layerSheet.apply()
                 }
                 Chip {
@@ -2269,7 +2396,8 @@ Window {
         id: saveDialog
         title: T.t("dialog.save")
         fileMode: FileDialog.SaveFile
-        defaultSuffix: selectedNameFilter.index === 1 ? "omapixel" : "json"
+        defaultSuffix: selectedNameFilter.extensions.indexOf("omapixel") >= 0
+                      ? "omapixel" : "json"
         nameFilters: [T.t("dialog.jsonFilters"), T.t("dialog.omapixelFilters"),
                       T.t("dialog.allFiles")]
         onAccepted: {
@@ -2396,23 +2524,26 @@ Window {
                 Label { text: T.t("sheet.import.destination"); anchors.verticalCenter: parent.verticalCenter }
                 Chip {
                     id: importDestinationLayer
-                    objectName: "importDestinationLayer"
-                    label: T.t("sheet.import.layer")
-                    on: importSheet.destination === "layer"
+                     objectName: "importDestinationLayer"
+                     label: T.t("sheet.import.layer")
+                     checkable: true
+                     on: importSheet.destination === "layer"
                     onClicked: importSheet.destination = "layer"
                 }
                 Chip {
                     id: importDestinationDocument
-                    objectName: "importDestinationDocument"
-                    label: T.t("sheet.import.document")
-                    on: importSheet.destination === "document"
+                     objectName: "importDestinationDocument"
+                     label: T.t("sheet.import.document")
+                     checkable: true
+                     on: importSheet.destination === "document"
                     onClicked: importSheet.destination = "document"
                 }
                 Chip {
                     id: importDestinationWindow
-                    objectName: "importDestinationWindow"
-                    label: T.t("sheet.import.window")
-                    on: importSheet.destination === "window"
+                     objectName: "importDestinationWindow"
+                     label: T.t("sheet.import.window")
+                     checkable: true
+                     on: importSheet.destination === "window"
                     onClicked: importSheet.destination = "window"
                 }
             },
@@ -2421,16 +2552,18 @@ Window {
                 Label { text: T.t("sheet.import.mode"); anchors.verticalCenter: parent.verticalCenter }
                 Chip {
                     id: importScaleMode
-                    objectName: "importScaleMode"
-                    label: T.t("sheet.import.scale")
-                    on: importSheet.mode === "scale"
+                     objectName: "importScaleMode"
+                     label: T.t("sheet.import.scale")
+                     checkable: true
+                     on: importSheet.mode === "scale"
                     onClicked: importSheet.mode = "scale"
                 }
                 Chip {
                     id: importResolutionMode
-                    objectName: "importResolutionMode"
-                    label: T.t("sheet.import.resolution")
-                    on: importSheet.mode === "resolution"
+                     objectName: "importResolutionMode"
+                     label: T.t("sheet.import.resolution")
+                     checkable: true
+                     on: importSheet.mode === "resolution"
                     onClicked: importSheet.mode = "resolution"
                 }
             },
@@ -2442,9 +2575,10 @@ Window {
                     model: [1, 2, 4, 8, 16]
                     Chip {
                         required property int modelData
-                        objectName: "importScale" + modelData
-                        label: modelData + "×"
-                        on: importSheet.importScale === modelData
+                         objectName: "importScale" + modelData
+                         label: modelData + "×"
+                         checkable: true
+                         on: importSheet.importScale === modelData
                         onClicked: importSheet.importScale = modelData
                     }
                 }
@@ -2495,9 +2629,10 @@ Window {
                     ]
                     Chip {
                         required property var modelData
-                        objectName: "importFit" + modelData.key
-                        label: modelData.label
-                        on: importSheet.fit === modelData.key
+                         objectName: "importFit" + modelData.key
+                         label: modelData.label
+                         checkable: true
+                         on: importSheet.fit === modelData.key
                         onClicked: importSheet.fit = modelData.key
                     }
                 }
@@ -2575,9 +2710,10 @@ Window {
                     model: [1, 2, 4, 8, 16]
                     Chip {
                         required property int modelData
-                        objectName: "gifScale" + modelData
-                        label: modelData + "×"
-                        on: gifSheet.gifScale === modelData
+                         objectName: "gifScale" + modelData
+                         label: modelData + "×"
+                         checkable: true
+                         on: gifSheet.gifScale === modelData
                         onClicked: gifSheet.gifScale = modelData
                     }
                 }
@@ -2599,9 +2735,10 @@ Window {
             },
             Chip {
                 id: gifLoop
-                objectName: "gifLoop"
-                label: T.t("sheet.exportGif.loop")
-                on: gifSheet.loop
+                 objectName: "gifLoop"
+                 label: T.t("sheet.exportGif.loop")
+                 checkable: true
+                 on: gifSheet.loop
                 Accessible.name: T.t("sheet.exportGif.loop")
                 onClicked: gifSheet.loop = !gifSheet.loop
             },
@@ -2643,9 +2780,10 @@ Window {
 
                     Chip {
                         required property var modelData
-                        label: modelData.w + "×" + modelData.h
-                               + (modelData.why === "" ? "" : "  " + modelData.why)
-                        on: newSheet.columns === modelData.w && newSheet.rows === modelData.h
+                         label: modelData.w + "×" + modelData.h
+                                + (modelData.why === "" ? "" : "  " + modelData.why)
+                         checkable: true
+                         on: newSheet.columns === modelData.w && newSheet.rows === modelData.h
                         onClicked: {
                             newSheet.columns = modelData.w
                             newSheet.rows = modelData.h
@@ -3016,18 +3154,20 @@ Window {
                 Repeater {
                     model: [1, 2, 4, 8, 16]
                     Chip {
-                        required property int modelData
-                        label: modelData + "×"
-                        on: exportSheet.factor === modelData
+                         required property int modelData
+                         label: modelData + "×"
+                         checkable: true
+                         on: exportSheet.factor === modelData
                         onClicked: exportSheet.factor = modelData
                     }
                 }
             },
             Chip {
                 id: exportChecker
-                objectName: "exportChecker"
-                label: T.t("sheet.export.checker")
-                on: exportSheet.checker
+                 objectName: "exportChecker"
+                 label: T.t("sheet.export.checker")
+                 checkable: true
+                 on: exportSheet.checker
                 onClicked: exportSheet.checker = !exportSheet.checker
             },
             Row {

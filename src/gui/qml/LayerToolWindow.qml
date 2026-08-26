@@ -48,8 +48,16 @@ Window {
         if (id !== "" && doc.activeLayerId !== id)
             doc.activeLayerId = id
         if (!positioned) {
-            x = win.x + win.width + 24
-            y = win.y + 40
+            var areaX = Screen.virtualX
+            var areaY = Screen.virtualY
+            var areaWidth = Screen.desktopAvailableWidth
+            var areaHeight = Screen.desktopAvailableHeight
+            var wantedX = win.x + win.width + 24
+            var wantedY = win.y + 40
+            x = Math.max(areaX,
+                         Math.min(wantedX, areaX + Math.max(0, areaWidth - width)))
+            y = Math.max(areaY,
+                         Math.min(wantedY, areaY + Math.max(0, areaHeight - height)))
             positioned = true
         }
         show()
@@ -136,7 +144,16 @@ Window {
 
     function focusRename() { renameField.focusEntry() }
     function focusOpacity() { opacitySlider.forceActiveFocus() }
+    function syncOpacity() {
+        opacitySlider.value = currentLayer().opacity * 100 / 255
+    }
     signal commandRequested(string commandId)
+
+    Connections {
+        target: doc
+        function onActiveLayerChanged() { tool.syncOpacity() }
+        function onChanged() { tool.syncOpacity() }
+    }
 
     onVisibleChanged: {
         if (!visible && wasVisible)
@@ -213,6 +230,7 @@ Window {
                     Chip {
                         objectName: "toolVisibilityAction"
                         label: T.t("panel.layers.visibility")
+                        checkable: true
                         on: currentLayer().visible
                         usable: doc.activeLayerId !== ""
                         onClicked: tool.commandRequested("layers.visibility")
@@ -221,6 +239,7 @@ Window {
                     Chip {
                         objectName: "toolLockAction"
                         label: T.t("panel.layers.lock")
+                        checkable: true
                         on: currentLayer().locked
                         usable: doc.activeLayerId !== ""
                         onClicked: tool.commandRequested("layers.lock")
@@ -289,6 +308,7 @@ Window {
                         Chip {
                             objectName: "toolNormalModeButton"
                             label: T.t("panel.layers.normal")
+                            checkable: true
                             on: currentLayer().mode === "normal"
                             usable: doc.activeLayerId !== ""
                             onClicked: tool.commandRequested("layers.mode.normal")
@@ -297,6 +317,7 @@ Window {
                         Chip {
                             objectName: "toolMultiplyModeButton"
                             label: T.t("panel.layers.multiply")
+                            checkable: true
                             on: currentLayer().mode === "multiply"
                             usable: doc.activeLayerId !== ""
                             onClicked: tool.commandRequested("layers.mode.multiply")
@@ -305,6 +326,7 @@ Window {
                         Chip {
                             objectName: "toolScreenModeButton"
                             label: T.t("panel.layers.screen")
+                            checkable: true
                             on: currentLayer().mode === "screen"
                             usable: doc.activeLayerId !== ""
                             onClicked: tool.commandRequested("layers.mode.screen")
@@ -322,6 +344,7 @@ Window {
                         Chip {
                             width: Math.max(120, (parent.width - 5) / 2)
                             label: T.t("panel.layers.frame")
+                            checkable: true
                             on: doc.editScope === "frame"
                             usable: doc.activeLayerStorage !== "shared"
                             onClicked: tool.commandRequested("layers.scope.frame")
@@ -330,6 +353,7 @@ Window {
                         Chip {
                             width: Math.max(120, (parent.width - 5) / 2)
                             label: T.t("panel.layers.allFrames")
+                            checkable: true
                             on: doc.activeLayerStorage === "shared" || doc.editScope === "all-frames"
                             usable: doc.activeLayerStorage !== "shared"
                             onClicked: tool.commandRequested("layers.scope.all")
