@@ -36,3 +36,17 @@ jobs:
             XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
             GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
             bash -lc 'cd "$GITHUB_WORKSPACE" && mise trust && mise run check'
+
+  check-aarch64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes binutils file libarchive-tools
+
+      - name: build and test Arch Linux ARM package
+        run: pkgbuild/check-aarch64.sh

@@ -54,7 +54,24 @@ check() {
   make -j"$(nproc)"
   # The tests touch QImage and never open a window; a build server has no
   # display, and without this Qt aborts on a missing platform plugin.
-  QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./tst_omapixel
+  if [[ ${OMAPIXEL_QEMU_AARCH64:-0} == 1 ]]; then
+    # Binfmt exposes the emulator rather than the Studio executable through
+    # /proc, and emulated timings cannot enforce a native 100 ms budget.
+    QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
+      ./tst_omapixel 2>&1 | tee qemu-tests.log
+    local test_status=${PIPESTATUS[0]}
+    if (( test_status != 0 )); then
+      local allowed_failures='OmapixelTest::(whereFindsTheStudioHoldingADocument|whereReportsBothStudiosOnOneDocument|whereDoesNotWaitForAnUnrelatedStoppedStudio|fullHdSinglePixelEditStaysWithinBudget)'
+      grep -q '^Totals: ' qemu-tests.log || return 1
+      grep -q '^FAIL!' qemu-tests.log || return 1
+      if grep '^FAIL!' qemu-tests.log | grep -Evq "$allowed_failures"; then
+        return 1
+      fi
+      printf '%s\n' 'QEMU-only process identity or timing failures ignored'
+    fi
+  else
+    QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./tst_omapixel
+  fi
   cd ..
   OMAPIXEL_CLI="$PWD/build/bin/omapixel" python3 tests/test_skill.py
 }

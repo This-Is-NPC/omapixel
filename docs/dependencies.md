@@ -92,3 +92,25 @@ The Wayland test starts Sway with its headless Pixman backend and uses `wtype`
 to exercise keyboard input. Mesa provides Qt's software rendering path. These
 packages are test dependencies, not a replacement for the runtime dependency
 resolution performed by `pacman`.
+
+## AArch64 package check
+
+The ARM64 CI job runs natively on GitHub's `ubuntu-24.04-arm` runner but builds
+inside the same Arch Linux ARM image used by `omarchy-pkgs`. It executes the
+PKGBUILD check, verifies both installed executables are AArch64 ELF files, then
+installs the package in a clean ARM container and exercises the CLI and Studio
+offscreen smoke path.
+
+On an x86_64 host with Docker, reproduce that gate through QEMU with:
+
+```bash
+pkgbuild/setup-aarch64-emulation.sh
+pkgbuild/check-aarch64.sh
+```
+
+The setup combines the current QEMU binary with the `POCF` binfmt flags needed
+by the official builder's `sudo` calls and compiler subprocesses. QEMU cannot
+faithfully expose an emulated Studio process through `/proc/<pid>/exe`, and its
+timings are not native timings. The local gate therefore tolerates only the
+three process-identity tests and one 100 ms timing test affected by those
+limitations. The native ARM CI job runs every PKGBUILD test without exceptions.
