@@ -6,7 +6,7 @@
 operation is on the command line, and there is a window for when you take
 over.**
 
-![the last-horizon photograph dissolving into the omarchy wallpaper](examples/last-horizon-omarchy.gif)
+![the last-horizon photograph dissolving into the omarchy wallpaper](examples/last-horizon-omarchy/last-horizon-omarchy.gif)
 
 No mouse in the loop. No colour baked into a pixel. No screenshotting a running
 window to find out what got drawn.
